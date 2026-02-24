@@ -2,9 +2,9 @@
 
 namespace CreativeCrafts\LaravelAiAgentKit;
 
+use CreativeCrafts\LaravelAiAgentKit\Commands\LaravelAiAgentKitCommand;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
-use CreativeCrafts\LaravelAiAgentKit\Commands\LaravelAiAgentKitCommand;
 
 class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 {
