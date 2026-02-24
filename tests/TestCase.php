@@ -2,9 +2,9 @@
 
 namespace CreativeCrafts\LaravelAiAgentKit\Tests;
 
+use CreativeCrafts\LaravelAiAgentKit\LaravelAiAgentKitServiceProvider;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Orchestra\Testbench\TestCase as Orchestra;
-use CreativeCrafts\LaravelAiAgentKit\LaravelAiAgentKitServiceProvider;
 
 class TestCase extends Orchestra
 {
