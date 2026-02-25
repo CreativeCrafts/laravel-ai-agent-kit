@@ -1,0 +1,47 @@
+name: Security
+description: Security concern, vulnerability, or hardening task
+title: "[security] <short description>"
+labels: [ "type:security", "risk:high" ]
+body:
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options: [ P0, P1, P2, P3 ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Describe the security concern and affected components.
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Replay, open redirect, token leak, privilege escalation, etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: mitigation
+    attributes:
+      label: Proposed mitigation
+      description: Intended fix and trade-offs.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      value: |
+        - [ ] Fix implemented
+        - [ ] Tests cover exploit/regression scenario
+        - [ ] Audit logging does not leak secrets
+    validations:
+      required: true

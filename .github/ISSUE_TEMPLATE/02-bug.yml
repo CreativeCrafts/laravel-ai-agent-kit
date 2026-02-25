@@ -1,0 +1,63 @@
+name: Bug
+description: Something is broken
+title: "[bug] <short description>"
+labels: [ "type:bug" ]
+body:
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options: [ P0, P1, P2, P3 ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: "What should happen?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: "What happens instead?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1) ...
+        2) ...
+        3) ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      placeholder: |
+        - PHP:
+        - Laravel:
+        - Package branch/version:
+        - Database:
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      value: |
+        - [ ] Root cause identified
+        - [ ] Fix implemented
+        - [ ] Regression test added
+        - [ ] No BC breaks (or documented)
+    validations:
+      required: true
