@@ -8,7 +8,7 @@ return [
     |
     | When enabled, the package validates this configuration during service
     | provider registration (fail-fast). Disable only for advanced bootstrapping
-    | scenarios or highly customised test setups.
+    | scenarios or highly customized test setups.
     |
     */
     'validation' => [
