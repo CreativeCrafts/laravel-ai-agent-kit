@@ -2,9 +2,35 @@ includes:
     - phpstan-baseline.neon
 
 parameters:
-    level: 5
     paths:
         - src
-        - config
-        - database
-    tmpDir: build/phpstan
+
+    level: max
+
+    excludePaths:
+        analyseAndScan:
+            - vendor
+            - stubs (?)
+            - build (?)
+            - .phpunit.cache (?)
+
+    # No broad global ignores. If a false-positive is confirmed, add a narrowly scoped
+    # ignore using `identifier` + `path`.
+    ignoreErrors: []
+
+    bootstrapFiles:
+        - vendor/autoload.php
+
+    checkUninitializedProperties: true
+    checkUnionTypes: true
+    treatPhpDocTypesAsCertain: true
+    inferPrivatePropertyTypeFromConstructor: true
+
+    # Keep configuration hygiene: fail when ignore rules become stale.
+    reportUnmatchedIgnoredErrors: true
+
+    parallel:
+        maximumNumberOfProcesses: 0
+        minimumNumberOfJobsPerProcess: 1
+        jobSize: 1
+        processTimeout: 600.0

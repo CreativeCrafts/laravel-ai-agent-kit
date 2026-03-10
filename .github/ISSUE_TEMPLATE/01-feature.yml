@@ -1,0 +1,67 @@
+name: Feature / Task
+description: A new deliverable (milestone work item)
+title: "[v0.x] <outcome-focused title>"
+labels: [ "type:feature" ]
+body:
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: P0 blocks release/security. P1 milestone-critical. P2 important. P3 nice-to-have.
+      options: [ P0, P1, P2, P3 ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: 1–3 sentences describing the delivered outcome.
+      placeholder: "Implement create_sso_tables migration stub with 6 tables and required constraints."
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Explicitly list in-scope and out-of-scope items.
+      placeholder: |
+        In-scope:
+        - ...
+        Out-of-scope:
+        - ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: Must be testable and unambiguous. Use checkboxes.
+      value: |
+        - [ ] ...
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: qa
+    attributes:
+      label: QA / Tests
+      description: Required. Mention feature/unit tests and edge cases.
+      placeholder: |
+        - Feature: ...
+        - Unit: ...
+        - Edge cases: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks / Notes
+      description: Security, tenancy scoping, BC breaks, performance.
+    validations:
+      required: false
