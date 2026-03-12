@@ -3,7 +3,11 @@
 namespace CreativeCrafts\LaravelAiAgentKit;
 
 use CreativeCrafts\LaravelAiAgentKit\Commands\LaravelAiAgentKitCommand;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\ConfigValidator;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Contracts\Foundation\Application;
@@ -29,6 +33,31 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             $config = $app->make(ConfigRepository::class);
 
             return new ConfigValidator($config);
+        });
+
+        $this->app->singleton(ConfiguredProviderRegistry::class, function (Application $app): ConfiguredProviderRegistry {
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
+            return new ConfiguredProviderRegistry($config);
+        });
+
+        $this->app->singleton(ProviderRegistry::class, function (Application $app): ProviderRegistry {
+            return $app->make(ConfiguredProviderRegistry::class);
+        });
+
+        $this->app->singleton(DefaultProviderSelector::class, function (Application $app): DefaultProviderSelector {
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
+            return new DefaultProviderSelector(
+                config: $config,
+                providerRegistry: $app->make(ProviderRegistry::class),
+            );
+        });
+
+        $this->app->singleton(ProviderSelector::class, function (Application $app): ProviderSelector {
+            return $app->make(DefaultProviderSelector::class);
         });
     }
 
