@@ -3,9 +3,11 @@
 namespace CreativeCrafts\LaravelAiAgentKit;
 
 use CreativeCrafts\LaravelAiAgentKit\Commands\LaravelAiAgentKitCommand;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\ConfigValidator;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredFailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
@@ -58,6 +60,20 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 
         $this->app->singleton(ProviderSelector::class, function (Application $app): ProviderSelector {
             return $app->make(DefaultProviderSelector::class);
+        });
+
+        $this->app->singleton(ConfiguredFailoverProviderSelector::class, function (Application $app): ConfiguredFailoverProviderSelector {
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
+            return new ConfiguredFailoverProviderSelector(
+                config: $config,
+                providerRegistry: $app->make(ProviderRegistry::class),
+            );
+        });
+
+        $this->app->singleton(FailoverProviderSelector::class, function (Application $app): FailoverProviderSelector {
+            return $app->make(ConfiguredFailoverProviderSelector::class);
         });
     }
 
