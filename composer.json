@@ -4,7 +4,9 @@
     "keywords": [
         "CreativeCrafts",
         "laravel",
-        "laravel-ai-agent-kit"
+        "laravel-ai-agent-kit",
+        "ai",
+        "ai-agent"
     ],
     "homepage": "https://github.com/creativecrafts/laravel-ai-agent-kit",
     "license": "MIT",
