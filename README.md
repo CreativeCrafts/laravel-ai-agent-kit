@@ -2,50 +2,48 @@
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/creativecrafts/laravel-ai-agent-kit.svg?style=flat-square)](https://packagist.org/packages/creativecrafts/laravel-ai-agent-kit)
 [![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/creativecrafts/laravel-ai-agent-kit/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/creativecrafts/laravel-ai-agent-kit/actions?query=workflow%3Arun-tests+branch%3Amain)
-[![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/creativecrafts/laravel-ai-agent-kit/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/creativecrafts/laravel-ai-agent-kit/actions?query=workflow%3A"Fix+PHP+code+style+issues"+branch%3Amain)
+[![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/creativecrafts/laravel-ai-agent-kit/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/creativecrafts/laravel-ai-agent-kit/actions?query=workflow%3A%22Fix+PHP+code+style+issues%22+branch%3Amain)
 [![Total Downloads](https://img.shields.io/packagist/dt/creativecrafts/laravel-ai-agent-kit.svg?style=flat-square)](https://packagist.org/packages/creativecrafts/laravel-ai-agent-kit)
 
-Laravel AI Agent Kit is a Laravel package that delivers a full agent-workflow toolkit built atop the official Laravel AI SDK. It simplifies how developers build, orchestrate, and deploy AI-powered agents in their applications by providing structured pipelines, safe tooling, and out-of-the-box resilience and observability.
+Laravel AI Agent Kit is a Laravel package that delivers a structured agent-workflow toolkit built on top of the official Laravel AI SDK. It provides provider abstraction, pipeline orchestration, and
+package foundations for building AI-powered application flows safely and predictably.
 
 ## Installation
 
-You can install the package via composer:
+Install the package with Composer:
 
-```bash
+~~~bash
 composer require creativecrafts/laravel-ai-agent-kit
-```
+~~~
 
-You can publish and run the migrations with:
+Publish and run migrations:
 
-```bash
+~~~bash
 php artisan vendor:publish --tag="ai-agent-kit-migrations"
 php artisan migrate
-```
+~~~
 
-You can publish the config file with:
+Publish the configuration file:
 
-```bash
+~~~bash
 php artisan vendor:publish --tag="ai-agent-kit-config"
-```
+~~~
 
-These are the contents of the published config file:
+Optionally, publish the views:
 
-```php
-return [
-];
-```
-
-Optionally, you can publish the views using
-
-```bash
+~~~bash
 php artisan vendor:publish --tag="ai-agent-kit-views"
-```
+~~~
 
 ## Configuration
-The package validates its configuration during boot by default. At least one enabled provider must exist, default_provider must reference an enabled configured provider, and failover_order must include the default provider.
+
+The package validates its configuration during boot by default.
+
+At least one enabled provider must exist, `default_provider` must reference an enabled configured provider, and `failover_order` must include the default provider.
 
 Example configuration:
-```php
+
+~~~php
 return [
     'validation' => [
         'enabled' => true,
@@ -72,13 +70,13 @@ return [
         'max_cost_usd' => null,
     ],
 ];
-```
-
+~~~
 
 ## Usage
-Resolve the configured provider registry or the default provider selector through the container:
 
-```php
+Resolve the configured provider registry or default provider selector through the container:
+
+~~~php
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
 
@@ -86,15 +84,45 @@ $registry = app(ProviderRegistry::class);
 $selector = app(ProviderSelector::class);
 
 $defaultProvider = $selector->selectDefault();
-
 $provider = $registry->get('null');
-```
+~~~
+
+Build and run a synchronous pipeline with typed steps:
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineStep;
+use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\PipelineBuilder;
+use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\RunContext;
+
+$pipeline = PipelineBuilder::make()
+    ->addStep(new class implements PipelineStep
+    {
+        public function handle(RunContext $context): RunContext
+        {
+            return $context
+                ->withStateValue('normalized', true)
+                ->incrementStepCount();
+        }
+    })
+    ->build();
+
+$runner = app(PipelineRunner::class);
+
+$result = $runner->run(
+    $pipeline,
+    new RunContext(
+        runId: 'run-001',
+        input: ['text' => 'Hello world'],
+    ),
+);
+~~~
 
 ## Testing
 
-```bash
+~~~bash
 composer test
-```
+~~~
 
 ## Changelog
 
