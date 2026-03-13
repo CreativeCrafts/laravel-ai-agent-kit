@@ -2,10 +2,12 @@
 
 namespace CreativeCrafts\LaravelAiAgentKit;
 
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\ConfigValidator;
+use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\SynchronousPipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredFailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
@@ -20,10 +22,10 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
     public function configurePackage(Package $package): void
     {
         $package
-          ->name('laravel-ai-agent-kit')
-          ->hasConfigFile('ai-agent-kit')
-          ->hasViews()
-          ->hasMigration('create_laravel_ai_agent_kit_table');
+            ->name('laravel-ai-agent-kit')
+            ->hasConfigFile('ai-agent-kit')
+            ->hasViews()
+            ->hasMigration('create_laravel_ai_agent_kit_table');
     }
 
     public function packageRegistered(): void
@@ -51,8 +53,8 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             $config = $app->make(ConfigRepository::class);
 
             return new DefaultProviderSelector(
-              config: $config,
-              providerRegistry: $app->make(ProviderRegistry::class),
+                config: $config,
+                providerRegistry: $app->make(ProviderRegistry::class),
             );
         });
 
@@ -65,13 +67,21 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             $config = $app->make(ConfigRepository::class);
 
             return new ConfiguredFailoverProviderSelector(
-              config: $config,
-              providerRegistry: $app->make(ProviderRegistry::class),
+                config: $config,
+                providerRegistry: $app->make(ProviderRegistry::class),
             );
         });
 
         $this->app->singleton(FailoverProviderSelector::class, function (Application $app): FailoverProviderSelector {
             return $app->make(ConfiguredFailoverProviderSelector::class);
+        });
+
+        $this->app->singleton(SynchronousPipelineRunner::class, function (): SynchronousPipelineRunner {
+            return new SynchronousPipelineRunner;
+        });
+
+        $this->app->singleton(PipelineRunner::class, function (Application $app): PipelineRunner {
+            return $app->make(SynchronousPipelineRunner::class);
         });
     }
 
@@ -88,7 +98,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         /** @var array{enabled?:bool}|null $validation */
         $validation = $config->get('ai-agent-kit.validation');
 
-        $enabled = !is_array($validation) || (bool)($validation['enabled'] ?? true);
+        $enabled = ! is_array($validation) || (bool) ($validation['enabled'] ?? true);
 
         if ($enabled) {
             $app->make(ConfigValidator::class)->validateCurrentConfig();
