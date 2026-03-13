@@ -2,7 +2,6 @@
 
 namespace CreativeCrafts\LaravelAiAgentKit;
 
-use CreativeCrafts\LaravelAiAgentKit\Commands\LaravelAiAgentKitCommand;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
@@ -21,11 +20,10 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
     public function configurePackage(Package $package): void
     {
         $package
-            ->name('laravel-ai-agent-kit')
-            ->hasConfigFile('ai-agent-kit')
-            ->hasViews()
-            ->hasMigration('create_laravel_ai_agent_kit_table')
-            ->hasCommand(LaravelAiAgentKitCommand::class);
+          ->name('laravel-ai-agent-kit')
+          ->hasConfigFile('ai-agent-kit')
+          ->hasViews()
+          ->hasMigration('create_laravel_ai_agent_kit_table');
     }
 
     public function packageRegistered(): void
@@ -53,8 +51,8 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             $config = $app->make(ConfigRepository::class);
 
             return new DefaultProviderSelector(
-                config: $config,
-                providerRegistry: $app->make(ProviderRegistry::class),
+              config: $config,
+              providerRegistry: $app->make(ProviderRegistry::class),
             );
         });
 
@@ -67,8 +65,8 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             $config = $app->make(ConfigRepository::class);
 
             return new ConfiguredFailoverProviderSelector(
-                config: $config,
-                providerRegistry: $app->make(ProviderRegistry::class),
+              config: $config,
+              providerRegistry: $app->make(ProviderRegistry::class),
             );
         });
 
@@ -90,7 +88,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         /** @var array{enabled?:bool}|null $validation */
         $validation = $config->get('ai-agent-kit.validation');
 
-        $enabled = ! is_array($validation) || (bool) ($validation['enabled'] ?? true);
+        $enabled = !is_array($validation) || (bool)($validation['enabled'] ?? true);
 
         if ($enabled) {
             $app->make(ConfigValidator::class)->validateCurrentConfig();
