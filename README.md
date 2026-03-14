@@ -5,8 +5,8 @@
 [![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/creativecrafts/laravel-ai-agent-kit/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/creativecrafts/laravel-ai-agent-kit/actions?query=workflow%3A%22Fix+PHP+code+style+issues%22+branch%3Amain)
 [![Total Downloads](https://img.shields.io/packagist/dt/creativecrafts/laravel-ai-agent-kit.svg?style=flat-square)](https://packagist.org/packages/creativecrafts/laravel-ai-agent-kit)
 
-Laravel AI Agent Kit is a Laravel package that delivers a structured agent-workflow toolkit built on top of the official Laravel AI SDK. It provides provider abstraction, pipeline orchestration, and
-package foundations for building AI-powered application flows safely and predictably.
+Laravel AI Agent Kit is a Laravel package that delivers a structured agent-workflow toolkit built on top of the official Laravel AI SDK. It provides provider abstraction, pipeline orchestration,
+queued execution, and package foundations for building AI-powered application flows safely and predictably.
 
 ## Installation
 
@@ -115,6 +115,68 @@ $result = $runner->run(
         runId: 'run-001',
         input: ['text' => 'Hello world'],
     ),
+);
+~~~
+
+Dispatch a queued pipeline using a typed pipeline definition and explicit result handler:
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineResultHandler;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\QueuedPipelineDefinition;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\QueuedPipelineDispatcher;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineStep;
+use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\Pipeline;
+use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\PipelineBuilder;
+use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\QueueDispatchOptions;
+use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\RunContext;
+use Throwable;
+
+final class NormalizeTranscriptPipeline implements QueuedPipelineDefinition
+{
+    public function build(): Pipeline
+    {
+        return PipelineBuilder::make()
+            ->addStep(new class implements PipelineStep
+            {
+                public function handle(RunContext $context): RunContext
+                {
+                    return $context
+                        ->withStateValue('normalized', true)
+                        ->incrementStepCount();
+                }
+            })
+            ->build();
+    }
+}
+
+final class StorePipelineResult implements PipelineResultHandler
+{
+    public function handleSuccess(RunContext $context): void
+    {
+        // Persist or publish the result explicitly.
+    }
+
+    public function handleFailure(RunContext $context, Throwable $throwable): void
+    {
+        // Persist or publish the failure explicitly.
+    }
+}
+
+$dispatcher = app(QueuedPipelineDispatcher::class);
+
+$dispatcher->dispatch(
+    pipelineDefinition: NormalizeTranscriptPipeline::class,
+    context: new RunContext(
+        runId: 'run-queued-001',
+        input: ['text' => 'Hello world'],
+    ),
+    options: new QueueDispatchOptions(
+        connection: 'redis',
+        queue: 'ai-pipelines',
+        delaySeconds: 5,
+        timeoutSeconds: 90,
+    ),
+    resultHandler: StorePipelineResult::class,
 );
 ~~~
 
