@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Providers;
 
 final readonly class ProviderDefinition
@@ -12,5 +14,6 @@ final readonly class ProviderDefinition
         public string $driver,
         public bool $enabled = true,
         public array $options = [],
-    ) {}
+    ) {
+    }
 }

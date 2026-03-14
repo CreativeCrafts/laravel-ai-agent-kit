@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CreativeCrafts\LaravelAiAgentKit;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
@@ -79,7 +81,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         });
 
         $this->app->singleton(SynchronousPipelineRunner::class, function (): SynchronousPipelineRunner {
-            return new SynchronousPipelineRunner;
+            return new SynchronousPipelineRunner();
         });
 
         $this->app->singleton(PipelineRunner::class, function (Application $app): PipelineRunner {
@@ -87,7 +89,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         });
 
         $this->app->singleton(LaravelQueuedPipelineDispatcher::class, function (): LaravelQueuedPipelineDispatcher {
-            return new LaravelQueuedPipelineDispatcher;
+            return new LaravelQueuedPipelineDispatcher();
         });
 
         $this->app->singleton(QueuedPipelineDispatcher::class, function (Application $app): QueuedPipelineDispatcher {

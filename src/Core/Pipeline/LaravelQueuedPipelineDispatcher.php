@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Pipeline;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineResultHandler;
@@ -16,7 +18,7 @@ final class LaravelQueuedPipelineDispatcher implements QueuedPipelineDispatcher
     public function dispatch(
         string $pipelineDefinition,
         RunContext $context,
-        QueueDispatchOptions $options = new QueueDispatchOptions,
+        QueueDispatchOptions $options = new QueueDispatchOptions(),
         ?string $resultHandler = null,
     ): void {
         dispatch(

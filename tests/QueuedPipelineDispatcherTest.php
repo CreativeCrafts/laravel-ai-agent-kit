@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineResultHandler;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineStep;
@@ -21,8 +23,7 @@ final class TestQueuedPipelineDefinition implements QueuedPipelineDefinition
     {
         return PipelineBuilder::make()
             ->addStep(
-                new class implements PipelineStep
-                {
+                new class () implements PipelineStep {
                     public function handle(RunContext $context): RunContext
                     {
                         return $context
@@ -41,8 +42,7 @@ final class FailingQueuedPipelineDefinition implements QueuedPipelineDefinition
     {
         return PipelineBuilder::make()
             ->addStep(
-                new class implements PipelineStep
-                {
+                new class () implements PipelineStep {
                     public function handle(RunContext $context): RunContext
                     {
                         throw new RuntimeException('Queued step failure');
@@ -88,9 +88,9 @@ final class TestPipelineResultHandler implements PipelineResultHandler
 beforeEach(function () {
     TestPipelineResultHandler::reset();
 
-    app()->singleton(TestQueuedPipelineDefinition::class, fn (): TestQueuedPipelineDefinition => new TestQueuedPipelineDefinition);
-    app()->singleton(FailingQueuedPipelineDefinition::class, fn (): FailingQueuedPipelineDefinition => new FailingQueuedPipelineDefinition);
-    app()->singleton(TestPipelineResultHandler::class, fn (): TestPipelineResultHandler => new TestPipelineResultHandler);
+    app()->singleton(TestQueuedPipelineDefinition::class, fn (): TestQueuedPipelineDefinition => new TestQueuedPipelineDefinition());
+    app()->singleton(FailingQueuedPipelineDefinition::class, fn (): FailingQueuedPipelineDefinition => new FailingQueuedPipelineDefinition());
+    app()->singleton(TestPipelineResultHandler::class, fn (): TestPipelineResultHandler => new TestPipelineResultHandler());
 });
 
 it('binds the queued pipeline dispatcher contract', function () {

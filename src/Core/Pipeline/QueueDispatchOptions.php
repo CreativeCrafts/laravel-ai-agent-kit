@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Pipeline;
 
 final readonly class QueueDispatchOptions
@@ -9,5 +11,6 @@ final readonly class QueueDispatchOptions
         public ?string $queue = null,
         public ?int $delaySeconds = null,
         public ?int $timeoutSeconds = null,
-    ) {}
+    ) {
+    }
 }

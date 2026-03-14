@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Providers;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
@@ -11,7 +13,8 @@ final readonly class ConfiguredProviderRegistry implements ProviderRegistry
     public function __construct(
         private ConfigRepository $config,
         private string $configKey = 'ai-agent-kit.providers',
-    ) {}
+    ) {
+    }
 
     /**
      * @return array<string, ProviderDefinition>

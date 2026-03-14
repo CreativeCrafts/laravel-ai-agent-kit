@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineStep;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\RunContext;
 
@@ -58,8 +60,7 @@ it('returns a new run context when stateful orchestration values change', functi
 });
 
 it('allows pipeline steps to transform a run context deterministically', function () {
-    $step = new class implements PipelineStep
-    {
+    $step = new class () implements PipelineStep {
         public function handle(RunContext $context): RunContext
         {
             return $context

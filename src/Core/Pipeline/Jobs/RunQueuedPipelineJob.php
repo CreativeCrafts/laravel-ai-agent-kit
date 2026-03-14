@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\Jobs;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineResultHandler;
@@ -36,7 +38,7 @@ class RunQueuedPipelineJob implements ShouldQueue
         public readonly string $pipelineDefinition,
         public readonly RunContext $context,
         public readonly ?string $resultHandler = null,
-        QueueDispatchOptions $options = new QueueDispatchOptions,
+        QueueDispatchOptions $options = new QueueDispatchOptions(),
     ) {
         if ($options->connection !== null) {
             $this->onConnection($options->connection);
@@ -77,21 +79,6 @@ class RunQueuedPipelineJob implements ShouldQueue
         }
     }
 
-    private function resolveResultHandler(Application $app): ?PipelineResultHandler
-    {
-        if ($this->resultHandler === null) {
-            return null;
-        }
-
-        $resultHandler = $app->make($this->resultHandler);
-
-        if (! $resultHandler instanceof PipelineResultHandler) {
-            throw InvalidPipelineResultHandlerException::forClass($this->resultHandler);
-        }
-
-        return $resultHandler;
-    }
-
     public function pipelineDefinition(): string
     {
         return $this->pipelineDefinition;
@@ -105,5 +92,20 @@ class RunQueuedPipelineJob implements ShouldQueue
     public function resultHandler(): ?string
     {
         return $this->resultHandler;
+    }
+
+    private function resolveResultHandler(Application $app): ?PipelineResultHandler
+    {
+        if ($this->resultHandler === null) {
+            return null;
+        }
+
+        $resultHandler = $app->make($this->resultHandler);
+
+        if (! $resultHandler instanceof PipelineResultHandler) {
+            throw InvalidPipelineResultHandlerException::forClass($this->resultHandler);
+        }
+
+        return $resultHandler;
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Providers;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
@@ -14,7 +16,8 @@ final readonly class DefaultProviderSelector implements ProviderSelector
         private ConfigRepository $config,
         private ProviderRegistry $providerRegistry,
         private string $defaultProviderConfigKey = 'ai-agent-kit.default_provider',
-    ) {}
+    ) {
+    }
 
     public function selectDefault(): ProviderDefinition
     {
