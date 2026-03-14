@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Pipeline;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineStep;
@@ -11,7 +13,8 @@ final readonly class Pipeline
      */
     public function __construct(
         private array $steps,
-    ) {}
+    ) {
+    }
 
     /**
      * @return list<PipelineStep>

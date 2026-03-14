@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Config;
 
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\Exceptions\InvalidConfigurationException;
@@ -10,7 +12,8 @@ final readonly class ConfigValidator
     public function __construct(
         private ConfigRepository $config,
         private string $configKey = 'ai-agent-kit',
-    ) {}
+    ) {
+    }
 
     /**
      * Validate the currently loaded config (fail-fast).

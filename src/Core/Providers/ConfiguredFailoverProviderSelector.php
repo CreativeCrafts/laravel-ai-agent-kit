@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Providers;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
@@ -14,7 +16,8 @@ final readonly class ConfiguredFailoverProviderSelector implements FailoverProvi
         private ConfigRepository $config,
         private ProviderRegistry $providerRegistry,
         private string $failoverOrderConfigKey = 'ai-agent-kit.failover_order',
-    ) {}
+    ) {
+    }
 
     public function nextAfter(string $currentProviderName): ?ProviderDefinition
     {

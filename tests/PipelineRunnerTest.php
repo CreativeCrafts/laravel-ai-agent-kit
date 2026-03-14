@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineStep;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\Exceptions\PipelineExecutionException;
@@ -16,8 +18,7 @@ it('binds the synchronous pipeline runner contract', function () {
 it('builds a pipeline fluently and runs steps in order', function () {
     $pipeline = PipelineBuilder::make()
         ->addStep(
-            new class implements PipelineStep
-            {
+            new class () implements PipelineStep {
                 public function handle(RunContext $context): RunContext
                 {
                     $log = $context->stateValue('log', []);
@@ -31,8 +32,7 @@ it('builds a pipeline fluently and runs steps in order', function () {
             },
         )
         ->addSteps([
-            new class implements PipelineStep
-            {
+            new class () implements PipelineStep {
                 public function handle(RunContext $context): RunContext
                 {
                     $log = $context->stateValue('log', []);
@@ -68,8 +68,7 @@ it('builds a pipeline fluently and runs steps in order', function () {
 it('wraps step failures in a typed pipeline execution exception', function () {
     $pipeline = PipelineBuilder::make()
         ->addStep(
-            new class implements PipelineStep
-            {
+            new class () implements PipelineStep {
                 public function handle(RunContext $context): RunContext
                 {
                     throw new RuntimeException('Step failure');
@@ -78,7 +77,7 @@ it('wraps step failures in a typed pipeline execution exception', function () {
         )
         ->build();
 
-    $runner = new SynchronousPipelineRunner;
+    $runner = new SynchronousPipelineRunner();
 
     expect(fn (): RunContext => $runner->run($pipeline, new RunContext(runId: 'run-failure')))
         ->toThrow(PipelineExecutionException::class, 'failed during synchronous execution');

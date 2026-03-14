@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CreativeCrafts\LaravelAiAgentKit\Contracts\Core;
 
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\QueueDispatchOptions;
@@ -14,7 +16,7 @@ interface QueuedPipelineDispatcher
     public function dispatch(
         string $pipelineDefinition,
         RunContext $context,
-        QueueDispatchOptions $options = new QueueDispatchOptions,
+        QueueDispatchOptions $options = new QueueDispatchOptions(),
         ?string $resultHandler = null,
     ): void;
 }

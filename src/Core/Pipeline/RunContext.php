@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Pipeline;
 
 final readonly class RunContext
@@ -17,7 +19,8 @@ final readonly class RunContext
         public int $stepCount = 0,
         public int $toolCallCount = 0,
         public ?string $selectedProvider = null,
-    ) {}
+    ) {
+    }
 
     public function hasInputValue(string $key): bool
     {
