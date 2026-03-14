@@ -3,10 +3,12 @@
 namespace CreativeCrafts\LaravelAiAgentKit;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\QueuedPipelineDispatcher;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\ConfigValidator;
+use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\LaravelQueuedPipelineDispatcher;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\SynchronousPipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredFailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
@@ -82,6 +84,14 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 
         $this->app->singleton(PipelineRunner::class, function (Application $app): PipelineRunner {
             return $app->make(SynchronousPipelineRunner::class);
+        });
+
+        $this->app->singleton(LaravelQueuedPipelineDispatcher::class, function (): LaravelQueuedPipelineDispatcher {
+            return new LaravelQueuedPipelineDispatcher;
+        });
+
+        $this->app->singleton(QueuedPipelineDispatcher::class, function (Application $app): QueuedPipelineDispatcher {
+            return $app->make(LaravelQueuedPipelineDispatcher::class);
         });
     }
 
