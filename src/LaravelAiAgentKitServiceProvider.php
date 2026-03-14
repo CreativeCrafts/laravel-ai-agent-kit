@@ -32,7 +32,8 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
           ->name('laravel-ai-agent-kit')
           ->hasConfigFile('ai-agent-kit')
           ->hasViews()
-          ->hasMigration('create_laravel_ai_agent_kit_table');
+          ->hasMigration('create_ai_agent_conversations_table')
+          ->hasMigration('create_ai_agent_conversation_messages_table');
     }
 
     public function packageRegistered(): void
@@ -126,7 +127,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         /** @var ConfigRepository $config */
         $config = $app->make(ConfigRepository::class);
 
-        /** @var array{enabled?:bool}|null $validation */
+        /** @var array{enabled?: bool}|null $validation */
         $validation = $config->get('ai-agent-kit.validation');
 
         $enabled = !is_array($validation) || (bool)($validation['enabled'] ?? true);
