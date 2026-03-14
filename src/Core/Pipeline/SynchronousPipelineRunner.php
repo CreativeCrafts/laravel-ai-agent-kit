@@ -5,14 +5,20 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Pipeline;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\Exceptions\PipelineExecutionException;
 use Throwable;
 
-final class SynchronousPipelineRunner implements PipelineRunner
+final readonly class SynchronousPipelineRunner implements PipelineRunner
 {
+    public function __construct(
+        private ?ConversationContextManager $conversationContextManager = null,
+    ) {
+    }
+
     public function run(Pipeline $pipeline, RunContext $context): RunContext
     {
-        $currentContext = $context;
+        $currentContext = $this->initializeConversationContext($context);
 
         foreach ($pipeline->steps() as $step) {
             try {
@@ -22,6 +28,24 @@ final class SynchronousPipelineRunner implements PipelineRunner
             }
         }
 
-        return $currentContext;
+        return $this->persistConversationContext($currentContext);
+    }
+
+    private function initializeConversationContext(RunContext $context): RunContext
+    {
+        if (!$this->conversationContextManager instanceof ConversationContextManager) {
+            return $context;
+        }
+
+        return $this->conversationContextManager->initialize($context);
+    }
+
+    private function persistConversationContext(RunContext $context): RunContext
+    {
+        if (!$this->conversationContextManager instanceof ConversationContextManager) {
+            return $context;
+        }
+
+        return $this->conversationContextManager->persist($context);
     }
 }

@@ -6,6 +6,8 @@ namespace CreativeCrafts\LaravelAiAgentKit;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\QueuedPipelineDispatcher;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
@@ -15,6 +17,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\SynchronousPipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredFailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Memory\StoreBackedConversationContextManager;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Contracts\Foundation\Application;
@@ -26,10 +29,10 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
     public function configurePackage(Package $package): void
     {
         $package
-            ->name('laravel-ai-agent-kit')
-            ->hasConfigFile('ai-agent-kit')
-            ->hasViews()
-            ->hasMigration('create_laravel_ai_agent_kit_table');
+          ->name('laravel-ai-agent-kit')
+          ->hasConfigFile('ai-agent-kit')
+          ->hasViews()
+          ->hasMigration('create_laravel_ai_agent_kit_table');
     }
 
     public function packageRegistered(): void
@@ -80,8 +83,24 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return $app->make(ConfiguredFailoverProviderSelector::class);
         });
 
-        $this->app->singleton(SynchronousPipelineRunner::class, function (): SynchronousPipelineRunner {
-            return new SynchronousPipelineRunner();
+        $this->app->singleton(StoreBackedConversationContextManager::class, function (Application $app): StoreBackedConversationContextManager {
+            return new StoreBackedConversationContextManager(
+                conversationStore: $app->make(ConversationStore::class),
+            );
+        });
+
+        $this->app->singleton(ConversationContextManager::class, function (Application $app): ConversationContextManager {
+            return $app->make(StoreBackedConversationContextManager::class);
+        });
+
+        $this->app->singleton(SynchronousPipelineRunner::class, function (Application $app): SynchronousPipelineRunner {
+            $conversationContextManager = null;
+
+            if ($app->bound(ConversationStore::class)) {
+                $conversationContextManager = $app->make(ConversationContextManager::class);
+            }
+
+            return new SynchronousPipelineRunner($conversationContextManager);
         });
 
         $this->app->singleton(PipelineRunner::class, function (Application $app): PipelineRunner {
@@ -110,7 +129,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         /** @var array{enabled?:bool}|null $validation */
         $validation = $config->get('ai-agent-kit.validation');
 
-        $enabled = ! is_array($validation) || (bool) ($validation['enabled'] ?? true);
+        $enabled = !is_array($validation) || (bool)($validation['enabled'] ?? true);
 
         if ($enabled) {
             $app->make(ConfigValidator::class)->validateCurrentConfig();
