@@ -7,6 +7,7 @@ namespace CreativeCrafts\LaravelAiAgentKit;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\QueuedPipelineDispatcher;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationRetentionPurger;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
@@ -17,10 +18,15 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\SynchronousPipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredFailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationRetentionPurger;
+use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\StoreBackedConversationContextManager;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Container\BindingResolutionException;
+use Illuminate\Contracts\Encryption\Encrypter;
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Database\DatabaseManager;
+use RuntimeException;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 
@@ -84,6 +90,47 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return $app->make(ConfiguredFailoverProviderSelector::class);
         });
 
+        $this->app->singleton(DatabaseConversationStore::class, function (Application $app): DatabaseConversationStore {
+            /** @var DatabaseManager $database */
+            $database = $app->make(DatabaseManager::class);
+            /** @var Encrypter $encrypter */
+            $encrypter = $app->make(Encrypter::class);
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
+            return new DatabaseConversationStore(
+                database: $database,
+                encrypter: $encrypter,
+                connectionName: $this->nullableStringConfig($config, 'ai-agent-kit.memory.database.connection'),
+                conversationsTable: $this->stringConfig($config, 'ai-agent-kit.memory.database.conversations_table'),
+                messagesTable: $this->stringConfig($config, 'ai-agent-kit.memory.database.messages_table'),
+                driverName: $this->stringConfig($config, 'ai-agent-kit.memory.database.driver_name'),
+                retentionDays: $this->nullableIntConfig($config, 'ai-agent-kit.memory.database.retention_days'),
+                encryptPayloads: (bool)$config->get('ai-agent-kit.memory.database.encrypt_payloads', true),
+            );
+        });
+
+        $this->app->singleton(ConversationStore::class, function (Application $app): ConversationStore {
+            return $app->make(DatabaseConversationStore::class);
+        });
+
+        $this->app->singleton(DatabaseConversationRetentionPurger::class, function (Application $app): DatabaseConversationRetentionPurger {
+            /** @var DatabaseManager $database */
+            $database = $app->make(DatabaseManager::class);
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
+            return new DatabaseConversationRetentionPurger(
+                database: $database,
+                connectionName: $this->nullableStringConfig($config, 'ai-agent-kit.memory.database.connection'),
+                conversationsTable: $this->stringConfig($config, 'ai-agent-kit.memory.database.conversations_table'),
+            );
+        });
+
+        $this->app->singleton(ConversationRetentionPurger::class, function (Application $app): ConversationRetentionPurger {
+            return $app->make(DatabaseConversationRetentionPurger::class);
+        });
+
         $this->app->singleton(StoreBackedConversationContextManager::class, function (Application $app): StoreBackedConversationContextManager {
             return new StoreBackedConversationContextManager(
                 conversationStore: $app->make(ConversationStore::class),
@@ -95,13 +142,9 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         });
 
         $this->app->singleton(SynchronousPipelineRunner::class, function (Application $app): SynchronousPipelineRunner {
-            $conversationContextManager = null;
-
-            if ($app->bound(ConversationStore::class)) {
-                $conversationContextManager = $app->make(ConversationContextManager::class);
-            }
-
-            return new SynchronousPipelineRunner($conversationContextManager);
+            return new SynchronousPipelineRunner(
+                conversationContextManager: $app->make(ConversationContextManager::class),
+            );
         });
 
         $this->app->singleton(PipelineRunner::class, function (Application $app): PipelineRunner {
@@ -135,5 +178,34 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         if ($enabled) {
             $app->make(ConfigValidator::class)->validateCurrentConfig();
         }
+    }
+
+    private function nullableStringConfig(ConfigRepository $config, string $key): ?string
+    {
+        $value = $config->get($key);
+
+        if ($value === null) {
+            return null;
+        }
+
+        return is_string($value) && $value !== '' ? $value : throw new RuntimeException("Configuration key [{$key}] must be null or a non-empty string.");
+    }
+
+    private function stringConfig(ConfigRepository $config, string $key): string
+    {
+        $value = $config->get($key);
+
+        return is_string($value) && $value !== '' ? $value : throw new RuntimeException("Configuration key [{$key}] must be a non-empty string.");
+    }
+
+    private function nullableIntConfig(ConfigRepository $config, string $key): ?int
+    {
+        $value = $config->get($key);
+
+        if ($value === null) {
+            return null;
+        }
+
+        return is_int($value) ? $value : throw new RuntimeException("Configuration key [{$key}] must be null or an integer.");
     }
 }

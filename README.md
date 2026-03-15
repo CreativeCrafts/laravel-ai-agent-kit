@@ -41,6 +41,8 @@ The package validates its configuration during boot by default.
 
 At least one enabled provider must exist, `default_provider` must reference an enabled configured provider, and `failover_order` must include the default provider.
 
+The database memory driver persists conversations and messages using encrypted payload columns by default. Retention is explicit and purgeable through the memory retention service.
+
 Example configuration:
 
 ~~~php
@@ -68,6 +70,19 @@ return [
         'max_total_timeout_seconds' => 120,
         'max_tokens' => null,
         'max_cost_usd' => null,
+    ],
+
+    'memory' => [
+        'default_driver' => 'database',
+
+        'database' => [
+            'connection' => null,
+            'conversations_table' => 'ai_agent_conversations',
+            'messages_table' => 'ai_agent_conversation_messages',
+            'driver_name' => 'database',
+            'retention_days' => 30,
+            'encrypt_payloads' => true,
+        ],
     ],
 ];
 ~~~
@@ -178,6 +193,21 @@ $dispatcher->dispatch(
     ),
     resultHandler: StorePipelineResult::class,
 );
+~~~
+
+Use the database-backed conversation store and retention purger through their contracts:
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationRetentionPurger;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
+use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
+
+$conversationStore = app(ConversationStore::class);
+$retentionPurger = app(ConversationRetentionPurger::class);
+
+$conversation = $conversationStore->find(new ConversationId('conv-001'));
+
+$purgedCount = $retentionPurger->purgeExpired();
 ~~~
 
 ## Testing
