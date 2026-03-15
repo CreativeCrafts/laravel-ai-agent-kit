@@ -2,88 +2,18 @@
 
 declare(strict_types=1);
 
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineResultHandler;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineStep;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\QueuedPipelineDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\QueuedPipelineDispatcher;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\Exceptions\QueuedPipelineExecutionException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\Jobs\RunQueuedPipelineJob;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\LaravelQueuedPipelineDispatcher;
-use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\Pipeline;
-use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\PipelineBuilder;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\QueueDispatchOptions;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\RunContext;
+use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\FailingQueuedPipelineDefinition;
+use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\TestPipelineResultHandler;
+use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\TestQueuedPipelineDefinition;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\Queue;
-
-final class TestQueuedPipelineDefinition implements QueuedPipelineDefinition
-{
-    public function build(): Pipeline
-    {
-        return PipelineBuilder::make()
-            ->addStep(
-                new class () implements PipelineStep {
-                    public function handle(RunContext $context): RunContext
-                    {
-                        return $context
-                            ->withStateValue('queued', true)
-                            ->incrementStepCount();
-                    }
-                },
-            )
-            ->build();
-    }
-}
-
-final class FailingQueuedPipelineDefinition implements QueuedPipelineDefinition
-{
-    public function build(): Pipeline
-    {
-        return PipelineBuilder::make()
-            ->addStep(
-                new class () implements PipelineStep {
-                    public function handle(RunContext $context): RunContext
-                    {
-                        throw new RuntimeException('Queued step failure');
-                    }
-                },
-            )
-            ->build();
-    }
-}
-
-final class TestPipelineResultHandler implements PipelineResultHandler
-{
-    /**
-     * @var list<RunContext>
-     */
-    public static array $successes = [];
-
-    /**
-     * @var list<array{context: RunContext, throwable: Throwable}>
-     */
-    public static array $failures = [];
-
-    public static function reset(): void
-    {
-        self::$successes = [];
-        self::$failures = [];
-    }
-
-    public function handleSuccess(RunContext $context): void
-    {
-        self::$successes[] = $context;
-    }
-
-    public function handleFailure(RunContext $context, Throwable $throwable): void
-    {
-        self::$failures[] = [
-            'context' => $context,
-            'throwable' => $throwable,
-        ];
-    }
-}
 
 beforeEach(function () {
     TestPipelineResultHandler::reset();
@@ -142,11 +72,11 @@ it('executes a queued pipeline job and forwards successful results explicitly', 
     );
 
     expect(TestPipelineResultHandler::$successes)
-        ->toHaveCount(1)
-        ->and(TestPipelineResultHandler::$successes[0]->runId)->toBe('run-success')
-        ->and(TestPipelineResultHandler::$successes[0]->stateValue('queued'))->toBeTrue()
-        ->and(TestPipelineResultHandler::$successes[0]->stepCount)->toBe(1)
-        ->and(TestPipelineResultHandler::$failures)->toBe([]);
+      ->toHaveCount(1)
+      ->and(TestPipelineResultHandler::$successes[0]->runId)->toBe('run-success')
+      ->and(TestPipelineResultHandler::$successes[0]->stateValue('queued'))->toBeTrue()
+      ->and(TestPipelineResultHandler::$successes[0]->stepCount)->toBe(1)
+      ->and(TestPipelineResultHandler::$failures)->toBe([]);
 });
 
 it('wraps queued pipeline failures and preserves the previous exception chain', function () {
@@ -165,11 +95,11 @@ it('wraps queued pipeline failures and preserves the previous exception chain', 
         $this->fail('Expected queued pipeline execution to fail.');
     } catch (QueuedPipelineExecutionException $exception) {
         expect($exception->getPrevious())->not
-            ->toBeNull()
-            ->and($exception->getPrevious()?->getMessage())->toContain('failed during synchronous execution')
-            ->and(TestPipelineResultHandler::$successes)->toBe([])
-            ->and(TestPipelineResultHandler::$failures)->toHaveCount(1)
-            ->and(TestPipelineResultHandler::$failures[0]['context']->runId)->toBe('run-failure')
-            ->and(TestPipelineResultHandler::$failures[0]['throwable']->getMessage())->toContain('failed during synchronous execution');
+          ->toBeNull()
+          ->and($exception->getPrevious()?->getMessage())->toContain('failed during synchronous execution')
+          ->and(TestPipelineResultHandler::$successes)->toBe([])
+          ->and(TestPipelineResultHandler::$failures)->toHaveCount(1)
+          ->and(TestPipelineResultHandler::$failures[0]['context']->runId)->toBe('run-failure')
+          ->and(TestPipelineResultHandler::$failures[0]['throwable']->getMessage())->toContain('failed during synchronous execution');
     }
 });
