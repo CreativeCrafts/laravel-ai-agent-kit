@@ -23,6 +23,7 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationRetentionPurger;
 use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\InMemoryConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\NullConversationSummarizer;
+use CreativeCrafts\LaravelAiAgentKit\Memory\RedisConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\StoreBackedConversationContextManager;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Container\BindingResolutionException;
@@ -122,6 +123,19 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             );
         });
 
+        $this->app->singleton(RedisConversationStore::class, function (Application $app): RedisConversationStore {
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
+            return new RedisConversationStore(
+                app: $app,
+                connectionName: $this->nullableStringConfig($config, 'ai-agent-kit.memory.redis.connection'),
+                keyPrefix: $this->stringConfig($config, 'ai-agent-kit.memory.redis.prefix'),
+                driverName: $this->stringConfig($config, 'ai-agent-kit.memory.redis.driver_name'),
+                retentionDays: $this->nullableIntConfig($config, 'ai-agent-kit.memory.redis.retention_days'),
+            );
+        });
+
         $this->app->singleton(ConversationStore::class, function (Application $app): ConversationStore {
             /** @var ConfigRepository $config */
             $config = $app->make(ConfigRepository::class);
@@ -129,6 +143,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return match ($this->memoryDriver($config)) {
                 'database' => $app->make(DatabaseConversationStore::class),
                 'in_memory' => $app->make(InMemoryConversationStore::class),
+                'redis' => $app->make(RedisConversationStore::class),
                 default => throw new RuntimeException('Unsupported memory driver.'),
             };
         });
@@ -153,6 +168,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return match ($this->memoryDriver($config)) {
                 'database' => $app->make(DatabaseConversationRetentionPurger::class),
                 'in_memory' => $app->make(InMemoryConversationStore::class),
+                'redis' => $app->make(RedisConversationStore::class),
                 default => throw new RuntimeException('Unsupported memory driver.'),
             };
         });

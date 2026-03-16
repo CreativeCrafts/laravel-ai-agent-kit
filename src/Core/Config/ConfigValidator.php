@@ -249,8 +249,8 @@ final readonly class ConfigValidator
                 throw InvalidConfigurationException::invalidValue('memory.default_driver', 'Must be a non-empty string.');
             }
 
-            if (!in_array($defaultDriver, ['database', 'in_memory'], true)) {
-                throw InvalidConfigurationException::invalidValue('memory.default_driver', 'Must be one of: database, in_memory.');
+            if (!in_array($defaultDriver, ['database', 'in_memory', 'redis'], true)) {
+                throw InvalidConfigurationException::invalidValue('memory.default_driver', 'Must be one of: database, in_memory, redis.');
             }
         }
 
@@ -270,46 +270,80 @@ final readonly class ConfigValidator
             }
         }
 
-        if (!array_key_exists('database', $config['memory'])) {
-            return;
-        }
-
-        if (!is_array($config['memory']['database'])) {
-            throw InvalidConfigurationException::invalidType('memory.database', 'array');
-        }
-
-        $database = $config['memory']['database'];
-
-        foreach (['conversations_table', 'messages_table', 'driver_name'] as $key) {
-            if (!array_key_exists($key, $database)) {
-                continue;
+        if (array_key_exists('database', $config['memory'])) {
+            if (!is_array($config['memory']['database'])) {
+                throw InvalidConfigurationException::invalidType('memory.database', 'array');
             }
 
-            $value = $database[$key];
+            $database = $config['memory']['database'];
 
-            if (!is_string($value) || $value === '') {
-                throw InvalidConfigurationException::invalidValue("memory.database.{$key}", 'Must be a non-empty string.');
+            foreach (['conversations_table', 'messages_table', 'driver_name'] as $key) {
+                if (!array_key_exists($key, $database)) {
+                    continue;
+                }
+
+                $value = $database[$key];
+
+                if (!is_string($value) || $value === '') {
+                    throw InvalidConfigurationException::invalidValue("memory.database.{$key}", 'Must be a non-empty string.');
+                }
+            }
+
+            if (array_key_exists('connection', $database)) {
+                $connection = $database['connection'];
+
+                if ($connection !== null && (!is_string($connection) || $connection === '')) {
+                    throw InvalidConfigurationException::invalidType('memory.database.connection', 'string|null');
+                }
+            }
+
+            if (array_key_exists('retention_days', $database)) {
+                $retentionDays = $database['retention_days'];
+
+                if ($retentionDays !== null && (!is_int($retentionDays) || $retentionDays < 1)) {
+                    throw InvalidConfigurationException::invalidValue('memory.database.retention_days', 'Must be null or an integer >= 1.');
+                }
+            }
+
+            if (array_key_exists('encrypt_payloads', $database) && !is_bool($database['encrypt_payloads'])) {
+                throw InvalidConfigurationException::invalidType('memory.database.encrypt_payloads', 'bool');
             }
         }
 
-        if (array_key_exists('connection', $database)) {
-            $connection = $database['connection'];
-
-            if ($connection !== null && (!is_string($connection) || $connection === '')) {
-                throw InvalidConfigurationException::invalidType('memory.database.connection', 'string|null');
+        if (array_key_exists('redis', $config['memory'])) {
+            if (!is_array($config['memory']['redis'])) {
+                throw InvalidConfigurationException::invalidType('memory.redis', 'array');
             }
-        }
 
-        if (array_key_exists('retention_days', $database)) {
-            $retentionDays = $database['retention_days'];
+            $redis = $config['memory']['redis'];
 
-            if ($retentionDays !== null && (!is_int($retentionDays) || $retentionDays < 1)) {
-                throw InvalidConfigurationException::invalidValue('memory.database.retention_days', 'Must be null or an integer >= 1.');
+            foreach (['prefix', 'driver_name'] as $key) {
+                if (!array_key_exists($key, $redis)) {
+                    continue;
+                }
+
+                $value = $redis[$key];
+
+                if (!is_string($value) || $value === '') {
+                    throw InvalidConfigurationException::invalidValue("memory.redis.{$key}", 'Must be a non-empty string.');
+                }
             }
-        }
 
-        if (array_key_exists('encrypt_payloads', $database) && !is_bool($database['encrypt_payloads'])) {
-            throw InvalidConfigurationException::invalidType('memory.database.encrypt_payloads', 'bool');
+            if (array_key_exists('connection', $redis)) {
+                $connection = $redis['connection'];
+
+                if ($connection !== null && (!is_string($connection) || $connection === '')) {
+                    throw InvalidConfigurationException::invalidType('memory.redis.connection', 'string|null');
+                }
+            }
+
+            if (array_key_exists('retention_days', $redis)) {
+                $retentionDays = $redis['retention_days'];
+
+                if ($retentionDays !== null && (!is_int($retentionDays) || $retentionDays < 1)) {
+                    throw InvalidConfigurationException::invalidValue('memory.redis.retention_days', 'Must be null or an integer >= 1.');
+                }
+            }
         }
     }
 
