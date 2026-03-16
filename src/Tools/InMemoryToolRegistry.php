@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Tools;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\Tool;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Tools\Exceptions\InvalidToolInputException;
 use CreativeCrafts\LaravelAiAgentKit\Tools\Exceptions\InvalidToolSchemaException;
 use CreativeCrafts\LaravelAiAgentKit\Tools\Exceptions\ToolNotRegisteredException;
+use CreativeCrafts\LaravelAiAgentKit\Tools\Exceptions\ToolUnauthorizedException;
 
 final class InMemoryToolRegistry implements ToolRegistry
 {
@@ -20,8 +22,10 @@ final class InMemoryToolRegistry implements ToolRegistry
     /**
      * @param iterable<Tool> $tools
      */
-    public function __construct(iterable $tools = [])
-    {
+    public function __construct(
+        private readonly ToolAuthorizer $authorizer = new DenyAllToolAuthorizer(),
+        iterable $tools = [],
+    ) {
         foreach ($tools as $tool) {
             $this->register($tool);
         }
@@ -48,6 +52,10 @@ final class InMemoryToolRegistry implements ToolRegistry
         $tool = $this->get($name);
 
         $this->assertValidInput($tool, $input);
+
+        if (!$this->authorizer->authorize($tool, $input)) {
+            throw ToolUnauthorizedException::forName($tool->name());
+        }
 
         return $tool->execute($input);
     }
