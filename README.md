@@ -41,7 +41,8 @@ The package validates its configuration during boot by default.
 
 At least one enabled provider must exist, `default_provider` must reference an enabled configured provider, and `failover_order` must include the default provider.
 
-The database memory driver persists conversations and messages using encrypted payload columns by default. Retention is explicit and purgeable through the memory retention service.
+The default memory driver is now `in_memory`. That default is explicit, non-persistent, and safe for tests, local development, and ephemeral runs. Switch `memory.default_driver` to `database` when you
+want encrypted persistent storage and retention-based purging.
 
 Example configuration:
 
@@ -73,7 +74,11 @@ return [
     ],
 
     'memory' => [
-        'default_driver' => 'database',
+        'default_driver' => 'in_memory',
+
+        'in_memory' => [
+            'retention_days' => null,
+        ],
 
         'database' => [
             'connection' => null,
@@ -137,9 +142,9 @@ Dispatch a queued pipeline using a typed pipeline definition and explicit result
 
 ~~~php
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineResultHandler;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineStep;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\QueuedPipelineDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\QueuedPipelineDispatcher;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineStep;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\Pipeline;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\PipelineBuilder;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\QueueDispatchOptions;
@@ -195,19 +200,46 @@ $dispatcher->dispatch(
 );
 ~~~
 
-Use the database-backed conversation store and retention purger through their contracts:
+Use the memory contracts through their default non-persistent driver:
 
 ~~~php
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationRetentionPurger;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
+use CreativeCrafts\LaravelAiAgentKit\Memory\Conversation;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
+use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessage;
+use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessageRole;
+use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
 
 $conversationStore = app(ConversationStore::class);
 $retentionPurger = app(ConversationRetentionPurger::class);
 
-$conversation = $conversationStore->find(new ConversationId('conv-001'));
+$conversationStore->save(new Conversation(
+    id: new ConversationId('conv-001'),
+    createdAt: new DateTimeImmutable('2026-03-14T09:00:00+00:00'),
+    updatedAt: new DateTimeImmutable('2026-03-14T09:00:00+00:00'),
+    messages: [
+        new ConversationMessage(
+            id: new MessageId('msg-001'),
+            role: ConversationMessageRole::User,
+            content: 'Hello world',
+            createdAt: new DateTimeImmutable('2026-03-14T09:00:00+00:00'),
+        ),
+    ],
+));
 
+$conversation = $conversationStore->find(new ConversationId('conv-001'));
 $purgedCount = $retentionPurger->purgeExpired();
+~~~
+
+Switch to the database driver when you need persistence:
+
+~~~php
+// config/ai-agent-kit.php
+'memory' => [
+    'default_driver' => 'database',
+    // ...
+],
 ~~~
 
 ## Testing
