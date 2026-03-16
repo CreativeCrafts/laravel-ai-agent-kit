@@ -10,6 +10,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationRetentionPurger;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationSummarizer;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Prompts\PromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
@@ -25,6 +26,7 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\InMemoryConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\NullConversationSummarizer;
 use CreativeCrafts\LaravelAiAgentKit\Memory\RedisConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\StoreBackedConversationContextManager;
+use CreativeCrafts\LaravelAiAgentKit\Prompts\InMemoryPromptRepository;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Contracts\Encryption\Encrypter;
@@ -181,6 +183,14 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 
         $this->app->singleton(ConversationContextManager::class, function (Application $app): ConversationContextManager {
             return $app->make(StoreBackedConversationContextManager::class);
+        });
+
+        $this->app->singleton(InMemoryPromptRepository::class, function (): InMemoryPromptRepository {
+            return new InMemoryPromptRepository();
+        });
+
+        $this->app->singleton(PromptRepository::class, function (Application $app): PromptRepository {
+            return $app->make(InMemoryPromptRepository::class);
         });
 
         $this->app->singleton(SynchronousPipelineRunner::class, function (Application $app): SynchronousPipelineRunner {
