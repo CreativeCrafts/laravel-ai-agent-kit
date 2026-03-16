@@ -41,8 +41,8 @@ The package validates its configuration during boot by default.
 
 At least one enabled provider must exist, `default_provider` must reference an enabled configured provider, and `failover_order` must include the default provider.
 
-The default memory driver is now `in_memory`. That default is explicit, non-persistent, and safe for tests, local development, and ephemeral runs. Switch `memory.default_driver` to `database` when you
-want encrypted persistent storage and retention-based purging.
+The default memory driver is `in_memory`. That default is explicit, non-persistent, and safe for tests, local development, and ephemeral runs. Switch `memory.default_driver` to `database` when you
+want encrypted persistent storage and retention-based purging, or to `redis` when you need shared ephemeral memory across workers.
 
 Example configuration:
 
@@ -87,6 +87,13 @@ return [
             'driver_name' => 'database',
             'retention_days' => 30,
             'encrypt_payloads' => true,
+        ],
+
+        'redis' => [
+            'connection' => null,
+            'prefix' => 'ai_agent_memory:',
+            'driver_name' => 'redis',
+            'retention_days' => 7,
         ],
     ],
 ];
@@ -239,6 +246,21 @@ Switch to the database driver when you need persistence:
 'memory' => [
     'default_driver' => 'database',
     // ...
+],
+~~~
+
+Switch to the Redis driver when you need shared ephemeral memory across workers:
+
+~~~php
+// config/ai-agent-kit.php
+'memory' => [
+    'default_driver' => 'redis',
+    'redis' => [
+        'connection' => 'default',
+        'prefix' => 'ai_agent_memory:',
+        'driver_name' => 'redis',
+        'retention_days' => 7,
+    ],
 ],
 ~~~
 

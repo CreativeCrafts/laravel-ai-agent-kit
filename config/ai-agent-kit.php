@@ -86,6 +86,7 @@ return [
     | The in-memory driver is the default non-persistent driver and is safe for
     | tests, local development, and ephemeral runs. The database driver remains
     | available for persistent storage with encrypted payloads and retention.
+    | The Redis driver supports shared ephemeral memory across workers.
     |
     */
   'memory' => [
@@ -106,6 +107,15 @@ return [
         ? 30
         : (int)env('AI_AGENT_KIT_MEMORY_RETENTION_DAYS'),
       'encrypt_payloads' => (bool)env('AI_AGENT_KIT_MEMORY_ENCRYPT_PAYLOADS', true),
+    ],
+
+    'redis' => [
+      'connection' => env('AI_AGENT_KIT_MEMORY_REDIS_CONNECTION'),
+      'prefix' => (string)env('AI_AGENT_KIT_MEMORY_REDIS_PREFIX', 'ai_agent_memory:'),
+      'driver_name' => (string)env('AI_AGENT_KIT_MEMORY_REDIS_DRIVER_NAME', 'redis'),
+      'retention_days' => env('AI_AGENT_KIT_MEMORY_REDIS_RETENTION_DAYS') === null
+        ? null
+        : (int)env('AI_AGENT_KIT_MEMORY_REDIS_RETENTION_DAYS'),
     ],
   ],
 
