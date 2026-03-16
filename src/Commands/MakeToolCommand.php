@@ -18,7 +18,8 @@ final class MakeToolCommand extends Command
 
     public function handle(): int
     {
-        $rawName = (string)$this->argument('name');
+        /** @var string $rawName */
+        $rawName = $this->argument('name');
         $normalizedName = $this->normalizeClassName($rawName);
 
         if ($normalizedName === '') {
