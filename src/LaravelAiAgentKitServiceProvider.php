@@ -20,6 +20,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationRetentionPurger;
 use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationStore;
+use CreativeCrafts\LaravelAiAgentKit\Memory\InMemoryConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\StoreBackedConversationContextManager;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Container\BindingResolutionException;
@@ -110,8 +111,24 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             );
         });
 
+        $this->app->singleton(InMemoryConversationStore::class, function (Application $app): InMemoryConversationStore {
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
+            return new InMemoryConversationStore(
+                retentionDays: $this->nullableIntConfig($config, 'ai-agent-kit.memory.in_memory.retention_days'),
+            );
+        });
+
         $this->app->singleton(ConversationStore::class, function (Application $app): ConversationStore {
-            return $app->make(DatabaseConversationStore::class);
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
+            return match ($this->memoryDriver($config)) {
+                'database' => $app->make(DatabaseConversationStore::class),
+                'in_memory' => $app->make(InMemoryConversationStore::class),
+                default => throw new RuntimeException('Unsupported memory driver.'),
+            };
         });
 
         $this->app->singleton(DatabaseConversationRetentionPurger::class, function (Application $app): DatabaseConversationRetentionPurger {
@@ -128,7 +145,14 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         });
 
         $this->app->singleton(ConversationRetentionPurger::class, function (Application $app): ConversationRetentionPurger {
-            return $app->make(DatabaseConversationRetentionPurger::class);
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
+            return match ($this->memoryDriver($config)) {
+                'database' => $app->make(DatabaseConversationRetentionPurger::class),
+                'in_memory' => $app->make(InMemoryConversationStore::class),
+                default => throw new RuntimeException('Unsupported memory driver.'),
+            };
         });
 
         $this->app->singleton(StoreBackedConversationContextManager::class, function (Application $app): StoreBackedConversationContextManager {
@@ -188,14 +212,18 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return null;
         }
 
-        return is_string($value) && $value !== '' ? $value : throw new RuntimeException("Configuration key [{$key}] must be null or a non-empty string.");
+        return is_string($value) && $value !== ''
+          ? $value
+          : throw new RuntimeException("Configuration key [{$key}] must be null or a non-empty string.");
     }
 
     private function stringConfig(ConfigRepository $config, string $key): string
     {
         $value = $config->get($key);
 
-        return is_string($value) && $value !== '' ? $value : throw new RuntimeException("Configuration key [{$key}] must be a non-empty string.");
+        return is_string($value) && $value !== ''
+          ? $value
+          : throw new RuntimeException("Configuration key [{$key}] must be a non-empty string.");
     }
 
     private function nullableIntConfig(ConfigRepository $config, string $key): ?int
@@ -206,6 +234,13 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return null;
         }
 
-        return is_int($value) ? $value : throw new RuntimeException("Configuration key [{$key}] must be null or an integer.");
+        return is_int($value)
+          ? $value
+          : throw new RuntimeException("Configuration key [{$key}] must be null or an integer.");
+    }
+
+    private function memoryDriver(ConfigRepository $config): string
+    {
+        return $this->stringConfig($config, 'ai-agent-kit.memory.default_driver');
     }
 }

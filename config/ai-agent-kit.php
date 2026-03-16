@@ -83,13 +83,19 @@ return [
     | Memory
     |--------------------------------------------------------------------------
     |
-    | The database driver is the first persistent conversation-memory driver.
-    | Payloads are encrypted before storage by default and expired records may
-    | be purged through the retention service.
+    | The in-memory driver is the default non-persistent driver and is safe for
+    | tests, local development, and ephemeral runs. The database driver remains
+    | available for persistent storage with encrypted payloads and retention.
     |
     */
   'memory' => [
-    'default_driver' => (string)env('AI_AGENT_KIT_MEMORY_DRIVER', 'database'),
+    'default_driver' => (string)env('AI_AGENT_KIT_MEMORY_DRIVER', 'in_memory'),
+
+    'in_memory' => [
+      'retention_days' => env('AI_AGENT_KIT_MEMORY_IN_MEMORY_RETENTION_DAYS') === null
+        ? null
+        : (int)env('AI_AGENT_KIT_MEMORY_IN_MEMORY_RETENTION_DAYS'),
+    ],
 
     'database' => [
       'connection' => env('AI_AGENT_KIT_MEMORY_DB_CONNECTION'),

@@ -121,7 +121,9 @@ final readonly class ConfigValidator
         $this->validateMemory($config);
     }
 
-    /** @param array<string, mixed> $config */
+    /**
+     * @param array<string, mixed> $config
+     */
     private function validateValidationSection(array $config): void
     {
         if (!array_key_exists('validation', $config)) {
@@ -174,7 +176,9 @@ final readonly class ConfigValidator
         return $enabled;
     }
 
-    /** @param array<string, mixed> $config */
+    /**
+     * @param array<string, mixed> $config
+     */
     private function validateBudgets(array $config): void
     {
         if (!array_key_exists('budgets', $config)) {
@@ -224,7 +228,9 @@ final readonly class ConfigValidator
         }
     }
 
-    /** @param array<string, mixed> $config */
+    /**
+     * @param array<string, mixed> $config
+     */
     private function validateMemory(array $config): void
     {
         if (!array_key_exists('memory', $config)) {
@@ -240,6 +246,26 @@ final readonly class ConfigValidator
 
             if (!is_string($defaultDriver) || $defaultDriver === '') {
                 throw InvalidConfigurationException::invalidValue('memory.default_driver', 'Must be a non-empty string.');
+            }
+
+            if (!in_array($defaultDriver, ['database', 'in_memory'], true)) {
+                throw InvalidConfigurationException::invalidValue('memory.default_driver', 'Must be one of: database, in_memory.');
+            }
+        }
+
+        if (array_key_exists('in_memory', $config['memory'])) {
+            if (!is_array($config['memory']['in_memory'])) {
+                throw InvalidConfigurationException::invalidType('memory.in_memory', 'array');
+            }
+
+            $inMemory = $config['memory']['in_memory'];
+
+            if (array_key_exists('retention_days', $inMemory)) {
+                $retentionDays = $inMemory['retention_days'];
+
+                if ($retentionDays !== null && (!is_int($retentionDays) || $retentionDays < 1)) {
+                    throw InvalidConfigurationException::invalidValue('memory.in_memory.retention_days', 'Must be null or an integer >= 1.');
+                }
             }
         }
 

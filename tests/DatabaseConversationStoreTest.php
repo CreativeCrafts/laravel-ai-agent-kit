@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 beforeEach(function (): void {
+    config()->set('ai-agent-kit.memory.default_driver', 'database');
     config()->set('ai-agent-kit.memory.database.connection', 'testing');
     config()->set('ai-agent-kit.memory.database.conversations_table', 'ai_agent_conversations');
     config()->set('ai-agent-kit.memory.database.messages_table', 'ai_agent_conversation_messages');
