@@ -12,11 +12,12 @@ final readonly class PromptTemplate
      * @param list<string> $variables
      */
     public function __construct(
-      public string $name,
-      public string $version,
-      public string $content,
-      public array $variables = [],
-    ) {}
+        public string $name,
+        public string $version,
+        public string $content,
+        public array $variables = [],
+    ) {
+    }
 
     public static function fromContent(string $name, string $version, string $content): self
     {
@@ -26,10 +27,10 @@ final readonly class PromptTemplate
         $variables = array_values(array_unique($matches[1]));
 
         return new self(
-          name: $name,
-          version: $version,
-          content: $content,
-          variables: $variables,
+            name: $name,
+            version: $version,
+            content: $content,
+            variables: $variables,
         );
     }
 
@@ -51,14 +52,14 @@ final readonly class PromptTemplate
         }
 
         return (string)preg_replace_callback(
-          '/\{\{\s*([A-Za-z_]\w*)\s*}}/',
-          static function (array $matches) use ($variables): string {
+            '/\{\{\s*([A-Za-z_]\w*)\s*}}/',
+            static function (array $matches) use ($variables): string {
               $key = $matches[1];
               $value = $variables[$key] ?? null;
 
               return $value === null ? '' : (string)$value;
           },
-          $this->content,
+            $this->content,
         );
     }
 }
