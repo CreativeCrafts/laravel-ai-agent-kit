@@ -119,6 +119,7 @@ final readonly class ConfigValidator
 
         $this->validateBudgets($config);
         $this->validateMemory($config);
+        $this->validateSummarization($config);
     }
 
     /**
@@ -309,6 +310,32 @@ final readonly class ConfigValidator
 
         if (array_key_exists('encrypt_payloads', $database) && !is_bool($database['encrypt_payloads'])) {
             throw InvalidConfigurationException::invalidType('memory.database.encrypt_payloads', 'bool');
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function validateSummarization(array $config): void
+    {
+        if (!array_key_exists('summarization', $config)) {
+            return;
+        }
+
+        if (!is_array($config['summarization'])) {
+            throw InvalidConfigurationException::invalidType('summarization', 'array');
+        }
+
+        if (array_key_exists('enabled', $config['summarization']) && !is_bool($config['summarization']['enabled'])) {
+            throw InvalidConfigurationException::invalidType('summarization.enabled', 'bool');
+        }
+
+        if (array_key_exists('trigger_message_count', $config['summarization'])) {
+            $triggerMessageCount = $config['summarization']['trigger_message_count'];
+
+            if (!is_int($triggerMessageCount) || $triggerMessageCount < 1) {
+                throw InvalidConfigurationException::invalidValue('summarization.trigger_message_count', 'Must be an integer >= 1.');
+            }
         }
     }
 }
