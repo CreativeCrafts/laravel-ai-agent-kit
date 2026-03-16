@@ -9,6 +9,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\QueuedPipelineDispatcher;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationRetentionPurger;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationSummarizer;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
@@ -21,6 +22,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationRetentionPurger;
 use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\InMemoryConversationStore;
+use CreativeCrafts\LaravelAiAgentKit\Memory\NullConversationSummarizer;
 use CreativeCrafts\LaravelAiAgentKit\Memory\StoreBackedConversationContextManager;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Container\BindingResolutionException;
@@ -181,6 +183,22 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 
         $this->app->singleton(QueuedPipelineDispatcher::class, function (Application $app): QueuedPipelineDispatcher {
             return $app->make(LaravelQueuedPipelineDispatcher::class);
+        });
+
+        $this->app->singleton(NullConversationSummarizer::class, function (Application $app): NullConversationSummarizer {
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+            /** @var int $triggerMessageCount */
+            $triggerMessageCount = $config->get('ai-agent-kit.summarization.trigger_message_count', 20);
+
+            return new NullConversationSummarizer(
+                enabled: (bool)$config->get('ai-agent-kit.summarization.enabled', false),
+                triggerMessageCount: $triggerMessageCount,
+            );
+        });
+
+        $this->app->singleton(ConversationSummarizer::class, function (Application $app): ConversationSummarizer {
+            return $app->make(NullConversationSummarizer::class);
         });
     }
 

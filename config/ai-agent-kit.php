@@ -108,4 +108,20 @@ return [
       'encrypt_payloads' => (bool)env('AI_AGENT_KIT_MEMORY_ENCRYPT_PAYLOADS', true),
     ],
   ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Conversation Summarization
+    |--------------------------------------------------------------------------
+    |
+    | Summarization is pluggable and explicit. The default implementation is a
+    | safe no-op summarizer that preserves any existing summary and never writes
+    | a new one. Trigger thresholds are configured centrally so downstream
+    | implementations can reuse the same policy surface.
+    |
+    */
+  'summarization' => [
+    'enabled' => (bool)env('AI_AGENT_KIT_SUMMARIZATION_ENABLED', false),
+    'trigger_message_count' => (int)env('AI_AGENT_KIT_SUMMARIZATION_TRIGGER_MESSAGE_COUNT', 20),
+  ],
 ];
