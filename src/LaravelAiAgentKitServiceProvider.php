@@ -14,6 +14,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Prompts\PromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\ConfigValidator;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\LaravelQueuedPipelineDispatcher;
@@ -28,6 +29,7 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\NullConversationSummarizer;
 use CreativeCrafts\LaravelAiAgentKit\Memory\RedisConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\StoreBackedConversationContextManager;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\InMemoryPromptRepository;
+use CreativeCrafts\LaravelAiAgentKit\Tools\DenyAllToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryToolRegistry;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Container\BindingResolutionException;
@@ -195,8 +197,18 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return $app->make(InMemoryPromptRepository::class);
         });
 
-        $this->app->singleton(InMemoryToolRegistry::class, function (): InMemoryToolRegistry {
-            return new InMemoryToolRegistry();
+        $this->app->singleton(DenyAllToolAuthorizer::class, function (): DenyAllToolAuthorizer {
+            return new DenyAllToolAuthorizer();
+        });
+
+        $this->app->singleton(ToolAuthorizer::class, function (Application $app): ToolAuthorizer {
+            return $app->make(DenyAllToolAuthorizer::class);
+        });
+
+        $this->app->singleton(InMemoryToolRegistry::class, function (Application $app): InMemoryToolRegistry {
+            return new InMemoryToolRegistry(
+                authorizer: $app->make(ToolAuthorizer::class),
+            );
         });
 
         $this->app->singleton(ToolRegistry::class, function (Application $app): ToolRegistry {
