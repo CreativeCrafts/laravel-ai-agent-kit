@@ -62,11 +62,12 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Budgets (reserved for enforcement in later milestones)
+    | Budgets
     |--------------------------------------------------------------------------
     |
-    | These keys are validated now to support fail-fast configuration safety.
-    | Enforcement is implemented in later phases.
+    | These values remain the global execution ceilings for later orchestration
+    | milestones. The retry ceiling is also used now to bound the resolved retry
+    | policy so retry configuration stays explicit and cost-safe.
     |
     */
   'budgets' => [
@@ -76,6 +77,31 @@ return [
     'max_total_timeout_seconds' => (int)env('AI_AGENT_KIT_MAX_TOTAL_TIMEOUT_SECONDS', 120),
     'max_tokens' => env('AI_AGENT_KIT_MAX_TOKENS') === null ? null : (int)env('AI_AGENT_KIT_MAX_TOKENS'),
     'max_cost_usd' => env('AI_AGENT_KIT_MAX_COST_USD') === null ? null : (float)env('AI_AGENT_KIT_MAX_COST_USD'),
+  ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Resilience
+    |--------------------------------------------------------------------------
+    |
+    | Retry policies are declared explicitly and later consumed by pipeline
+    | runners. The resolved retry policy is always bounded by `budgets`
+    | `max_retries_per_step` so configuration cannot bypass global ceilings.
+    |
+    */
+  'resilience' => [
+    'retry' => [
+      'enabled' => (bool)env('AI_AGENT_KIT_RETRY_ENABLED', true),
+      'max_attempts' => (int)env('AI_AGENT_KIT_RETRY_MAX_ATTEMPTS', 3),
+      'backoff' => [
+        'strategy' => (string)env('AI_AGENT_KIT_RETRY_BACKOFF_STRATEGY', 'exponential'),
+        'base_delay_ms' => (int)env('AI_AGENT_KIT_RETRY_BACKOFF_BASE_DELAY_MS', 250),
+        'max_delay_ms' => (int)env('AI_AGENT_KIT_RETRY_BACKOFF_MAX_DELAY_MS', 2000),
+        'multiplier' => env('AI_AGENT_KIT_RETRY_BACKOFF_MULTIPLIER') === null
+          ? 2.0
+          : (float)env('AI_AGENT_KIT_RETRY_BACKOFF_MULTIPLIER'),
+      ],
+    ],
   ],
 
     /*
