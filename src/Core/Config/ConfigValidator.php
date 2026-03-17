@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Config;
 
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\Exceptions\InvalidConfigurationException;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\BackoffStrategy;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 
 final readonly class ConfigValidator
@@ -118,6 +119,7 @@ final readonly class ConfigValidator
         }
 
         $this->validateBudgets($config);
+        $this->validateResilience($config);
         $this->validateMemory($config);
         $this->validateSummarization($config);
     }
@@ -225,6 +227,95 @@ final readonly class ConfigValidator
 
             if ($value < 0) {
                 throw InvalidConfigurationException::invalidValue("budgets.{$key}", 'Must be >= 0.');
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function validateResilience(array $config): void
+    {
+        if (!array_key_exists('resilience', $config)) {
+            return;
+        }
+
+        if (!is_array($config['resilience'])) {
+            throw InvalidConfigurationException::invalidType('resilience', 'array');
+        }
+
+        if (!array_key_exists('retry', $config['resilience'])) {
+            return;
+        }
+
+        if (!is_array($config['resilience']['retry'])) {
+            throw InvalidConfigurationException::invalidType('resilience.retry', 'array');
+        }
+
+        $retry = $config['resilience']['retry'];
+
+        if (array_key_exists('enabled', $retry) && !is_bool($retry['enabled'])) {
+            throw InvalidConfigurationException::invalidType('resilience.retry.enabled', 'bool');
+        }
+
+        if (array_key_exists('max_attempts', $retry)) {
+            $maxAttempts = $retry['max_attempts'];
+
+            if (!is_int($maxAttempts) || $maxAttempts < 1) {
+                throw InvalidConfigurationException::invalidValue('resilience.retry.max_attempts', 'Must be an integer >= 1.');
+            }
+        }
+
+        if (!array_key_exists('backoff', $retry)) {
+            return;
+        }
+
+        if (!is_array($retry['backoff'])) {
+            throw InvalidConfigurationException::invalidType('resilience.retry.backoff', 'array');
+        }
+
+        $backoff = $retry['backoff'];
+
+        if (array_key_exists('strategy', $backoff)) {
+            $strategy = $backoff['strategy'];
+
+            if (!is_string($strategy) || BackoffStrategy::tryFrom($strategy) === null) {
+                throw InvalidConfigurationException::invalidValue(
+                    'resilience.retry.backoff.strategy',
+                    'Must be one of: constant, linear, exponential.',
+                );
+            }
+        }
+
+        if (array_key_exists('base_delay_ms', $backoff)) {
+            $baseDelay = $backoff['base_delay_ms'];
+
+            if (!is_int($baseDelay) || $baseDelay < 0) {
+                throw InvalidConfigurationException::invalidValue('resilience.retry.backoff.base_delay_ms', 'Must be an integer >= 0.');
+            }
+        }
+
+        if (array_key_exists('max_delay_ms', $backoff)) {
+            $maxDelay = $backoff['max_delay_ms'];
+
+            if (!is_int($maxDelay) || $maxDelay < 0) {
+                throw InvalidConfigurationException::invalidValue('resilience.retry.backoff.max_delay_ms', 'Must be an integer >= 0.');
+            }
+
+            $baseDelay = $backoff['base_delay_ms'] ?? 0;
+            if (is_int($baseDelay) && $maxDelay < $baseDelay) {
+                throw InvalidConfigurationException::invalidValue(
+                    'resilience.retry.backoff.max_delay_ms',
+                    'Must be greater than or equal to resilience.retry.backoff.base_delay_ms.',
+                );
+            }
+        }
+
+        if (array_key_exists('multiplier', $backoff)) {
+            $multiplier = $backoff['multiplier'];
+
+            if ((!is_int($multiplier) && !is_float($multiplier)) || $multiplier < 1) {
+                throw InvalidConfigurationException::invalidValue('resilience.retry.backoff.multiplier', 'Must be a numeric value >= 1.');
             }
         }
     }

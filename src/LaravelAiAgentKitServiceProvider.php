@@ -16,6 +16,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Prompts\PromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\RetryPolicyResolver;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\ConfigValidator;
@@ -31,6 +32,7 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\NullConversationSummarizer;
 use CreativeCrafts\LaravelAiAgentKit\Memory\RedisConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\StoreBackedConversationContextManager;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\InMemoryPromptRepository;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\ConfigRetryPolicyResolver;
 use CreativeCrafts\LaravelAiAgentKit\Tools\DenyAllToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryToolRegistry;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
@@ -52,10 +54,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
           ->hasViews()
           ->hasMigration('create_ai_agent_conversations_table')
           ->hasMigration('create_ai_agent_conversation_messages_table')
-          ->hasCommands([
-            MakeToolCommand::class,
-            MakePromptCommand::class,
-          ]);
+          ->hasCommands([MakePromptCommand::class, MakeToolCommand::class]);
     }
 
     public function packageRegistered(): void
@@ -104,6 +103,17 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 
         $this->app->singleton(FailoverProviderSelector::class, function (Application $app): FailoverProviderSelector {
             return $app->make(ConfiguredFailoverProviderSelector::class);
+        });
+
+        $this->app->singleton(ConfigRetryPolicyResolver::class, function (Application $app): ConfigRetryPolicyResolver {
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
+            return new ConfigRetryPolicyResolver($config);
+        });
+
+        $this->app->singleton(RetryPolicyResolver::class, function (Application $app): RetryPolicyResolver {
+            return $app->make(ConfigRetryPolicyResolver::class);
         });
 
         $this->app->singleton(DatabaseConversationStore::class, function (Application $app): DatabaseConversationStore {
