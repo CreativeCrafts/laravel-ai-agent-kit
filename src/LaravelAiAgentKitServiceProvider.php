@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit;
 
+use CreativeCrafts\LaravelAiAgentKit\Commands\MakePromptCommand;
 use CreativeCrafts\LaravelAiAgentKit\Commands\MakeToolCommand;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\QueuedPipelineDispatcher;
@@ -51,7 +52,10 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
           ->hasViews()
           ->hasMigration('create_ai_agent_conversations_table')
           ->hasMigration('create_ai_agent_conversation_messages_table')
-          ->hasCommands([MakeToolCommand::class]);
+          ->hasCommands([
+            MakeToolCommand::class,
+            MakePromptCommand::class,
+          ]);
     }
 
     public function packageRegistered(): void
