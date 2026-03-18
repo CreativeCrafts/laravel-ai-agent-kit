@@ -16,6 +16,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Prompts\PromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\CircuitBreakerManager;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\RetryPolicyResolver;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
@@ -33,6 +34,7 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\RedisConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\StoreBackedConversationContextManager;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\InMemoryPromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\ConfigRetryPolicyResolver;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\InMemoryCircuitBreakerManager;
 use CreativeCrafts\LaravelAiAgentKit\Tools\DenyAllToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryToolRegistry;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
@@ -114,6 +116,17 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 
         $this->app->singleton(RetryPolicyResolver::class, function (Application $app): RetryPolicyResolver {
             return $app->make(ConfigRetryPolicyResolver::class);
+        });
+
+        $this->app->singleton(InMemoryCircuitBreakerManager::class, function (Application $app): InMemoryCircuitBreakerManager {
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
+            return new InMemoryCircuitBreakerManager($config);
+        });
+
+        $this->app->singleton(CircuitBreakerManager::class, function (Application $app): CircuitBreakerManager {
+            return $app->make(InMemoryCircuitBreakerManager::class);
         });
 
         $this->app->singleton(DatabaseConversationStore::class, function (Application $app): DatabaseConversationStore {

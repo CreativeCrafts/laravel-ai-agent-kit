@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Config;
 
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\Exceptions\InvalidConfigurationException;
-use CreativeCrafts\LaravelAiAgentKit\Resilience\BackoffStrategy;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\enums\BackoffStrategy;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 
 final readonly class ConfigValidator
@@ -244,78 +244,102 @@ final readonly class ConfigValidator
             throw InvalidConfigurationException::invalidType('resilience', 'array');
         }
 
-        if (!array_key_exists('retry', $config['resilience'])) {
+        $resilience = $config['resilience'];
+
+        if (array_key_exists('retry', $resilience)) {
+            if (!is_array($resilience['retry'])) {
+                throw InvalidConfigurationException::invalidType('resilience.retry', 'array');
+            }
+
+            $retry = $resilience['retry'];
+
+            if (array_key_exists('enabled', $retry) && !is_bool($retry['enabled'])) {
+                throw InvalidConfigurationException::invalidType('resilience.retry.enabled', 'bool');
+            }
+
+            if (array_key_exists('max_attempts', $retry)) {
+                $maxAttempts = $retry['max_attempts'];
+
+                if (!is_int($maxAttempts) || $maxAttempts < 1) {
+                    throw InvalidConfigurationException::invalidValue('resilience.retry.max_attempts', 'Must be an integer >= 1.');
+                }
+            }
+
+            if (array_key_exists('backoff', $retry)) {
+                if (!is_array($retry['backoff'])) {
+                    throw InvalidConfigurationException::invalidType('resilience.retry.backoff', 'array');
+                }
+
+                $backoff = $retry['backoff'];
+
+                if (array_key_exists('strategy', $backoff)) {
+                    $strategy = $backoff['strategy'];
+
+                    if (!is_string($strategy) || BackoffStrategy::tryFrom($strategy) === null) {
+                        throw InvalidConfigurationException::invalidValue(
+                            'resilience.retry.backoff.strategy',
+                            'Must be one of: constant, linear, exponential.',
+                        );
+                    }
+                }
+
+                if (array_key_exists('base_delay_ms', $backoff)) {
+                    $baseDelay = $backoff['base_delay_ms'];
+
+                    if (!is_int($baseDelay) || $baseDelay < 0) {
+                        throw InvalidConfigurationException::invalidValue('resilience.retry.backoff.base_delay_ms', 'Must be an integer >= 0.');
+                    }
+                }
+
+                if (array_key_exists('max_delay_ms', $backoff)) {
+                    $maxDelay = $backoff['max_delay_ms'];
+
+                    if (!is_int($maxDelay) || $maxDelay < 0) {
+                        throw InvalidConfigurationException::invalidValue('resilience.retry.backoff.max_delay_ms', 'Must be an integer >= 0.');
+                    }
+
+                    $baseDelay = $backoff['base_delay_ms'] ?? 0;
+                    if (is_int($baseDelay) && $maxDelay < $baseDelay) {
+                        throw InvalidConfigurationException::invalidValue(
+                            'resilience.retry.backoff.max_delay_ms',
+                            'Must be greater than or equal to resilience.retry.backoff.base_delay_ms.',
+                        );
+                    }
+                }
+
+                if (array_key_exists('multiplier', $backoff)) {
+                    $multiplier = $backoff['multiplier'];
+
+                    if ((!is_int($multiplier) && !is_float($multiplier)) || $multiplier < 1) {
+                        throw InvalidConfigurationException::invalidValue('resilience.retry.backoff.multiplier', 'Must be a numeric value >= 1.');
+                    }
+                }
+            }
+        }
+
+        if (!array_key_exists('circuit_breaker', $resilience)) {
             return;
         }
 
-        if (!is_array($config['resilience']['retry'])) {
-            throw InvalidConfigurationException::invalidType('resilience.retry', 'array');
+        if (!is_array($resilience['circuit_breaker'])) {
+            throw InvalidConfigurationException::invalidType('resilience.circuit_breaker', 'array');
         }
 
-        $retry = $config['resilience']['retry'];
+        $circuitBreaker = $resilience['circuit_breaker'];
 
-        if (array_key_exists('enabled', $retry) && !is_bool($retry['enabled'])) {
-            throw InvalidConfigurationException::invalidType('resilience.retry.enabled', 'bool');
+        if (array_key_exists('enabled', $circuitBreaker) && !is_bool($circuitBreaker['enabled'])) {
+            throw InvalidConfigurationException::invalidType('resilience.circuit_breaker.enabled', 'bool');
         }
 
-        if (array_key_exists('max_attempts', $retry)) {
-            $maxAttempts = $retry['max_attempts'];
-
-            if (!is_int($maxAttempts) || $maxAttempts < 1) {
-                throw InvalidConfigurationException::invalidValue('resilience.retry.max_attempts', 'Must be an integer >= 1.');
-            }
-        }
-
-        if (!array_key_exists('backoff', $retry)) {
-            return;
-        }
-
-        if (!is_array($retry['backoff'])) {
-            throw InvalidConfigurationException::invalidType('resilience.retry.backoff', 'array');
-        }
-
-        $backoff = $retry['backoff'];
-
-        if (array_key_exists('strategy', $backoff)) {
-            $strategy = $backoff['strategy'];
-
-            if (!is_string($strategy) || BackoffStrategy::tryFrom($strategy) === null) {
-                throw InvalidConfigurationException::invalidValue(
-                    'resilience.retry.backoff.strategy',
-                    'Must be one of: constant, linear, exponential.',
-                );
-            }
-        }
-
-        if (array_key_exists('base_delay_ms', $backoff)) {
-            $baseDelay = $backoff['base_delay_ms'];
-
-            if (!is_int($baseDelay) || $baseDelay < 0) {
-                throw InvalidConfigurationException::invalidValue('resilience.retry.backoff.base_delay_ms', 'Must be an integer >= 0.');
-            }
-        }
-
-        if (array_key_exists('max_delay_ms', $backoff)) {
-            $maxDelay = $backoff['max_delay_ms'];
-
-            if (!is_int($maxDelay) || $maxDelay < 0) {
-                throw InvalidConfigurationException::invalidValue('resilience.retry.backoff.max_delay_ms', 'Must be an integer >= 0.');
+        foreach (['failure_threshold', 'reset_timeout_seconds', 'half_open_success_threshold'] as $key) {
+            if (!array_key_exists($key, $circuitBreaker)) {
+                continue;
             }
 
-            $baseDelay = $backoff['base_delay_ms'] ?? 0;
-            if (is_int($baseDelay) && $maxDelay < $baseDelay) {
-                throw InvalidConfigurationException::invalidValue(
-                    'resilience.retry.backoff.max_delay_ms',
-                    'Must be greater than or equal to resilience.retry.backoff.base_delay_ms.',
-                );
-            }
-        }
+            $value = $circuitBreaker[$key];
 
-        if (array_key_exists('multiplier', $backoff)) {
-            $multiplier = $backoff['multiplier'];
-
-            if ((!is_int($multiplier) && !is_float($multiplier)) || $multiplier < 1) {
-                throw InvalidConfigurationException::invalidValue('resilience.retry.backoff.multiplier', 'Must be a numeric value >= 1.');
+            if (!is_int($value) || $value < 1) {
+                throw InvalidConfigurationException::invalidValue("resilience.circuit_breaker.{$key}", 'Must be an integer >= 1.');
             }
         }
     }

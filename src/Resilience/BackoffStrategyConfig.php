@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Resilience;
 
+use CreativeCrafts\LaravelAiAgentKit\Resilience\enums\BackoffStrategy;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\Exceptions\InvalidRetryPolicyException;
 
 final readonly class BackoffStrategyConfig

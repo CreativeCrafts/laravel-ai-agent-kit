@@ -118,6 +118,41 @@ it('validates retry resilience configuration', function () {
     expect(true)->toBeTrue();
 });
 
+it('validates circuit breaker resilience configuration', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'null' => [
+          'driver' => 'null',
+          'enabled' => true,
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'null',
+      'failover_order' => ['null'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 2,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+      'resilience' => [
+        'circuit_breaker' => [
+          'enabled' => true,
+          'failure_threshold' => 3,
+          'reset_timeout_seconds' => 60,
+          'half_open_success_threshold' => 2,
+        ],
+      ],
+    ]);
+
+    expect(true)->toBeTrue();
+});
+
 it('rejects missing providers', function () {
     /** @var ConfigValidator $validator */
     $validator = app(ConfigValidator::class);
@@ -227,3 +262,64 @@ it('rejects a retry backoff max delay smaller than the base delay', function () 
       ],
     ]);
 })->throws(InvalidConfigurationException::class);
+
+it('rejects an invalid circuit breaker failure threshold', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'null' => [
+          'driver' => 'null',
+          'enabled' => true,
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'null',
+      'failover_order' => ['null'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 2,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+      'resilience' => [
+        'circuit_breaker' => [
+          'enabled' => true,
+          'failure_threshold' => 0,
+          'reset_timeout_seconds' => 60,
+          'half_open_success_threshold' => 1,
+        ],
+      ],
+    ]);
+})->throws(InvalidConfigurationException::class, 'resilience.circuit_breaker.failure_threshold');
+
+it('rejects an invalid circuit breaker section type', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'null' => [
+          'driver' => 'null',
+          'enabled' => true,
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'null',
+      'failover_order' => ['null'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 2,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+      'resilience' => [
+        'circuit_breaker' => 'invalid',
+      ],
+    ]);
+})->throws(InvalidConfigurationException::class, 'resilience.circuit_breaker');
