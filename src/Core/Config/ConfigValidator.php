@@ -121,6 +121,7 @@ final readonly class ConfigValidator
         $this->validateBudgets($config);
         $this->validateResilience($config);
         $this->validateMemory($config);
+        $this->validateVector($config);
         $this->validateSummarization($config);
     }
 
@@ -458,6 +459,46 @@ final readonly class ConfigValidator
                 if ($retentionDays !== null && (!is_int($retentionDays) || $retentionDays < 1)) {
                     throw InvalidConfigurationException::invalidValue('memory.redis.retention_days', 'Must be null or an integer >= 1.');
                 }
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function validateVector(array $config): void
+    {
+        if (!array_key_exists('vector', $config)) {
+            return;
+        }
+
+        if (!is_array($config['vector'])) {
+            throw InvalidConfigurationException::invalidType('vector', 'array');
+        }
+
+        $vector = $config['vector'];
+
+        if (array_key_exists('default_driver', $vector)) {
+            $defaultDriver = $vector['default_driver'];
+
+            if (!is_string($defaultDriver) || $defaultDriver === '') {
+                throw InvalidConfigurationException::invalidValue('vector.default_driver', 'Must be a non-empty string.');
+            }
+
+            if ($defaultDriver !== 'in_memory') {
+                throw InvalidConfigurationException::invalidValue('vector.default_driver', 'Must be one of: in_memory.');
+            }
+        }
+
+        if (array_key_exists('in_memory', $vector)) {
+            if (!is_array($vector['in_memory'])) {
+                throw InvalidConfigurationException::invalidType('vector.in_memory', 'array');
+            }
+
+            $inMemory = $vector['in_memory'];
+
+            if (array_key_exists('enabled', $inMemory) && !is_bool($inMemory['enabled'])) {
+                throw InvalidConfigurationException::invalidType('vector.in_memory.enabled', 'bool');
             }
         }
     }

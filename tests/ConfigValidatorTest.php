@@ -153,6 +153,67 @@ it('validates circuit breaker resilience configuration', function () {
     expect(true)->toBeTrue();
 });
 
+it('validates vector configuration', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'null' => [
+          'driver' => 'null',
+          'enabled' => true,
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'null',
+      'failover_order' => ['null'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 1,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+      'vector' => [
+        'default_driver' => 'in_memory',
+        'in_memory' => [
+          'enabled' => true,
+        ],
+      ],
+    ]);
+
+    expect(true)->toBeTrue();
+});
+
+it('rejects an unsupported vector driver', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'null' => [
+          'driver' => 'null',
+          'enabled' => true,
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'null',
+      'failover_order' => ['null'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 1,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+      'vector' => [
+        'default_driver' => 'unknown',
+      ],
+    ]);
+})->throws(InvalidConfigurationException::class);
+
 it('rejects missing providers', function () {
     /** @var ConfigValidator $validator */
     $validator = app(ConfigValidator::class);

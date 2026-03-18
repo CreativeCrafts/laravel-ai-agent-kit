@@ -153,6 +153,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Vector Store
+    |--------------------------------------------------------------------------
+    |
+    | The initial adapter is an in-memory vector store intended for local use,
+    | deterministic tests, and contract validation. The driver remains explicit
+    | so concrete adapters can be swapped behind the contract boundary later.
+    |
+    */
+  'vector' => [
+    'default_driver' => (string)env('AI_AGENT_KIT_VECTOR_DRIVER', 'in_memory'),
+
+    'in_memory' => [
+      'enabled' => (bool)env('AI_AGENT_KIT_VECTOR_IN_MEMORY_ENABLED', true),
+    ],
+  ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Conversation Summarization
     |--------------------------------------------------------------------------
     |
