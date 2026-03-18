@@ -361,6 +361,34 @@ php artisan ai:make:tool Support/LookupCustomer
 php artisan ai:make:prompt Support.Reply --prompt-version=2.1.0
 ~~~
 
+Use the vector store contract through a backend-agnostic interface:
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreInterface;
+use CreativeCrafts\LaravelAiAgentKit\Vector\VectorDocument;
+use CreativeCrafts\LaravelAiAgentKit\Vector\VectorSearchQuery;
+
+/** @var VectorStoreInterface $vectorStore */
+$vectorStore = app(VectorStoreInterface::class);
+
+$vectorStore->upsert('support', [
+    new VectorDocument(
+        id: 'doc-1',
+        embedding: [0.12, 0.98, 0.44],
+        metadata: ['topic' => 'billing'],
+    ),
+]);
+
+$results = $vectorStore->search('support', new VectorSearchQuery(
+    embedding: [0.10, 0.95, 0.40],
+    limit: 5,
+));
+
+$vectorStore->delete('support', ['doc-1']);
+~~~
+
+The package currently ships the vector port and typed vector exceptions first so adapters can remain cleanly behind the contract boundary. Concrete adapter wiring lands in the next milestone issue.
+
 ## Testing
 
 Run the test suite:
