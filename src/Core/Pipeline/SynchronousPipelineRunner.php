@@ -7,28 +7,51 @@ namespace CreativeCrafts\LaravelAiAgentKit\Core\Pipeline;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\Exceptions\PipelineExecutionException;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\PipelineCompleted;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\PipelineStarted;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\PipelineStepCompleted;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\PipelineStepFailed;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\PipelineStepStarted;
+use Illuminate\Contracts\Events\Dispatcher;
 use Throwable;
 
 final readonly class SynchronousPipelineRunner implements PipelineRunner
 {
     public function __construct(
         private ?ConversationContextManager $conversationContextManager = null,
+        private ?Dispatcher $events = null,
     ) {
     }
 
     public function run(Pipeline $pipeline, RunContext $context): RunContext
     {
         $currentContext = $this->initializeConversationContext($context);
+        $steps = $pipeline->steps();
 
-        foreach ($pipeline->steps() as $step) {
+        $this->dispatch(PipelineStarted::fromContext($currentContext, count($steps)));
+
+        foreach ($steps as $index => $step) {
+            $stepIndex = $index + 1;
+            $stepClass = $step::class;
+
+            $this->dispatch(PipelineStepStarted::fromContext($currentContext, $stepClass, $stepIndex));
+
             try {
                 $currentContext = $step->handle($currentContext);
             } catch (Throwable $throwable) {
-                throw PipelineExecutionException::forStep($step::class, $throwable);
+                $this->dispatch(PipelineStepFailed::fromContext($currentContext, $stepClass, $stepIndex, $throwable));
+
+                throw PipelineExecutionException::forStep($stepClass, $throwable);
             }
+
+            $this->dispatch(PipelineStepCompleted::fromContext($currentContext, $stepClass, $stepIndex));
         }
 
-        return $this->persistConversationContext($currentContext);
+        $persistedContext = $this->persistConversationContext($currentContext);
+
+        $this->dispatch(PipelineCompleted::fromContext($persistedContext));
+
+        return $persistedContext;
     }
 
     private function initializeConversationContext(RunContext $context): RunContext
@@ -38,6 +61,13 @@ final readonly class SynchronousPipelineRunner implements PipelineRunner
         }
 
         return $this->conversationContextManager->initialize($context);
+    }
+
+    private function dispatch(object $event): void
+    {
+        if ($this->events instanceof Dispatcher) {
+            $this->events->dispatch($event);
+        }
     }
 
     private function persistConversationContext(RunContext $context): RunContext
