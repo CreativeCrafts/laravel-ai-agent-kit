@@ -47,6 +47,9 @@ want encrypted persistent storage and retention-based purging, or to `redis` whe
 Retry and circuit breaker resilience settings are configured explicitly under `resilience`. Retry policy evaluation remains bounded by `budgets.max_retries_per_step`, and the circuit breaker exposes
 clear `closed`, `open`, and `half_open` semantics with configurable thresholds and reset timing.
 
+Pipeline lifecycle and failover telemetry are emitted through Laravel events with redacted defaults. Event payloads expose safe metadata such as run identifiers, provider names, step classes, counts,
+and key lists rather than raw prompt, input, metadata, or provider option values by default.
+
 Example configuration:
 
 ~~~php

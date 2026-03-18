@@ -8,7 +8,9 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelecto
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderDisabledException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderNotInFailoverOrderException;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\ProviderFailoverResolved;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
+use Illuminate\Contracts\Events\Dispatcher;
 
 final readonly class ConfiguredFailoverProviderSelector implements FailoverProviderSelector
 {
@@ -16,6 +18,7 @@ final readonly class ConfiguredFailoverProviderSelector implements FailoverProvi
         private ConfigRepository $config,
         private ProviderRegistry $providerRegistry,
         private string $failoverOrderConfigKey = 'ai-agent-kit.failover_order',
+        private ?Dispatcher $events = null,
     ) {
     }
 
@@ -36,7 +39,10 @@ final readonly class ConfiguredFailoverProviderSelector implements FailoverProvi
             throw ProviderNotInFailoverOrderException::named($currentProviderName);
         }
 
-        return $orderedProviders[$currentIndex + 1] ?? null;
+        $nextProvider = $orderedProviders[$currentIndex + 1] ?? null;
+        $this->dispatch(ProviderFailoverResolved::fromDefinitions($currentProviderName, $nextProvider, $orderedProviders));
+
+        return $nextProvider;
     }
 
     /**
@@ -46,14 +52,14 @@ final readonly class ConfiguredFailoverProviderSelector implements FailoverProvi
     {
         $failoverOrder = $this->config->get($this->failoverOrderConfigKey, []);
 
-        if (! is_array($failoverOrder)) {
+        if (!is_array($failoverOrder)) {
             return [];
         }
 
         $providers = [];
 
         foreach ($failoverOrder as $providerName) {
-            if (! is_string($providerName)) {
+            if (!is_string($providerName)) {
                 continue;
             }
             if ($providerName === '') {
@@ -61,7 +67,7 @@ final readonly class ConfiguredFailoverProviderSelector implements FailoverProvi
             }
             $provider = $this->providerRegistry->get($providerName);
 
-            if (! $provider->enabled) {
+            if (!$provider->enabled) {
                 throw ProviderDisabledException::named($providerName);
             }
 
@@ -69,5 +75,12 @@ final readonly class ConfiguredFailoverProviderSelector implements FailoverProvi
         }
 
         return $providers;
+    }
+
+    private function dispatch(object $event): void
+    {
+        if ($this->events instanceof Dispatcher) {
+            $this->events->dispatch($event);
+        }
     }
 }

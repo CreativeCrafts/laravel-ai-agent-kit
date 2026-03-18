@@ -40,6 +40,7 @@ use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryToolRegistry;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Contracts\Encryption\Encrypter;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\DatabaseManager;
 use RuntimeException;
@@ -100,6 +101,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return new ConfiguredFailoverProviderSelector(
                 config: $config,
                 providerRegistry: $app->make(ProviderRegistry::class),
+                events: $app->make(Dispatcher::class),
             );
         });
 
@@ -247,6 +249,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         $this->app->singleton(SynchronousPipelineRunner::class, function (Application $app): SynchronousPipelineRunner {
             return new SynchronousPipelineRunner(
                 conversationContextManager: $app->make(ConversationContextManager::class),
+                events: $app->make(Dispatcher::class),
             );
         });
 
