@@ -102,6 +102,12 @@ return [
           : (float)env('AI_AGENT_KIT_RETRY_BACKOFF_MULTIPLIER'),
       ],
     ],
+    'circuit_breaker' => [
+      'enabled' => (bool)env('AI_AGENT_KIT_CIRCUIT_BREAKER_ENABLED', true),
+      'failure_threshold' => (int)env('AI_AGENT_KIT_CIRCUIT_BREAKER_FAILURE_THRESHOLD', 3),
+      'reset_timeout_seconds' => (int)env('AI_AGENT_KIT_CIRCUIT_BREAKER_RESET_TIMEOUT_SECONDS', 60),
+      'half_open_success_threshold' => (int)env('AI_AGENT_KIT_CIRCUIT_BREAKER_HALF_OPEN_SUCCESS_THRESHOLD', 1),
+    ],
   ],
 
     /*

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Resilience;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\RetryPolicyResolver;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\enums\BackoffStrategy;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\Exceptions\InvalidRetryPolicyException;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 

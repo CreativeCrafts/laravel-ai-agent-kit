@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace CreativeCrafts\LaravelAiAgentKit\Resilience;
+namespace CreativeCrafts\LaravelAiAgentKit\Resilience\enums;
 
 enum BackoffStrategy: string
 {

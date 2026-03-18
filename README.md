@@ -44,6 +44,9 @@ At least one enabled provider must exist, `default_provider` must reference an e
 The default memory driver is `in_memory`. That default is explicit, non-persistent, and safe for tests, local development, and ephemeral runs. Switch `memory.default_driver` to `database` when you
 want encrypted persistent storage and retention-based purging, or to `redis` when you need shared ephemeral memory across workers.
 
+Retry and circuit breaker resilience settings are configured explicitly under `resilience`. Retry policy evaluation remains bounded by `budgets.max_retries_per_step`, and the circuit breaker exposes
+clear `closed`, `open`, and `half_open` semantics with configurable thresholds and reset timing.
+
 Example configuration:
 
 ~~~php
@@ -71,6 +74,25 @@ return [
         'max_total_timeout_seconds' => 120,
         'max_tokens' => null,
         'max_cost_usd' => null,
+    ],
+
+    'resilience' => [
+        'retry' => [
+            'enabled' => true,
+            'max_attempts' => 3,
+            'backoff' => [
+                'strategy' => 'exponential',
+                'base_delay_ms' => 250,
+                'max_delay_ms' => 2000,
+                'multiplier' => 2.0,
+            ],
+        ],
+        'circuit_breaker' => [
+            'enabled' => true,
+            'failure_threshold' => 3,
+            'reset_timeout_seconds' => 60,
+            'half_open_success_threshold' => 1,
+        ],
     ],
 
     'memory' => [
@@ -218,56 +240,136 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessage;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessageRole;
 use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
 
-$conversationStore = app(ConversationStore::class);
-$retentionPurger = app(ConversationRetentionPurger::class);
+$store = app(ConversationStore::class);
 
-$conversationStore->save(new Conversation(
+$conversation = new Conversation(
     id: new ConversationId('conv-001'),
-    createdAt: new DateTimeImmutable('2026-03-14T09:00:00+00:00'),
-    updatedAt: new DateTimeImmutable('2026-03-14T09:00:00+00:00'),
     messages: [
         new ConversationMessage(
             id: new MessageId('msg-001'),
             role: ConversationMessageRole::User,
             content: 'Hello world',
-            createdAt: new DateTimeImmutable('2026-03-14T09:00:00+00:00'),
         ),
     ],
-));
+);
 
-$conversation = $conversationStore->find(new ConversationId('conv-001'));
-$purgedCount = $retentionPurger->purgeExpired();
+$store->save($conversation);
+
+$loaded = $store->get(new ConversationId('conv-001'));
+
+$purger = app(ConversationRetentionPurger::class);
+$purger->purgeExpired();
 ~~~
 
-Switch to the database driver when you need persistence:
+Use the default summarizer through the summarization contract:
 
 ~~~php
-// config/ai-agent-kit.php
-'memory' => [
-    'default_driver' => 'database',
-    // ...
-],
-~~~
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationSummarizer;
+use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
+use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessage;
+use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessageRole;
+use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
+use CreativeCrafts\LaravelAiAgentKit\Memory\SummarizationInput;
 
-Switch to the Redis driver when you need shared ephemeral memory across workers:
+$summarizer = app(ConversationSummarizer::class);
 
-~~~php
-// config/ai-agent-kit.php
-'memory' => [
-    'default_driver' => 'redis',
-    'redis' => [
-        'connection' => 'default',
-        'prefix' => 'ai_agent_memory:',
-        'driver_name' => 'redis',
-        'retention_days' => 7,
+$input = new SummarizationInput(
+    conversationId: new ConversationId('conv-summary'),
+    messages: [
+        new ConversationMessage(
+            id: new MessageId('msg-001'),
+            role: ConversationMessageRole::User,
+            content: 'Summarize this exchange.',
+        ),
+        new ConversationMessage(
+            id: new MessageId('msg-002'),
+            role: ConversationMessageRole::Assistant,
+            content: 'Here is the reply.',
+        ),
     ],
-],
+    existingSummary: null,
+);
+
+$result = $summarizer->summarize($input);
+~~~
+
+Render a versioned prompt template through the in-memory prompt repository:
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Prompts\PromptRepository;
+use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptTemplate;
+
+$repository = app(PromptRepository::class);
+
+$repository->store(
+    new PromptTemplate(
+        name: 'support.reply',
+        version: 'v1',
+        content: 'Reply to {{customer_name}} about {{topic}}.',
+        variables: ['customer_name', 'topic'],
+    ),
+);
+
+$rendered = $repository->render('support.reply', 'v1', [
+    'customer_name' => 'Taylor',
+    'topic' => 'account verification',
+]);
+~~~
+
+Register a tool explicitly and provide an authorization hook before execution:
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\Tool;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
+
+$registry = app(ToolRegistry::class);
+
+$registry->register(new class () implements Tool
+{
+    public function name(): string
+    {
+        return 'math.add';
+    }
+
+    public function inputSchema(): array
+    {
+        return [
+            'type' => 'object',
+            'properties' => [
+                'left' => ['type' => 'integer'],
+                'right' => ['type' => 'integer'],
+            ],
+            'required' => ['left', 'right'],
+            'additionalProperties' => false,
+        ];
+    }
+
+    public function execute(array $input): array
+    {
+        return ['sum' => $input['left'] + $input['right']];
+    }
+});
+~~~
+
+Generate a tool or prompt scaffold:
+
+~~~bash
+php artisan ai:make:tool Support/LookupCustomer
+php artisan ai:make:prompt Support.Reply --prompt-version=2.1.0
 ~~~
 
 ## Testing
 
+Run the test suite:
+
 ~~~bash
 composer test
+~~~
+
+Run static analysis:
+
+~~~bash
+composer analyse
 ~~~
 
 ## Changelog
@@ -284,9 +386,9 @@ Please review [our security policy](../../security/policy) on how to report secu
 
 ## Credits
 
-- [Godspower Oduose](https://github.com/rockblings)
+- [Creative Crafts](https://github.com/creativecrafts)
 - [All Contributors](../../contributors)
 
 ## License
 
-The MIT Licence (MIT). Please see [Licence File](LICENSE.md) for more information.
+The MIT License (MIT). Please see [License File](LICENSE.md) for more information.

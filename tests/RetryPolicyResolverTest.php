@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\RetryPolicyResolver;
-use CreativeCrafts\LaravelAiAgentKit\Resilience\BackoffStrategy;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\BackoffStrategyConfig;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\enums\BackoffStrategy;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\RetryPolicy;
 
 it('resolves a retry policy and bounds it by the configured retry budget', function () {
