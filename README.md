@@ -417,7 +417,7 @@ Please review [our security policy](../../security/policy) on how to report secu
 
 ## Credits
 
-- [Creative Crafts](https://github.com/creativecrafts)
+- [Godspower Oduose](https://github.com/rockblings)
 - [All Contributors](../../contributors)
 
 ## License

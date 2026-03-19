@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Memory;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\EncryptionService;
 use CreativeCrafts\LaravelAiAgentKit\Memory\Exceptions\ConversationStoreException;
 use DateMalformedStringException;
 use DateTimeImmutable;
-use Illuminate\Contracts\Encryption\Encrypter;
 use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
 use JsonException;
@@ -19,7 +19,7 @@ final readonly class DatabaseConversationStore implements ConversationStore
 {
     public function __construct(
         private DatabaseManager $database,
-        private Encrypter $encrypter,
+        private EncryptionService $encryptionService,
         private ?string $connectionName,
         private string $conversationsTable,
         private string $messagesTable,
@@ -202,16 +202,7 @@ final readonly class DatabaseConversationStore implements ConversationStore
         }
 
         try {
-            $decrypted = $this->encrypter->decrypt($payload, false);
-
-            if (!is_string($decrypted)) {
-                throw ConversationStoreException::payloadDecryptionFailed(
-                    $field,
-                    new RuntimeException("Decrypted payload for [{$field}] must be a string."),
-                );
-            }
-
-            return $decrypted;
+            return $this->encryptionService->decryptString($payload);
         } catch (Throwable $exception) {
             throw ConversationStoreException::payloadDecryptionFailed($field, $exception);
         }
@@ -299,7 +290,7 @@ final readonly class DatabaseConversationStore implements ConversationStore
     private function encryptStringPayload(string $field, string $payload): string
     {
         try {
-            return $this->encrypter->encrypt($payload, false);
+            return $this->encryptionService->encryptString($payload);
         } catch (Throwable $exception) {
             throw ConversationStoreException::payloadEncryptionFailed($field, $exception);
         }
