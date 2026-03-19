@@ -18,6 +18,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\CircuitBreakerManager;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\RetryPolicyResolver;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\EncryptionService;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreInterface;
@@ -36,6 +37,7 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\StoreBackedConversationContextManage
 use CreativeCrafts\LaravelAiAgentKit\Prompts\InMemoryPromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\ConfigRetryPolicyResolver;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\InMemoryCircuitBreakerManager;
+use CreativeCrafts\LaravelAiAgentKit\Security\LaravelEncryptionService;
 use CreativeCrafts\LaravelAiAgentKit\Tools\DenyAllToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Vector\InMemoryVectorStore;
@@ -133,17 +135,28 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return $app->make(InMemoryCircuitBreakerManager::class);
         });
 
+        $this->app->singleton(LaravelEncryptionService::class, function (Application $app): LaravelEncryptionService {
+            /** @var Encrypter $encrypter */
+            $encrypter = $app->make(Encrypter::class);
+
+            return new LaravelEncryptionService($encrypter);
+        });
+
+        $this->app->singleton(EncryptionService::class, function (Application $app): EncryptionService {
+            return $app->make(LaravelEncryptionService::class);
+        });
+
         $this->app->singleton(DatabaseConversationStore::class, function (Application $app): DatabaseConversationStore {
             /** @var DatabaseManager $database */
             $database = $app->make(DatabaseManager::class);
-            /** @var Encrypter $encrypter */
-            $encrypter = $app->make(Encrypter::class);
+            /** @var EncryptionService $encryptionService */
+            $encryptionService = $app->make(EncryptionService::class);
             /** @var ConfigRepository $config */
             $config = $app->make(ConfigRepository::class);
 
             return new DatabaseConversationStore(
                 database: $database,
-                encrypter: $encrypter,
+                encryptionService: $encryptionService,
                 connectionName: $this->nullableStringConfig($config, 'ai-agent-kit.memory.database.connection'),
                 conversationsTable: $this->stringConfig($config, 'ai-agent-kit.memory.database.conversations_table'),
                 messagesTable: $this->stringConfig($config, 'ai-agent-kit.memory.database.messages_table'),

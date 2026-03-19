@@ -100,6 +100,56 @@ it('persists and reloads conversations through the database-backed store', funct
       ->and((string)$messageRow?->content_ciphertext)->not->toContain('Summarize the meeting notes.');
 });
 
+it('persists plaintext payloads when database encryption is explicitly disabled', function (): void {
+    config()->set('ai-agent-kit.memory.database.encrypt_payloads', false);
+
+    $store = app(ConversationStore::class);
+    $startedAt = new DateTimeImmutable('2026-03-14T09:00:00+00:00');
+
+    $conversation = new Conversation(
+        id: new ConversationId('conv-plaintext'),
+        createdAt: $startedAt,
+        updatedAt: $startedAt,
+        messages: [
+        new ConversationMessage(
+            id: new MessageId('msg-plaintext'),
+            role: ConversationMessageRole::User,
+            content: 'Plaintext content',
+            createdAt: $startedAt,
+            metadata: ['channel' => 'cli'],
+        ),
+      ],
+        metadata: ['tenant' => 'internal'],
+    );
+
+    $store->save($conversation);
+
+    $conversationRow = DB::table('ai_agent_conversations')
+      ->where('conversation_id', 'conv-plaintext')
+      ->first();
+
+    $messageRow = DB::table('ai_agent_conversation_messages')
+      ->where('message_id', 'msg-plaintext')
+      ->first();
+
+    expect($conversationRow)->not
+      ->toBeNull()
+      ->and($conversationRow?->is_encrypted)->toBe(0)
+      ->and((string)$conversationRow?->metadata_ciphertext)->toContain('internal');
+
+    expect($messageRow)->not
+      ->toBeNull()
+      ->and((string)$messageRow?->content_ciphertext)->toBe('Plaintext content')
+      ->and((string)$messageRow?->metadata_ciphertext)->toContain('cli');
+
+    $reloaded = $store->find(new ConversationId('conv-plaintext'));
+
+    expect($reloaded)
+      ->toBeInstanceOf(Conversation::class)
+      ->and($reloaded?->latestMessage()?->content)->toBe('Plaintext content')
+      ->and($reloaded?->metadataValue('tenant'))->toBe('internal');
+});
+
 it('updates existing conversations and preserves delete semantics through the contract', function (): void {
     $store = app(ConversationStore::class);
     $startedAt = new DateTimeImmutable('2026-03-14T09:00:00+00:00');
