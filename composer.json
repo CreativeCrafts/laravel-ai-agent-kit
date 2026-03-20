@@ -69,6 +69,11 @@
       "@analyse",
       "@test"
     ],
+    "code-check": [
+      "@pint",
+      "@analyse",
+      "@test"
+    ],
     "ci": [
       "@validate-composer",
       "@security-audit",

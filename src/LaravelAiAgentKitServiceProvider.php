@@ -6,6 +6,7 @@ namespace CreativeCrafts\LaravelAiAgentKit;
 
 use CreativeCrafts\LaravelAiAgentKit\Commands\MakePromptCommand;
 use CreativeCrafts\LaravelAiAgentKit\Commands\MakeToolCommand;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\QueuedPipelineDispatcher;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager;
@@ -28,6 +29,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\SynchronousPipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredFailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\SdkAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationRetentionPurger;
 use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\InMemoryConversationStore;
@@ -273,6 +275,14 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
                 'in_memory' => $app->make(InMemoryVectorStore::class),
                 default => throw new RuntimeException('Unsupported vector driver.'),
             };
+        });
+
+        $this->app->singleton(SdkAiRuntime::class, function (): SdkAiRuntime {
+            return new SdkAiRuntime();
+        });
+
+        $this->app->singleton(AiRuntime::class, function (Application $app): AiRuntime {
+            return $app->make(SdkAiRuntime::class);
         });
 
         $this->app->singleton(SynchronousPipelineRunner::class, function (Application $app): SynchronousPipelineRunner {
