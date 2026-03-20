@@ -16,14 +16,23 @@ Install the package with Composer:
 composer require creativecrafts/laravel-ai-agent-kit
 ~~~
 
-Publish and run migrations:
+Laravel AI Agent Kit requires the official Laravel AI SDK at runtime. The package now declares `laravel/ai` as a Composer dependency, so Composer will install the SDK automatically when you require
+this package.
+
+Publish the Laravel AI SDK configuration and migrations first:
+
+~~~bash
+php artisan vendor:publish --provider="Laravel\Ai\AiServiceProvider"
+~~~
+
+Then publish and run this package's migrations:
 
 ~~~bash
 php artisan vendor:publish --tag="ai-agent-kit-migrations"
 php artisan migrate
 ~~~
 
-Publish the configuration file:
+Publish this package's configuration file:
 
 ~~~bash
 php artisan vendor:publish --tag="ai-agent-kit-config"
