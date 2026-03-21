@@ -122,6 +122,7 @@ final readonly class ConfigValidator
         $this->validateResilience($config);
         $this->validateMemory($config);
         $this->validateVector($config);
+        $this->validateTools($config);
         $this->validateSummarization($config);
     }
 
@@ -499,6 +500,127 @@ final readonly class ConfigValidator
 
             if (array_key_exists('enabled', $inMemory) && !is_bool($inMemory['enabled'])) {
                 throw InvalidConfigurationException::invalidType('vector.in_memory.enabled', 'bool');
+            }
+        }
+    }
+
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function validateTools(array $config): void
+    {
+        if (!array_key_exists('tools', $config)) {
+            return;
+        }
+
+        if (!is_array($config['tools'])) {
+            throw InvalidConfigurationException::invalidType('tools', 'array');
+        }
+
+        $tools = $config['tools'];
+
+        if (!array_key_exists('provider_tools', $tools)) {
+            return;
+        }
+
+        if (!is_array($tools['provider_tools'])) {
+            throw InvalidConfigurationException::invalidType('tools.provider_tools', 'array');
+        }
+
+        foreach ($tools['provider_tools'] as $alias => $definition) {
+            if (!is_string($alias) || $alias === '') {
+                throw InvalidConfigurationException::invalidValue('tools.provider_tools', 'Provider tool aliases must be non-empty strings.');
+            }
+
+            if (!is_array($definition)) {
+                throw InvalidConfigurationException::invalidType("tools.provider_tools.{$alias}", 'array');
+            }
+
+            $type = $definition['type'] ?? null;
+
+            if (!is_string($type) || !in_array($type, ['web_search', 'web_fetch', 'file_search'], true)) {
+                throw InvalidConfigurationException::invalidValue(
+                    "tools.provider_tools.{$alias}.type",
+                    'Must be one of: web_search, web_fetch, file_search.',
+                );
+            }
+
+            if (array_key_exists('enabled', $definition) && !is_bool($definition['enabled'])) {
+                throw InvalidConfigurationException::invalidType("tools.provider_tools.{$alias}.enabled", 'bool');
+            }
+
+            if (array_key_exists('max_searches', $definition)) {
+                $maxSearches = $definition['max_searches'];
+
+                if (!is_int($maxSearches) || $maxSearches < 1) {
+                    throw InvalidConfigurationException::invalidValue(
+                        "tools.provider_tools.{$alias}.max_searches",
+                        'Must be an integer >= 1.',
+                    );
+                }
+            }
+
+            if (array_key_exists('allowed_domains', $definition)) {
+                $allowedDomains = $definition['allowed_domains'];
+
+                if (!is_array($allowedDomains)) {
+                    throw InvalidConfigurationException::invalidType("tools.provider_tools.{$alias}.allowed_domains", 'array');
+                }
+
+                foreach ($allowedDomains as $index => $domain) {
+                    if (!is_string($domain) || $domain === '') {
+                        throw InvalidConfigurationException::invalidValue(
+                            "tools.provider_tools.{$alias}.allowed_domains.{$index}",
+                            'Must be a non-empty string.',
+                        );
+                    }
+                }
+            }
+
+            if ($type === 'file_search') {
+                $stores = $definition['stores'] ?? null;
+
+                if (!is_array($stores) || $stores === []) {
+                    throw InvalidConfigurationException::invalidValue(
+                        "tools.provider_tools.{$alias}.stores",
+                        'Must contain at least one store identifier for file_search tools.',
+                    );
+                }
+
+                foreach ($stores as $index => $store) {
+                    if (!is_string($store) || $store === '') {
+                        throw InvalidConfigurationException::invalidValue(
+                            "tools.provider_tools.{$alias}.stores.{$index}",
+                            'Must be a non-empty string.',
+                        );
+                    }
+                }
+            }
+
+            if (array_key_exists('filters', $definition) && !is_array($definition['filters'])) {
+                throw InvalidConfigurationException::invalidType("tools.provider_tools.{$alias}.filters", 'array');
+            }
+
+            if (array_key_exists('location', $definition)) {
+                if (!is_array($definition['location'])) {
+                    throw InvalidConfigurationException::invalidType("tools.provider_tools.{$alias}.location", 'array');
+                }
+
+                foreach (['city', 'region', 'country'] as $key) {
+                    if (!array_key_exists($key, $definition['location'])) {
+                        continue;
+                    }
+
+                    $value = $definition['location'][$key];
+
+                    if ($value !== null && (!is_string($value) || $value === '')) {
+                        throw InvalidConfigurationException::invalidType(
+                            "tools.provider_tools.{$alias}.location.{$key}",
+                            'string|null',
+                        );
+                    }
+                }
             }
         }
     }

@@ -384,3 +384,118 @@ it('rejects an invalid circuit breaker section type', function () {
       ],
     ]);
 })->throws(InvalidConfigurationException::class, 'resilience.circuit_breaker');
+
+it('validates configured provider-native tool mappings', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'null' => [
+          'driver' => 'null',
+          'enabled' => true,
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'null',
+      'failover_order' => ['null'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 1,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+      'tools' => [
+        'provider_tools' => [
+          'web.search' => [
+            'type' => 'web_search',
+            'enabled' => true,
+            'max_searches' => 3,
+            'allowed_domains' => ['example.com'],
+            'location' => [
+              'city' => 'Stockholm',
+              'region' => 'Stockholm County',
+              'country' => 'SE',
+            ],
+          ],
+          'docs.search' => [
+            'type' => 'file_search',
+            'enabled' => true,
+            'stores' => ['store_123'],
+            'filters' => ['scope' => 'support'],
+          ],
+        ],
+      ],
+    ]);
+
+    expect(true)->toBeTrue();
+});
+
+it('rejects provider-native tool mappings with unsupported types', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'null' => [
+          'driver' => 'null',
+          'enabled' => true,
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'null',
+      'failover_order' => ['null'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 1,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+      'tools' => [
+        'provider_tools' => [
+          'web.search' => [
+            'type' => 'browser_search',
+            'enabled' => true,
+          ],
+        ],
+      ],
+    ]);
+})->throws(InvalidConfigurationException::class, 'tools.provider_tools.web.search.type');
+
+it('rejects file search provider-native tools without stores', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'null' => [
+          'driver' => 'null',
+          'enabled' => true,
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'null',
+      'failover_order' => ['null'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 1,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+      'tools' => [
+        'provider_tools' => [
+          'docs.search' => [
+            'type' => 'file_search',
+            'enabled' => true,
+            'stores' => [],
+          ],
+        ],
+      ],
+    ]);
+})->throws(InvalidConfigurationException::class, 'tools.provider_tools.docs.search.stores');
