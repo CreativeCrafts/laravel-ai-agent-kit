@@ -42,6 +42,7 @@ use CreativeCrafts\LaravelAiAgentKit\Resilience\InMemoryCircuitBreakerManager;
 use CreativeCrafts\LaravelAiAgentKit\Security\LaravelEncryptionService;
 use CreativeCrafts\LaravelAiAgentKit\Tools\DenyAllToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryToolRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
 use CreativeCrafts\LaravelAiAgentKit\Vector\InMemoryVectorStore;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Container\BindingResolutionException;
@@ -277,8 +278,20 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             };
         });
 
-        $this->app->singleton(SdkAiRuntime::class, function (): SdkAiRuntime {
-            return new SdkAiRuntime();
+        $this->app->singleton(SdkToolMaterializer::class, function (Application $app): SdkToolMaterializer {
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
+            return new SdkToolMaterializer(
+                toolRegistry: $app->make(ToolRegistry::class),
+                config: $config,
+            );
+        });
+
+        $this->app->singleton(SdkAiRuntime::class, function (Application $app): SdkAiRuntime {
+            return new SdkAiRuntime(
+                toolMaterializer: $app->make(SdkToolMaterializer::class),
+            );
         });
 
         $this->app->singleton(AiRuntime::class, function (Application $app): AiRuntime {

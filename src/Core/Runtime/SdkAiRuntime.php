@@ -6,20 +6,28 @@ namespace CreativeCrafts\LaravelAiAgentKit\Core\Runtime;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeExecutionException;
+use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
 use Laravel\Ai\AnonymousAgent;
 use Throwable;
 
-final class SdkAiRuntime implements AiRuntime
+final readonly class SdkAiRuntime implements AiRuntime
 {
+    public function __construct(
+        private SdkToolMaterializer $toolMaterializer,
+    ) {
+    }
+
     public function execute(ExecutionRequest $request): ExecutionResult
     {
-        $agent = new AnonymousAgent(
-            instructions: $this->instructionsAsString($request),
-            messages: [],
-            tools: [],
-        );
-
         try {
+            $materializedTools = $this->toolMaterializer->materialize($request->toolNames);
+
+            $agent = new AnonymousAgent(
+                instructions: $this->instructionsAsString($request),
+                messages: [],
+                tools: $materializedTools,
+            );
+
             $response = $agent->prompt(
                 prompt: $request->prompt,
                 provider: $request->provider,
@@ -53,6 +61,7 @@ final class SdkAiRuntime implements AiRuntime
             'tool_result_count' => $response->toolResults->count(),
             'step_count' => $response->steps->count(),
             'requested_tool_names' => $request->toolNames,
+            'materialized_tool_count' => count($materializedTools),
           ],
         );
     }

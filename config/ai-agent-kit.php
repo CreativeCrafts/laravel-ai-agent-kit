@@ -171,6 +171,38 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Tool Materialization
+    |--------------------------------------------------------------------------
+    |
+    | Package tools remain explicit and package-owned. Provider-native tools
+    | may only be enabled here through explicit aliases that the runtime can
+    | materialize on demand when a request names them.
+    |
+    */
+  'tools' => [
+    'provider_tools' => [
+        // 'web.search' => [
+        //     'type' => 'web_search',
+        //     'enabled' => true,
+        //     'max_searches' => 3,
+        //     'allowed_domains' => ['example.com'],
+        //     'location' => [
+        //         'city' => 'Stockholm',
+        //         'region' => 'Stockholm County',
+        //         'country' => 'SE',
+        //     ],
+        // ],
+        // 'docs.search' => [
+        //     'type' => 'file_search',
+        //     'enabled' => true,
+        //     'stores' => ['store_123'],
+        //     'filters' => ['scope' => 'support'],
+        // ],
+    ],
+  ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Conversation Summarization
     |--------------------------------------------------------------------------
     |
