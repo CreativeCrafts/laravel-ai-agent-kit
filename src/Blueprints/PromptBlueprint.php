@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Blueprints;
 
+use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use InvalidArgumentException;
 
 final readonly class PromptBlueprint
@@ -27,6 +28,9 @@ final readonly class PromptBlueprint
         public array $input = [],
         public array $metadata = [],
         public ?int $timeout = null,
+        public ?ConversationId $conversationId = null,
+        public bool $storeConversation = false,
+        public bool $continueConversation = false,
     ) {
         if ($this->promptName === '') {
             throw new InvalidArgumentException('Prompt blueprints require a non-empty prompt name.');
@@ -47,6 +51,10 @@ final readonly class PromptBlueprint
 
         if ($this->timeout !== null && $this->timeout < 1) {
             throw new InvalidArgumentException('Prompt blueprints require timeout to be null or an integer greater than or equal to 1.');
+        }
+
+        if ($this->continueConversation && !$this->conversationId instanceof ConversationId) {
+            throw new InvalidArgumentException('Prompt blueprints that continue a conversation require a conversationId.');
         }
     }
 
@@ -69,6 +77,9 @@ final readonly class PromptBlueprint
             input: $this->input,
             metadata: $this->metadata,
             timeout: $this->timeout,
+            conversationId: $this->conversationId,
+            storeConversation: $this->storeConversation,
+            continueConversation: $this->continueConversation,
         );
     }
 
@@ -86,6 +97,9 @@ final readonly class PromptBlueprint
             input: $this->input,
             metadata: $this->metadata,
             timeout: $this->timeout,
+            conversationId: $this->conversationId,
+            storeConversation: $this->storeConversation,
+            continueConversation: $this->continueConversation,
         );
     }
 
@@ -114,6 +128,9 @@ final readonly class PromptBlueprint
             input: $this->input,
             metadata: $this->metadata,
             timeout: $this->timeout,
+            conversationId: $this->conversationId,
+            storeConversation: $this->storeConversation,
+            continueConversation: $this->continueConversation,
         );
     }
 
@@ -142,6 +159,9 @@ final readonly class PromptBlueprint
             input: $this->input,
             metadata: $this->metadata,
             timeout: $this->timeout,
+            conversationId: $this->conversationId,
+            storeConversation: $this->storeConversation,
+            continueConversation: $this->continueConversation,
         );
     }
 
@@ -159,6 +179,9 @@ final readonly class PromptBlueprint
             input: $this->input,
             metadata: $this->metadata,
             timeout: $this->timeout,
+            conversationId: $this->conversationId,
+            storeConversation: $this->storeConversation,
+            continueConversation: $this->continueConversation,
         );
     }
 
@@ -176,6 +199,9 @@ final readonly class PromptBlueprint
             input: $this->input,
             metadata: $this->metadata,
             timeout: $this->timeout,
+            conversationId: $this->conversationId,
+            storeConversation: $this->storeConversation,
+            continueConversation: $this->continueConversation,
         );
     }
 
@@ -204,6 +230,9 @@ final readonly class PromptBlueprint
             input: $this->input,
             metadata: $this->metadata,
             timeout: $this->timeout,
+            conversationId: $this->conversationId,
+            storeConversation: $this->storeConversation,
+            continueConversation: $this->continueConversation,
         );
     }
 
@@ -232,6 +261,9 @@ final readonly class PromptBlueprint
             input: $input,
             metadata: $this->metadata,
             timeout: $this->timeout,
+            conversationId: $this->conversationId,
+            storeConversation: $this->storeConversation,
+            continueConversation: $this->continueConversation,
         );
     }
 
@@ -260,6 +292,9 @@ final readonly class PromptBlueprint
             input: $this->input,
             metadata: $metadata,
             timeout: $this->timeout,
+            conversationId: $this->conversationId,
+            storeConversation: $this->storeConversation,
+            continueConversation: $this->continueConversation,
         );
     }
 
@@ -277,6 +312,69 @@ final readonly class PromptBlueprint
             input: $this->input,
             metadata: $this->metadata,
             timeout: $timeout,
+            conversationId: $this->conversationId,
+            storeConversation: $this->storeConversation,
+            continueConversation: $this->continueConversation,
+        );
+    }
+
+    public function startConversation(ConversationId|string|null $conversationId = null, bool $storeConversation = true): self
+    {
+        return new self(
+            promptName: $this->promptName,
+            runId: $this->runId,
+            version: $this->version,
+            variables: $this->variables,
+            instructions: $this->instructions,
+            provider: $this->provider,
+            model: $this->model,
+            toolNames: $this->toolNames,
+            input: $this->input,
+            metadata: $this->metadata,
+            timeout: $this->timeout,
+            conversationId: $this->resolveConversationId($conversationId),
+            storeConversation: $storeConversation,
+            continueConversation: false,
+        );
+    }
+
+    public function continueConversation(ConversationId|string $conversationId, bool $storeConversation = true): self
+    {
+        return new self(
+            promptName: $this->promptName,
+            runId: $this->runId,
+            version: $this->version,
+            variables: $this->variables,
+            instructions: $this->instructions,
+            provider: $this->provider,
+            model: $this->model,
+            toolNames: $this->toolNames,
+            input: $this->input,
+            metadata: $this->metadata,
+            timeout: $this->timeout,
+            conversationId: $this->resolveConversationId($conversationId),
+            storeConversation: $storeConversation,
+            continueConversation: true,
+        );
+    }
+
+    public function withoutConversationContext(): self
+    {
+        return new self(
+            promptName: $this->promptName,
+            runId: $this->runId,
+            version: $this->version,
+            variables: $this->variables,
+            instructions: $this->instructions,
+            provider: $this->provider,
+            model: $this->model,
+            toolNames: $this->toolNames,
+            input: $this->input,
+            metadata: $this->metadata,
+            timeout: $this->timeout,
+            conversationId: null,
+            storeConversation: false,
+            continueConversation: false,
         );
     }
 
@@ -299,5 +397,16 @@ final readonly class PromptBlueprint
         }
 
         return $normalized;
+    }
+
+    private function resolveConversationId(ConversationId|string|null $conversationId): ?ConversationId
+    {
+        if ($conversationId === null) {
+            return null;
+        }
+
+        return $conversationId instanceof ConversationId
+          ? $conversationId
+          : new ConversationId($conversationId);
     }
 }

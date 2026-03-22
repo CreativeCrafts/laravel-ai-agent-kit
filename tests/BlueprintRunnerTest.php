@@ -2,19 +2,21 @@
 
 declare(strict_types=1);
 
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\BlueprintCompiler;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\BlueprintRunner;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Prompts\PromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\Tool;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\CompiledBlueprintRunner;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\PromptBlueprintCompiler;
 use CreativeCrafts\LaravelAiAgentKit\LaravelAiAgentKit;
+use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\InMemoryPromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolAdapter;
 use Laravel\Ai\Ai;
 use Laravel\Ai\AiServiceProvider;
 use Laravel\Ai\AnonymousAgent;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\BlueprintCompiler;
-use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\PromptBlueprintCompiler;
 
 it('runs a prompt blueprint through the sdk-backed runtime bridge using package-owned fluent apis', function () {
     app()->register(AiServiceProvider::class);
@@ -95,6 +97,44 @@ it('runs a prompt blueprint through the sdk-backed runtime bridge using package-
           && $tools[0] instanceof SdkToolAdapter
           && $tools[0]->name() === 'math.add';
     });
+});
+
+it('runs a prompt blueprint with package-owned conversation controls through the memory bridge', function () {
+    app()->register(AiServiceProvider::class);
+
+    app()->instance(PromptRepository::class, new InMemoryPromptRepository([
+      'support.reply' => [
+        '1.0.0' => 'Reply to {{name}}.',
+      ],
+    ]));
+    app()->forgetInstance(BlueprintCompiler::class);
+    app()->forgetInstance(PromptBlueprintCompiler::class);
+    app()->forgetInstance(BlueprintRunner::class);
+    app()->forgetInstance(CompiledBlueprintRunner::class);
+
+    Ai::fakeAgent(AnonymousAgent::class, ['Blueprint conversation response'])->preventStrayPrompts();
+
+    /** @var BlueprintRunner $runner */
+    $runner = app(BlueprintRunner::class);
+
+    $result = $runner->run(
+        LaravelAiAgentKit::prompt('support.reply')
+        ->withRunId('run-blueprint-conversation-001')
+        ->withVersion('1.0.0')
+        ->withVariables(['name' => 'Prince'])
+        ->usingProvider('openai')
+        ->startConversation(new ConversationId('conv-blueprint-runner-001')),
+    );
+
+    /** @var ConversationStore $store */
+    $store = app(ConversationStore::class);
+    $conversation = $store->find(new ConversationId('conv-blueprint-runner-001'));
+
+    expect($result->metadata['package_conversation_id'])
+      ->toBe('conv-blueprint-runner-001')
+      ->and($conversation?->messageCount())->toBe(2)
+      ->and($conversation?->messages[0]->content)->toBe('Reply to Prince.')
+      ->and($conversation?->messages[1]->content)->toBe('Blueprint conversation response');
 });
 
 it('binds the blueprint runner contract to the compiled blueprint runner', function () {

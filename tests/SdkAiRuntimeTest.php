@@ -3,16 +3,24 @@
 declare(strict_types=1);
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\Tool;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeExecutionException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\SdkAiRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Memory\Conversation;
+use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
+use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessage;
+use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessageRole;
+use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolAdapter;
 use Laravel\Ai\Ai;
 use Laravel\Ai\AiServiceProvider;
 use Laravel\Ai\AnonymousAgent;
+use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
 
@@ -55,8 +63,11 @@ it('executes a runtime request through the laravel ai sdk bridge', function () {
       ->toHaveKey('invocation_id')
       ->toHaveKey('requested_tool_names')
       ->toHaveKey('materialized_tool_count')
+      ->toHaveKey('projected_message_count')
       ->and($result->metadata['requested_tool_names'])->toBe([])
-      ->and($result->metadata['materialized_tool_count'])->toBe(0);
+      ->and($result->metadata['materialized_tool_count'])->toBe(0)
+      ->and($result->metadata['projected_message_count'])->toBe(0)
+      ->and($result->metadata['package_conversation_id'])->toBeNull();
 });
 
 it('materializes package-governed tools into the sdk agent prompt', function () {
@@ -155,6 +166,116 @@ it('materializes explicitly configured provider-native tools into the sdk agent 
           && $tools[0] instanceof WebSearch
           && $tools[0]->maxSearches === 2
           && $tools[0]->allowedDomains === ['example.com'];
+    });
+});
+
+it('starts and persists a new package-owned conversation through the runtime bridge', function () {
+    app()->register(AiServiceProvider::class);
+
+    Ai::fakeAgent(AnonymousAgent::class, ['New conversation response'])->preventStrayPrompts();
+
+    /** @var AiRuntime $runtime */
+    $runtime = app(AiRuntime::class);
+
+    $result = $runtime->execute(
+        new ExecutionRequest(
+            runId: 'run-bridge-memory-start',
+            prompt: 'Start a conversation.',
+            provider: 'openai',
+            storeConversation: true,
+        ),
+    );
+
+    $conversationId = $result->metadata['package_conversation_id'];
+
+    /** @var ConversationStore $store */
+    $store = app(ConversationStore::class);
+    $conversation = is_string($conversationId)
+      ? $store->find(new ConversationId($conversationId))
+      : null;
+
+    expect($conversationId)
+      ->toBeString()
+      ->and($result->metadata['projected_message_count'])->toBe(0)
+      ->and($conversation?->messageCount())->toBe(2)
+      ->and($conversation?->messages[0]->role)->toBe(ConversationMessageRole::User)
+      ->and($conversation?->messages[0]->content)->toBe('Start a conversation.')
+      ->and($conversation?->messages[1]->role)->toBe(ConversationMessageRole::Assistant)
+      ->and($conversation?->messages[1]->content)->toBe('New conversation response');
+});
+
+it('continues a stored package conversation through the runtime bridge and persists appended state', function () {
+    app()->register(AiServiceProvider::class);
+
+    $conversationId = new ConversationId('conv-runtime-001');
+    $startedAt = new DateTimeImmutable('2026-03-22T10:00:00+00:00');
+
+    /** @var ConversationStore $store */
+    $store = app(ConversationStore::class);
+    $store->save(
+        new Conversation(
+            id: $conversationId,
+            createdAt: $startedAt,
+            updatedAt: $startedAt,
+            messages: [
+          new ConversationMessage(
+              id: new MessageId('msg-system'),
+              role: ConversationMessageRole::System,
+              content: 'Remember the customer prefers concise replies.',
+              createdAt: $startedAt,
+          ),
+          new ConversationMessage(
+              id: new MessageId('msg-user-1'),
+              role: ConversationMessageRole::User,
+              content: 'Previous question',
+              createdAt: $startedAt,
+          ),
+          new ConversationMessage(
+              id: new MessageId('msg-assistant-1'),
+              role: ConversationMessageRole::Assistant,
+              content: 'Previous answer',
+              createdAt: $startedAt,
+          ),
+        ],
+        ),
+    );
+
+    Ai::fakeAgent(AnonymousAgent::class, ['Follow-up response'])->preventStrayPrompts();
+
+    /** @var AiRuntime $runtime */
+    $runtime = app(AiRuntime::class);
+
+    $result = $runtime->execute(
+        new ExecutionRequest(
+            runId: 'run-bridge-memory-continue',
+            prompt: 'New follow-up question',
+            provider: 'openai',
+            conversationId: $conversationId,
+            storeConversation: true,
+            continueConversation: true,
+        ),
+    );
+
+    $persistedConversation = $store->find($conversationId);
+
+    expect($result->metadata['package_conversation_id'])
+      ->toBe('conv-runtime-001')
+      ->and($result->metadata['projected_message_count'])->toBe(2)
+      ->and($persistedConversation?->messageCount())->toBe(5)
+      ->and($persistedConversation?->messages[3]->content)->toBe('New follow-up question')
+      ->and($persistedConversation?->messages[4]->content)->toBe('Follow-up response')
+      ->and($persistedConversation?->metadata['last_run_id'])->toBe('run-bridge-memory-continue');
+
+    Ai::assertAgentWasPrompted(AnonymousAgent::class, function ($prompt): bool {
+        $messages = $prompt->agent->messages();
+        $messages = is_array($messages) ? array_values($messages) : array_values(iterator_to_array($messages));
+
+        return str_contains($prompt->agent->instructions(), 'Remember the customer prefers concise replies.')
+          && count($messages) === 2
+          && $messages[0] instanceof UserMessage
+          && $messages[0]->content === 'Previous question'
+          && $messages[1] instanceof AssistantMessage
+          && $messages[1]->content === 'Previous answer';
     });
 });
 
