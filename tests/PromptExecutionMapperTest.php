@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\RuntimeTelemetryAgent;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\Exceptions\MissingPromptVariableException;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\InMemoryPromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptExecutionMapper;
 use Laravel\Ai\Ai;
 use Laravel\Ai\AiServiceProvider;
-use Laravel\Ai\AnonymousAgent;
 
 it('maps a rendered prompt into a package-owned execution request', function () {
     $repository = new InMemoryPromptRepository([
@@ -75,7 +75,7 @@ it('preserves package-owned missing-variable failures during mapping', function 
 it('maps prompt repository output into a request the sdk runtime can execute', function () {
     app()->register(AiServiceProvider::class);
 
-    Ai::fakeAgent(AnonymousAgent::class, ['Mapped runtime response'])->preventStrayPrompts();
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, ['Mapped runtime response'])->preventStrayPrompts();
 
     $repository = new InMemoryPromptRepository([
       'support.reply' => [

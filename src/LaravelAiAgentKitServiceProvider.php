@@ -41,6 +41,7 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\InMemoryConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\NullConversationSummarizer;
 use CreativeCrafts\LaravelAiAgentKit\Memory\RedisConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\StoreBackedConversationContextManager;
+use CreativeCrafts\LaravelAiAgentKit\Observability\SdkTelemetryNormalizer;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\InMemoryPromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptExecutionMapper;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\ConfigRetryPolicyResolver;
@@ -56,6 +57,10 @@ use Illuminate\Contracts\Encryption\Encrypter;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\DatabaseManager;
+use Laravel\Ai\Events\AgentPrompted;
+use Laravel\Ai\Events\InvokingTool;
+use Laravel\Ai\Events\PromptingAgent;
+use Laravel\Ai\Events\ToolInvoked;
 use RuntimeException;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
@@ -310,6 +315,12 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             );
         });
 
+        $this->app->singleton(SdkTelemetryNormalizer::class, function (Application $app): SdkTelemetryNormalizer {
+            return new SdkTelemetryNormalizer(
+                events: $app->make(Dispatcher::class),
+            );
+        });
+
         $this->app->singleton(SdkAiRuntime::class, function (Application $app): SdkAiRuntime {
             return new SdkAiRuntime(
                 toolMaterializer: $app->make(SdkToolMaterializer::class),
@@ -386,6 +397,14 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         if ($enabled) {
             $app->make(ConfigValidator::class)->validateCurrentConfig();
         }
+
+        $normalizer = $app->make(SdkTelemetryNormalizer::class);
+        $events = $app->make(Dispatcher::class);
+
+        $events->listen(PromptingAgent::class, [$normalizer, 'handlePromptingAgent']);
+        $events->listen(AgentPrompted::class, [$normalizer, 'handleAgentPrompted']);
+        $events->listen(InvokingTool::class, [$normalizer, 'handleInvokingTool']);
+        $events->listen(ToolInvoked::class, [$normalizer, 'handleToolInvoked']);
     }
 
     private function nullableStringConfig(ConfigRepository $config, string $key): ?string

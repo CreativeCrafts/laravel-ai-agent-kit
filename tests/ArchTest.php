@@ -24,3 +24,7 @@ arch('public vector contracts and strategy types do not depend on laravel ai sdk
     'CreativeCrafts\\LaravelAiAgentKit\\Vector\\SdkBackedVectorAdapterStrategy',
   ])
   ->not->toUse('Laravel\\Ai');
+
+arch('public observability events do not depend on laravel ai sdk types')
+  ->expect('CreativeCrafts\LaravelAiAgentKit\Observability\Events')
+  ->not->toUse('Laravel\Ai');
