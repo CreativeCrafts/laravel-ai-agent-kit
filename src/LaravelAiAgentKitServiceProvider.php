@@ -7,6 +7,8 @@ namespace CreativeCrafts\LaravelAiAgentKit;
 use CreativeCrafts\LaravelAiAgentKit\Commands\MakePromptCommand;
 use CreativeCrafts\LaravelAiAgentKit\Commands\MakeToolCommand;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\BlueprintCompiler;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\BlueprintRunner;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\QueuedPipelineDispatcher;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager;
@@ -29,6 +31,8 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\SynchronousPipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredFailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\CompiledBlueprintRunner;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\PromptBlueprintCompiler;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\SdkAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationRetentionPurger;
 use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationStore;
@@ -37,6 +41,7 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\NullConversationSummarizer;
 use CreativeCrafts\LaravelAiAgentKit\Memory\RedisConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\StoreBackedConversationContextManager;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\InMemoryPromptRepository;
+use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptExecutionMapper;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\ConfigRetryPolicyResolver;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\InMemoryCircuitBreakerManager;
 use CreativeCrafts\LaravelAiAgentKit\Security\LaravelEncryptionService;
@@ -288,6 +293,16 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             );
         });
 
+        $this->app->singleton(PromptBlueprintCompiler::class, function (Application $app): PromptBlueprintCompiler {
+            return new PromptBlueprintCompiler(
+                promptExecutionMapper: $app->make(PromptExecutionMapper::class),
+            );
+        });
+
+        $this->app->singleton(BlueprintCompiler::class, function (Application $app): BlueprintCompiler {
+            return $app->make(PromptBlueprintCompiler::class);
+        });
+
         $this->app->singleton(SdkAiRuntime::class, function (Application $app): SdkAiRuntime {
             return new SdkAiRuntime(
                 toolMaterializer: $app->make(SdkToolMaterializer::class),
@@ -296,6 +311,17 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 
         $this->app->singleton(AiRuntime::class, function (Application $app): AiRuntime {
             return $app->make(SdkAiRuntime::class);
+        });
+
+        $this->app->singleton(CompiledBlueprintRunner::class, function (Application $app): CompiledBlueprintRunner {
+            return new CompiledBlueprintRunner(
+                blueprintCompiler: $app->make(BlueprintCompiler::class),
+                aiRuntime: $app->make(AiRuntime::class),
+            );
+        });
+
+        $this->app->singleton(BlueprintRunner::class, function (Application $app): BlueprintRunner {
+            return $app->make(CompiledBlueprintRunner::class);
         });
 
         $this->app->singleton(SynchronousPipelineRunner::class, function (Application $app): SynchronousPipelineRunner {
