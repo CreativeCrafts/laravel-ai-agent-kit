@@ -10,13 +10,13 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\Tool;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\CompiledBlueprintRunner;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\PromptBlueprintCompiler;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\RuntimeTelemetryAgent;
 use CreativeCrafts\LaravelAiAgentKit\LaravelAiAgentKit;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\InMemoryPromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolAdapter;
 use Laravel\Ai\Ai;
 use Laravel\Ai\AiServiceProvider;
-use Laravel\Ai\AnonymousAgent;
 
 it('runs a prompt blueprint through the sdk-backed runtime bridge using package-owned fluent apis', function () {
     app()->register(AiServiceProvider::class);
@@ -60,7 +60,7 @@ it('runs a prompt blueprint through the sdk-backed runtime bridge using package-
       },
     );
 
-    Ai::fakeAgent(AnonymousAgent::class, ['Blueprint runner response'])->preventStrayPrompts();
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, ['Blueprint runner response'])->preventStrayPrompts();
 
     /** @var BlueprintRunner $runner */
     $runner = app(BlueprintRunner::class);
@@ -88,7 +88,7 @@ it('runs a prompt blueprint through the sdk-backed runtime bridge using package-
       ->and($result->metadata['requested_tool_names'])->toBe(['math.add'])
       ->and($result->metadata['materialized_tool_count'])->toBe(1);
 
-    Ai::assertAgentWasPrompted(AnonymousAgent::class, function ($prompt): bool {
+    Ai::assertAgentWasPrompted(RuntimeTelemetryAgent::class, function ($prompt): bool {
         $tools = $prompt->agent->tools();
         $tools = is_array($tools) ? array_values($tools) : array_values(iterator_to_array($tools));
 
@@ -112,7 +112,7 @@ it('runs a prompt blueprint with package-owned conversation controls through the
     app()->forgetInstance(BlueprintRunner::class);
     app()->forgetInstance(CompiledBlueprintRunner::class);
 
-    Ai::fakeAgent(AnonymousAgent::class, ['Blueprint conversation response'])->preventStrayPrompts();
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, ['Blueprint conversation response'])->preventStrayPrompts();
 
     /** @var BlueprintRunner $runner */
     $runner = app(BlueprintRunner::class);

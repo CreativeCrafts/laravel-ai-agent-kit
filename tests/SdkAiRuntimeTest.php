@@ -9,6 +9,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeExecutionException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\RuntimeTelemetryAgent;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\SdkAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Memory\Conversation;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
@@ -16,13 +17,12 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessage;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessageRole;
 use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolAdapter;
+use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
 use Laravel\Ai\Ai;
 use Laravel\Ai\AiServiceProvider;
-use Laravel\Ai\AnonymousAgent;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Providers\Tools\WebSearch;
-use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
 
 it('binds the ai runtime contract to the sdk ai runtime', function () {
     app()->register(AiServiceProvider::class);
@@ -35,7 +35,7 @@ it('binds the ai runtime contract to the sdk ai runtime', function () {
 it('executes a runtime request through the laravel ai sdk bridge', function () {
     app()->register(AiServiceProvider::class);
 
-    Ai::fakeAgent(AnonymousAgent::class, ['Bridge response'])->preventStrayPrompts();
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, ['Bridge response'])->preventStrayPrompts();
 
     /** @var AiRuntime $runtime */
     $runtime = app(AiRuntime::class);
@@ -102,7 +102,7 @@ it('materializes package-governed tools into the sdk agent prompt', function () 
       },
     );
 
-    Ai::fakeAgent(AnonymousAgent::class, ['Bridge response'])->preventStrayPrompts();
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, ['Bridge response'])->preventStrayPrompts();
 
     /** @var AiRuntime $runtime */
     $runtime = app(AiRuntime::class);
@@ -117,7 +117,7 @@ it('materializes package-governed tools into the sdk agent prompt', function () 
         ),
     );
 
-    Ai::assertAgentWasPrompted(AnonymousAgent::class, function ($prompt): bool {
+    Ai::assertAgentWasPrompted(RuntimeTelemetryAgent::class, function ($prompt): bool {
         $tools = $prompt->agent->tools();
         $tools = is_array($tools) ? array_values($tools) : array_values(iterator_to_array($tools));
 
@@ -143,7 +143,7 @@ it('materializes explicitly configured provider-native tools into the sdk agent 
     app()->forgetInstance(SdkAiRuntime::class);
     app()->forgetInstance(AiRuntime::class);
 
-    Ai::fakeAgent(AnonymousAgent::class, ['Bridge response'])->preventStrayPrompts();
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, ['Bridge response'])->preventStrayPrompts();
 
     /** @var AiRuntime $runtime */
     $runtime = app(AiRuntime::class);
@@ -158,7 +158,7 @@ it('materializes explicitly configured provider-native tools into the sdk agent 
         ),
     );
 
-    Ai::assertAgentWasPrompted(AnonymousAgent::class, function ($prompt): bool {
+    Ai::assertAgentWasPrompted(RuntimeTelemetryAgent::class, function ($prompt): bool {
         $tools = $prompt->agent->tools();
         $tools = is_array($tools) ? array_values($tools) : array_values(iterator_to_array($tools));
 
@@ -172,7 +172,7 @@ it('materializes explicitly configured provider-native tools into the sdk agent 
 it('starts and persists a new package-owned conversation through the runtime bridge', function () {
     app()->register(AiServiceProvider::class);
 
-    Ai::fakeAgent(AnonymousAgent::class, ['New conversation response'])->preventStrayPrompts();
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, ['New conversation response'])->preventStrayPrompts();
 
     /** @var AiRuntime $runtime */
     $runtime = app(AiRuntime::class);
@@ -240,7 +240,7 @@ it('continues a stored package conversation through the runtime bridge and persi
         ),
     );
 
-    Ai::fakeAgent(AnonymousAgent::class, ['Follow-up response'])->preventStrayPrompts();
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, ['Follow-up response'])->preventStrayPrompts();
 
     /** @var AiRuntime $runtime */
     $runtime = app(AiRuntime::class);
@@ -266,7 +266,7 @@ it('continues a stored package conversation through the runtime bridge and persi
       ->and($persistedConversation?->messages[4]->content)->toBe('Follow-up response')
       ->and($persistedConversation?->metadata['last_run_id'])->toBe('run-bridge-memory-continue');
 
-    Ai::assertAgentWasPrompted(AnonymousAgent::class, function ($prompt): bool {
+    Ai::assertAgentWasPrompted(RuntimeTelemetryAgent::class, function ($prompt): bool {
         $messages = $prompt->agent->messages();
         $messages = is_array($messages) ? array_values($messages) : array_values(iterator_to_array($messages));
 
@@ -300,7 +300,7 @@ it('wraps missing tool materialization failures in a typed runtime execution exc
 it('wraps sdk runtime failures in a typed runtime execution exception', function () {
     app()->register(AiServiceProvider::class);
 
-    Ai::fakeAgent(AnonymousAgent::class, [
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, [
       static function (): never {
           throw new RuntimeException('SDK failure');
       },

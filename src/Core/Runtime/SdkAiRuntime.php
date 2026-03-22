@@ -7,7 +7,6 @@ namespace CreativeCrafts\LaravelAiAgentKit\Core\Runtime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeExecutionException;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
-use Laravel\Ai\AnonymousAgent;
 use Throwable;
 
 final readonly class SdkAiRuntime implements AiRuntime
@@ -23,8 +22,10 @@ final readonly class SdkAiRuntime implements AiRuntime
         try {
             $projectedConversation = $this->runtimeConversationMemoryBridge->project($request);
             $materializedTools = $this->toolMaterializer->materialize($request->toolNames);
+            $telemetryContext = RuntimeTelemetryContext::fromRequest($request, $projectedConversation);
 
-            $agent = new AnonymousAgent(
+            $agent = new RuntimeTelemetryAgent(
+                telemetryContext: $telemetryContext,
                 instructions: $this->instructionsAsString($request, $projectedConversation->systemInstructions),
                 messages: $projectedConversation->messages,
                 tools: $materializedTools,
