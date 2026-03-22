@@ -6,6 +6,7 @@ namespace CreativeCrafts\LaravelAiAgentKit\Prompts;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Prompts\PromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
+use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 
 final readonly class PromptExecutionMapper
 {
@@ -33,6 +34,9 @@ final readonly class PromptExecutionMapper
         array $input = [],
         array $metadata = [],
         ?int $timeout = null,
+        ?ConversationId $conversationId = null,
+        bool $storeConversation = false,
+        bool $continueConversation = false,
     ): ExecutionRequest {
         $template = $this->promptRepository->get($name, $version);
         $renderedPrompt = $template->render($variables);
@@ -61,6 +65,9 @@ final readonly class PromptExecutionMapper
             input: $input,
             metadata: $resolvedMetadata,
             timeout: $timeout,
+            conversationId: $conversationId,
+            storeConversation: $storeConversation,
+            continueConversation: $continueConversation,
         );
     }
 }

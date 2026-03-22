@@ -7,6 +7,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\BlueprintCompilatio
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\PromptBlueprintCompiler;
 use CreativeCrafts\LaravelAiAgentKit\LaravelAiAgentKit;
+use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\InMemoryPromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptExecutionMapper;
 
@@ -52,7 +53,35 @@ it('compiles a prompt blueprint into a package-owned execution request', functio
         'prompt_name' => 'support.reply',
         'prompt_version' => '1.0.0',
       ])
-      ->and($request->timeout)->toBe(30);
+      ->and($request->timeout)->toBe(30)
+      ->and($request->conversationId)->toBeNull()
+      ->and($request->storeConversation)->toBeFalse()
+      ->and($request->continueConversation)->toBeFalse();
+});
+
+it('compiles prompt blueprint conversation controls into the execution request', function () {
+    $repository = new InMemoryPromptRepository([
+      'support.reply' => [
+        '1.0.0' => 'Hello {{name}}.',
+      ],
+    ]);
+
+    $compiler = new PromptBlueprintCompiler(
+        new PromptExecutionMapper($repository),
+    );
+
+    $request = $compiler->compile(
+        LaravelAiAgentKit::prompt('support.reply')
+        ->withRunId('run-blueprint-conversation-001')
+        ->withVersion('1.0.0')
+        ->withVariables(['name' => 'Prince'])
+        ->continueConversation(new ConversationId('conv-blueprint-001')),
+    );
+
+    expect($request->conversationId?->toString())
+      ->toBe('conv-blueprint-001')
+      ->and($request->storeConversation)->toBeTrue()
+      ->and($request->continueConversation)->toBeTrue();
 });
 
 it('preserves package-owned run id validation during blueprint compilation', function () {

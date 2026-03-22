@@ -36,6 +36,9 @@ final readonly class PromptBlueprintCompiler implements BlueprintCompiler
             input: $blueprint->input,
             metadata: $blueprint->metadata,
             timeout: $blueprint->timeout,
+            conversationId: $blueprint->conversationId,
+            storeConversation: $blueprint->storeConversation,
+            continueConversation: $blueprint->continueConversation,
         );
     }
 }

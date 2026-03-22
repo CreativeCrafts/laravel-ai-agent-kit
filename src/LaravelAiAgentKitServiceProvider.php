@@ -33,6 +33,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\CompiledBlueprintRunner;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\PromptBlueprintCompiler;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\RuntimeConversationMemoryBridge;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\SdkAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationRetentionPurger;
 use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationStore;
@@ -303,9 +304,16 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return $app->make(PromptBlueprintCompiler::class);
         });
 
+        $this->app->singleton(RuntimeConversationMemoryBridge::class, function (Application $app): RuntimeConversationMemoryBridge {
+            return new RuntimeConversationMemoryBridge(
+                conversationContextManager: $app->make(ConversationContextManager::class),
+            );
+        });
+
         $this->app->singleton(SdkAiRuntime::class, function (Application $app): SdkAiRuntime {
             return new SdkAiRuntime(
                 toolMaterializer: $app->make(SdkToolMaterializer::class),
+                runtimeConversationMemoryBridge: $app->make(RuntimeConversationMemoryBridge::class),
             );
         });
 

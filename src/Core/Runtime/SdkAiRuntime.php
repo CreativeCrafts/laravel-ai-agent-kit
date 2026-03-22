@@ -14,17 +14,19 @@ final readonly class SdkAiRuntime implements AiRuntime
 {
     public function __construct(
         private SdkToolMaterializer $toolMaterializer,
+        private RuntimeConversationMemoryBridge $runtimeConversationMemoryBridge,
     ) {
     }
 
     public function execute(ExecutionRequest $request): ExecutionResult
     {
         try {
+            $projectedConversation = $this->runtimeConversationMemoryBridge->project($request);
             $materializedTools = $this->toolMaterializer->materialize($request->toolNames);
 
             $agent = new AnonymousAgent(
-                instructions: $this->instructionsAsString($request),
-                messages: [],
+                instructions: $this->instructionsAsString($request, $projectedConversation->systemInstructions),
+                messages: $projectedConversation->messages,
                 tools: $materializedTools,
             );
 
@@ -33,6 +35,12 @@ final readonly class SdkAiRuntime implements AiRuntime
                 provider: $request->provider,
                 model: $request->model,
                 timeout: $request->timeout,
+            );
+
+            $conversation = $this->runtimeConversationMemoryBridge->reconcile(
+                projected: $projectedConversation,
+                request: $request,
+                response: $response,
             );
         } catch (Throwable $throwable) {
             throw RuntimeExecutionException::forRequest($request->runId, $throwable);
@@ -62,15 +70,22 @@ final readonly class SdkAiRuntime implements AiRuntime
             'step_count' => $response->steps->count(),
             'requested_tool_names' => $request->toolNames,
             'materialized_tool_count' => count($materializedTools),
+            'projected_message_count' => $projectedConversation->projectedMessageCount(),
+            'package_conversation_id' => $conversation?->id->toString(),
+            'package_conversation_message_count' => $conversation?->messageCount(),
           ],
         );
     }
 
-    private function instructionsAsString(ExecutionRequest $request): string
+    /**
+     * @param list<string> $projectedSystemInstructions
+     */
+    private function instructionsAsString(ExecutionRequest $request, array $projectedSystemInstructions = []): string
     {
+        /** @var list<string> $instructions */
         $instructions = array_values(
             array_filter(
-                $request->instructions,
+                array_merge($projectedSystemInstructions, $request->instructions),
                 static fn (string $instruction): bool => $instruction !== '',
             ),
         );
