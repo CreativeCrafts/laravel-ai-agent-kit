@@ -396,7 +396,12 @@ $results = $vectorStore->search('support', new VectorSearchQuery(
 $vectorStore->delete('support', ['doc-1']);
 ~~~
 
-The package currently ships the vector port and typed vector exceptions first so adapters can remain cleanly behind the contract boundary. Concrete adapter wiring lands in the next milestone issue.
+The package-owned vector port remains authoritative. `VectorStoreInterface`, `VectorDocument`, `VectorSearchQuery`, `VectorSearchResult`, and the typed vector exceptions are the stable package
+boundary for retrieval flows.
+
+SDK-backed retrieval remains an implementation strategy rather than a public contract replacement. Internal adapters may delegate embedding generation, provider-native retrieval execution, or
+retrieval orchestration to Laravel AI SDK, but they must continue to accept package-owned vector inputs and return package-owned `VectorSearchResult` collections. SDK types must not leak through
+public vector contracts, DTOs, or typed exceptions.
 
 ## Testing
 
