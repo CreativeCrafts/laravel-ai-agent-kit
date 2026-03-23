@@ -60,8 +60,8 @@ it('emits redacted pipeline lifecycle events during successful execution', funct
           ->toBe('run-observability-success')
           ->and($event->totalSteps)->toBe(1)
           ->and($event->selectedProvider)->toBe('primary')
-          ->and($event->inputKeys)->toBe(['secret', 'safe_key'])
-          ->and($event->metadataKeys)->toBe(['token'])
+          ->and($event->inputKeys)->toBe(['[redacted-key]', 'safe_key'])
+          ->and($event->metadataKeys)->toBe(['[redacted-key]'])
           ->and(property_exists($event, 'input'))->toBeFalse();
 
         return true;
@@ -72,7 +72,7 @@ it('emits redacted pipeline lifecycle events during successful execution', funct
           ->toBe('run-observability-success')
           ->and($event->stepIndex)->toBe(1)
           ->and($event->stateKeys)->toBe([])
-          ->and($event->metadataKeys)->toBe(['token']);
+          ->and($event->metadataKeys)->toBe(['[redacted-key]']);
 
         return true;
     });
@@ -83,7 +83,7 @@ it('emits redacted pipeline lifecycle events during successful execution', funct
           ->and($event->stepIndex)->toBe(1)
           ->and($event->stepCount)->toBe(1)
           ->and($event->stateKeys)->toBe(['normalized'])
-          ->and($event->metadataKeys)->toBe(['token', 'result']);
+          ->and($event->metadataKeys)->toBe(['[redacted-key]', 'result']);
 
         return true;
     });
@@ -94,7 +94,7 @@ it('emits redacted pipeline lifecycle events during successful execution', funct
           ->and($event->totalSteps)->toBe(1)
           ->and($event->toolCallCount)->toBe(0)
           ->and($event->stateKeys)->toBe(['normalized'])
-          ->and($event->metadataKeys)->toBe(['token', 'result'])
+          ->and($event->metadataKeys)->toBe(['[redacted-key]', 'result'])
           ->and(property_exists($event, 'state'))->toBeFalse();
 
         return true;

@@ -22,6 +22,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\CircuitBreakerManager;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\RetryPolicyResolver;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\EncryptionService;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\Redactor;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreInterface;
@@ -46,6 +47,7 @@ use CreativeCrafts\LaravelAiAgentKit\Prompts\InMemoryPromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptExecutionMapper;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\ConfigRetryPolicyResolver;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\InMemoryCircuitBreakerManager;
+use CreativeCrafts\LaravelAiAgentKit\Security\DefaultRedactor;
 use CreativeCrafts\LaravelAiAgentKit\Security\LaravelEncryptionService;
 use CreativeCrafts\LaravelAiAgentKit\Tools\DenyAllToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryToolRegistry;
@@ -158,6 +160,14 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 
         $this->app->singleton(EncryptionService::class, function (Application $app): EncryptionService {
             return $app->make(LaravelEncryptionService::class);
+        });
+
+        $this->app->singleton(DefaultRedactor::class, function (): DefaultRedactor {
+            return new DefaultRedactor();
+        });
+
+        $this->app->singleton(Redactor::class, function (Application $app): Redactor {
+            return $app->make(DefaultRedactor::class);
         });
 
         $this->app->singleton(DatabaseConversationStore::class, function (Application $app): DatabaseConversationStore {
@@ -318,6 +328,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         $this->app->singleton(SdkTelemetryNormalizer::class, function (Application $app): SdkTelemetryNormalizer {
             return new SdkTelemetryNormalizer(
                 events: $app->make(Dispatcher::class),
+                redactor: $app->make(Redactor::class),
             );
         });
 
@@ -347,6 +358,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return new SynchronousPipelineRunner(
                 conversationContextManager: $app->make(ConversationContextManager::class),
                 events: $app->make(Dispatcher::class),
+                redactor: $app->make(Redactor::class),
             );
         });
 
