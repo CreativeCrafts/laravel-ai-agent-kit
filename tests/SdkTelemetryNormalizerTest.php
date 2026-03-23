@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\Redactor;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\RuntimeTelemetryAgent;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\RuntimeTelemetryContext;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\RuntimeExecutionCompleted;
@@ -9,6 +10,7 @@ use CreativeCrafts\LaravelAiAgentKit\Observability\Events\RuntimeExecutionStarte
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\RuntimeToolInvocationCompleted;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\RuntimeToolInvocationStarted;
 use CreativeCrafts\LaravelAiAgentKit\Observability\SdkTelemetryNormalizer;
+use CreativeCrafts\LaravelAiAgentKit\Security\DefaultRedactor;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Collection;
@@ -36,7 +38,7 @@ it('normalizes sdk prompting and completion events into redacted package telemet
     /** @var Dispatcher $eventDispatcher */
     $eventDispatcher = Event::getFacadeRoot();
 
-    $normalizer = new SdkTelemetryNormalizer(events: $eventDispatcher);
+    $normalizer = new SdkTelemetryNormalizer(events: $eventDispatcher, redactor: new DefaultRedactor());
 
     $telemetryAgent = new RuntimeTelemetryAgent(
         telemetryContext: new RuntimeTelemetryContext(
@@ -138,7 +140,7 @@ it('normalizes sdk prompting and completion events into redacted package telemet
           ->and($event->provider)->toBe('openai')
           ->and($event->model)->toBe('gpt-4o-mini')
           ->and($event->requestedToolNames)->toBe([])
-          ->and($event->inputKeys)->toBe(['secret'])
+          ->and($event->inputKeys)->toBe(['[redacted-key]'])
           ->and($event->metadataKeys)->toBe(['trace_id'])
           ->and($event->packageConversationId)->toBeNull()
           ->and($event->storeConversation)->toBeFalse()
@@ -180,7 +182,23 @@ it('normalizes sdk tool invocation events into redacted package telemetry', func
     /** @var Dispatcher $eventDispatcher */
     $eventDispatcher = Event::getFacadeRoot();
 
-    $normalizer = new SdkTelemetryNormalizer(events: $eventDispatcher);
+    $normalizer = new SdkTelemetryNormalizer(
+        events: $eventDispatcher,
+        redactor: new class () implements Redactor {
+        public function redactText(string $value): string
+        {
+            return '[custom:' . strlen($value) . ']';
+        }
+
+        public function redactKeys(array $values): array
+        {
+            return array_map(
+                static fn (string $key): string => 'custom:' . $key,
+                array_values(array_filter(array_keys($values), static fn (string $key): bool => $key !== '')),
+            );
+        }
+    },
+    );
 
     $telemetryAgent = new RuntimeTelemetryAgent(
         telemetryContext: new RuntimeTelemetryContext(
@@ -247,7 +265,7 @@ it('normalizes sdk tool invocation events into redacted package telemetry', func
           ->and($event->invocationId)->toBe('invoke-tool-001')
           ->and($event->toolInvocationId)->toBe('tool-call-001')
           ->and($event->toolName)->toBe('math.add')
-          ->and($event->argumentKeys)->toBe(['left', 'right'])
+          ->and($event->argumentKeys)->toBe(['custom:left', 'custom:right'])
           ->and(property_exists($event, 'arguments'))->toBeFalse();
 
         return true;
@@ -259,7 +277,7 @@ it('normalizes sdk tool invocation events into redacted package telemetry', func
           ->and($event->invocationId)->toBe('invoke-tool-001')
           ->and($event->toolInvocationId)->toBe('tool-call-001')
           ->and($event->toolName)->toBe('math.add')
-          ->and($event->argumentKeys)->toBe(['left', 'right'])
+          ->and($event->argumentKeys)->toBe(['custom:left', 'custom:right'])
           ->and($event->resultType)->toBe('array')
           ->and(property_exists($event, 'result'))->toBeFalse();
 

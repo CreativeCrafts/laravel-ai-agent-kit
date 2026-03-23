@@ -6,6 +6,7 @@ namespace CreativeCrafts\LaravelAiAgentKit\Core\Pipeline;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\Redactor;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\Exceptions\PipelineExecutionException;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\PipelineCompleted;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\PipelineStarted;
@@ -20,6 +21,7 @@ final readonly class SynchronousPipelineRunner implements PipelineRunner
     public function __construct(
         private ?ConversationContextManager $conversationContextManager = null,
         private ?Dispatcher $events = null,
+        private ?Redactor $redactor = null,
     ) {
     }
 
@@ -28,13 +30,13 @@ final readonly class SynchronousPipelineRunner implements PipelineRunner
         $currentContext = $this->initializeConversationContext($context);
         $steps = $pipeline->steps();
 
-        $this->dispatch(PipelineStarted::fromContext($currentContext, count($steps)));
+        $this->dispatch(PipelineStarted::fromContext($currentContext, count($steps), $this->redactor));
 
         foreach ($steps as $index => $step) {
             $stepIndex = $index + 1;
             $stepClass = $step::class;
 
-            $this->dispatch(PipelineStepStarted::fromContext($currentContext, $stepClass, $stepIndex));
+            $this->dispatch(PipelineStepStarted::fromContext($currentContext, $stepClass, $stepIndex, $this->redactor));
 
             try {
                 $currentContext = $step->handle($currentContext);
@@ -44,12 +46,12 @@ final readonly class SynchronousPipelineRunner implements PipelineRunner
                 throw PipelineExecutionException::forStep($stepClass, $throwable);
             }
 
-            $this->dispatch(PipelineStepCompleted::fromContext($currentContext, $stepClass, $stepIndex));
+            $this->dispatch(PipelineStepCompleted::fromContext($currentContext, $stepClass, $stepIndex, $this->redactor));
         }
 
         $persistedContext = $this->persistConversationContext($currentContext);
 
-        $this->dispatch(PipelineCompleted::fromContext($persistedContext));
+        $this->dispatch(PipelineCompleted::fromContext($persistedContext, $this->redactor));
 
         return $persistedContext;
     }

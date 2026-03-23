@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Observability\Events;
 
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\Redactor;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\RunContext;
 
 final readonly class PipelineStepCompleted
@@ -23,7 +24,7 @@ final readonly class PipelineStepCompleted
     ) {
     }
 
-    public static function fromContext(RunContext $context, string $stepClass, int $stepIndex): self
+    public static function fromContext(RunContext $context, string $stepClass, int $stepIndex, ?Redactor $redactor = null): self
     {
         return new self(
             runId: $context->runId,
@@ -31,8 +32,8 @@ final readonly class PipelineStepCompleted
             stepIndex: $stepIndex,
             stepCount: $context->stepCount,
             selectedProvider: $context->selectedProvider,
-            stateKeys: self::keys($context->state),
-            metadataKeys: self::keys($context->metadata),
+            stateKeys: self::keys($context->state, $redactor),
+            metadataKeys: self::keys($context->metadata, $redactor),
         );
     }
 
@@ -40,8 +41,12 @@ final readonly class PipelineStepCompleted
      * @param array<string, mixed> $values
      * @return list<string>
      */
-    private static function keys(array $values): array
+    private static function keys(array $values, ?Redactor $redactor = null): array
     {
+        if ($redactor instanceof Redactor) {
+            return $redactor->redactKeys($values);
+        }
+
         return array_values(
             array_filter(
                 array_keys($values),

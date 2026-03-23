@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Observability;
 
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\Redactor;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\RuntimeTelemetryAgent;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\RuntimeExecutionCompleted;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\RuntimeExecutionStarted;
@@ -20,6 +21,7 @@ final readonly class SdkTelemetryNormalizer
 {
     public function __construct(
         private Dispatcher $events,
+        private Redactor $redactor,
     ) {
     }
 
@@ -40,8 +42,8 @@ final readonly class SdkTelemetryNormalizer
                 provider: $this->resolveProviderName($event->prompt->provider()),
                 model: $event->prompt->model,
                 requestedToolNames: $telemetry->requestedToolNames,
-                inputKeys: $telemetry->inputKeys,
-                metadataKeys: $telemetry->metadataKeys,
+                inputKeys: $this->redactor->redactKeys(array_fill_keys($telemetry->inputKeys, true)),
+                metadataKeys: $this->redactor->redactKeys(array_fill_keys($telemetry->metadataKeys, true)),
                 packageConversationId: $telemetry->packageConversationId?->toString(),
                 storeConversation: $telemetry->storeConversation,
                 continueConversation: $telemetry->continueConversation,
@@ -100,7 +102,7 @@ final readonly class SdkTelemetryNormalizer
                 invocationId: $event->invocationId,
                 toolInvocationId: $event->toolInvocationId,
                 toolName: $this->resolveToolName($event->tool),
-                argumentKeys: $this->keys($event->arguments),
+                argumentKeys: $this->redactor->redactKeys($this->argumentsAsMap($event->arguments)),
                 packageConversationId: $agent->telemetryContext->packageConversationId?->toString(),
             ),
         );
@@ -120,7 +122,7 @@ final readonly class SdkTelemetryNormalizer
                 invocationId: $event->invocationId,
                 toolInvocationId: $event->toolInvocationId,
                 toolName: $this->resolveToolName($event->tool),
-                argumentKeys: $this->keys($event->arguments),
+                argumentKeys: $this->redactor->redactKeys($this->argumentsAsMap($event->arguments)),
                 resultType: get_debug_type($event->result),
                 packageConversationId: $agent->telemetryContext->packageConversationId?->toString(),
             ),
@@ -160,15 +162,22 @@ final readonly class SdkTelemetryNormalizer
 
     /**
      * @param array<mixed> $arguments
-     * @return list<string>
+     * @return array<string, mixed>
      */
-    private function keys(array $arguments): array
+    private function argumentsAsMap(array $arguments): array
     {
-        return array_values(
-            array_filter(
-                array_keys($arguments),
-                static fn (string $key): bool => $key !== '',
-            ),
-        );
+        $normalized = [];
+
+        foreach ($arguments as $key => $value) {
+            if (!is_string($key)) {
+                continue;
+            }
+            if ($key === '') {
+                continue;
+            }
+            $normalized[$key] = $value;
+        }
+
+        return $normalized;
     }
 }
