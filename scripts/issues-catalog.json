@@ -1,0 +1,2737 @@
+{
+  "labels": [
+    {
+      "name": "type:epic",
+      "color": "5319e7",
+      "description": "Issue type: epic"
+    },
+    {
+      "name": "type:feature",
+      "color": "1d76db",
+      "description": "Issue type: feature"
+    },
+    {
+      "name": "type:task",
+      "color": "0e8a16",
+      "description": "Issue type: task"
+    },
+    {
+      "name": "type:docs",
+      "color": "006b75",
+      "description": "Issue type: docs"
+    },
+    {
+      "name": "type:chore",
+      "color": "8a979e",
+      "description": "Issue type: chore"
+    },
+    {
+      "name": "area:core",
+      "color": "0052cc",
+      "description": "Module area: core"
+    },
+    {
+      "name": "area:runtime",
+      "color": "1d76db",
+      "description": "Module area: runtime"
+    },
+    {
+      "name": "area:prompts",
+      "color": "5319e7",
+      "description": "Module area: prompts"
+    },
+    {
+      "name": "area:tools",
+      "color": "d93f0b",
+      "description": "Module area: tools"
+    },
+    {
+      "name": "area:memory",
+      "color": "fbca04",
+      "description": "Module area: memory"
+    },
+    {
+      "name": "area:resilience",
+      "color": "b60205",
+      "description": "Module area: resilience"
+    },
+    {
+      "name": "area:vector",
+      "color": "0e8a16",
+      "description": "Module area: vector"
+    },
+    {
+      "name": "area:security",
+      "color": "b60205",
+      "description": "Module area: security"
+    },
+    {
+      "name": "area:observability",
+      "color": "e99695",
+      "description": "Module area: observability"
+    },
+    {
+      "name": "area:scaffolding",
+      "color": "c2e0c6",
+      "description": "Module area: scaffolding"
+    },
+    {
+      "name": "area:docs",
+      "color": "e4e669",
+      "description": "Module area: docs"
+    },
+    {
+      "name": "priority:P0",
+      "color": "b60205",
+      "description": "Priority P0: critical"
+    },
+    {
+      "name": "priority:P1",
+      "color": "d93f0b",
+      "description": "Priority P1: high"
+    },
+    {
+      "name": "priority:P2",
+      "color": "fbca04",
+      "description": "Priority P2: medium"
+    },
+    {
+      "name": "risk:security",
+      "color": "b60205",
+      "description": "Risk: security"
+    },
+    {
+      "name": "risk:perf",
+      "color": "5319e7",
+      "description": "Risk: performance"
+    },
+    {
+      "name": "risk:cost",
+      "color": "e99695",
+      "description": "Risk: cost"
+    },
+    {
+      "name": "risk:breaking-change",
+      "color": "c5def5",
+      "description": "Risk: breaking change"
+    },
+    {
+      "name": "status:blocked",
+      "color": "d93f0b",
+      "description": "Status: blocked"
+    },
+    {
+      "name": "status:needs-spec",
+      "color": "fbca04",
+      "description": "Status: needs spec"
+    },
+    {
+      "name": "status:ready",
+      "color": "0e8a16",
+      "description": "Status: ready"
+    }
+  ],
+  "milestones": [
+    {
+      "title": "P0 — Laravel AI SDK Alignment & Runtime Boundary",
+      "description": "Make Laravel AI SDK the package runtime substrate while preserving package-owned contracts, fluent APIs, and governance boundaries."
+    },
+    {
+      "title": "P1 — Core Workflow Infrastructure",
+      "description": "Establish workflow composition, provider policy, queueing, and installation/publishing on top of the SDK-backed runtime boundary."
+    },
+    {
+      "title": "P2 — Conversation Memory & State",
+      "description": "Provide package-owned conversation persistence, retention, and summarization with SDK context bridge compatibility."
+    },
+    {
+      "title": "P3 — Prompt & Tool Governance",
+      "description": "Keep prompt and tool governance package-owned while executing through the SDK runtime."
+    },
+    {
+      "title": "P4 — Resilience & Orchestration Enhancements",
+      "description": "Add retries, budgets, circuit breaking, lifecycle events, and failover telemetry around SDK-backed execution."
+    },
+    {
+      "title": "P5 — Vector & Retrieval",
+      "description": "Expose a package-owned vector port with at least one implementation and a documented SDK-backed adapter strategy."
+    },
+    {
+      "title": "P6 — Compliance & Security Layer",
+      "description": "Add encryption, redaction, retention, and secure defaults around package persistence and SDK-backed workflows."
+    },
+    {
+      "title": "P7 — Testing Harness & Observability",
+      "description": "Provide package fakes, assertions, and optional observability extensions while keeping telemetry redacted and deterministic."
+    },
+    {
+      "title": "P8 — Context-Aware Scaffolding",
+      "description": "Provide safe scaffolding commands that understand package conventions and Laravel AI SDK alignment assumptions."
+    },
+    {
+      "title": "P9 — Documentation & Patterns",
+      "description": "Keep docs, examples, and architecture guidance aligned with the SDK-backed package design."
+    }
+  ],
+  "issues": [
+    {
+      "title": "P0-I1 Add laravel/ai as an explicit dependency + install/config wiring",
+      "milestone": "P0 — Laravel AI SDK Alignment & Runtime Boundary",
+      "labels": [
+        "type:feature",
+        "area:runtime",
+        "priority:P0",
+        "risk:breaking-change",
+        "status:ready"
+      ],
+      "summary": "Add `laravel/ai` as an explicit Composer dependency and align package installation, service provider wiring, and configuration expectations so Laravel AI SDK becomes the package’s declared runtime substrate.\n\nThis issue does not expose Laravel AI SDK directly to package consumers. It establishes the dependency and installation assumptions required for the package to truthfully be described as built on Laravel AI SDK while keeping package-owned contracts intact.",
+      "rationale": "The governing project documents already position the package as built on Laravel AI SDK, but the current implementation plan does not yet make that relationship operational. This creates architectural drift between stated intent and actual code structure.\n\nMaking Laravel AI SDK an explicit dependency is the first step in resolving that drift and enables later runtime bridge work to proceed on a stable foundation.",
+      "scope": [
+        "Add `laravel/ai` to `composer.json`",
+        "Update package installation and configuration docs",
+        "Ensure package boot/config flow remains compatible with Laravel AI SDK",
+        "Preserve package-owned public contracts and boundaries"
+      ],
+      "out_of_scope": [
+        "Full runtime bridge implementation",
+        "Prompt/tool/memory/vector mapping into the SDK",
+        "Event normalization",
+        "Blueprint migration"
+      ],
+      "dependencies": [
+        "None"
+      ],
+      "acceptance_criteria": [
+        "`composer.json` declares `laravel/ai` as a runtime dependency.",
+        "Install docs explicitly state that Laravel AI SDK is required and explain how it fits into the package architecture.",
+        "Package boot remains deterministic and fail-fast with config validation.",
+        "No SDK types are introduced into `src/Contracts/**` or README-documented public APIs.",
+        "Existing tests remain green after the dependency is introduced."
+      ],
+      "tests": [
+        "Unit: N/A unless helper classes are introduced",
+        "Integration: container/service provider binding sanity; install/publish/config validation behavior",
+        "Contract: architecture/static checks proving no SDK type leakage into public contracts",
+        "Determinism controls: no network calls; no real provider execution"
+      ],
+      "risks": [
+        "Risk of accidentally leaking SDK types into package contracts",
+        "Risk of introducing hidden install complexity",
+        "Risk of diverging README/install docs from actual package boot behavior"
+      ],
+      "docs": [
+        "Update README install section",
+        "Update architecture docs to state Laravel AI SDK is the runtime substrate",
+        "Add migration note if the package is no longer intended to operate standalone"
+      ]
+    },
+    {
+      "title": "P0-I2 Define package-owned runtime contracts + internal SDK runtime bridge",
+      "milestone": "P0 — Laravel AI SDK Alignment & Runtime Boundary",
+      "labels": [
+        "type:feature",
+        "area:runtime",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Introduce a package-owned runtime seam for AI execution and implement the first internal Laravel AI SDK-backed runtime bridge behind that seam.\n\nThe package must not use SDK classes directly throughout its modules. Instead, prompts, tools, memory, pipelines, and blueprints should target package-owned contracts while actual execution is delegated to Laravel AI SDK internally.",
+      "rationale": "The package must be built on Laravel AI SDK without leaking vendor SDK types into public contracts. The only sustainable way to satisfy both constraints is to centralize SDK interaction behind an internal bridge layer.\n\nWithout this seam, the project will either drift toward a standalone runtime or begin leaking SDK types through module boundaries.",
+      "scope": [
+        "Define package-owned runtime request/result DTOs",
+        "Define a package-owned runtime execution contract",
+        "Implement the first internal SDK-backed runtime class",
+        "Centralize direct SDK usage in one module",
+        "Introduce typed exceptions for runtime execution failures"
+      ],
+      "out_of_scope": [
+        "Full prompt, tool, memory, and vector mapping",
+        "Event normalization",
+        "Complete blueprint migration",
+        "Provider policy redesign"
+      ],
+      "dependencies": [
+        "P0-I1"
+      ],
+      "acceptance_criteria": [
+        "A package-owned runtime contract exists for AI execution.",
+        "Runtime request/result DTOs are package-owned and do not contain SDK types.",
+        "A Laravel AI SDK-backed runtime implementation exists behind the package-owned contract.",
+        "SDK-specific code is isolated to the runtime bridge module.",
+        "Runtime failures are wrapped in typed package exceptions with previous exceptions preserved.",
+        "No direct SDK dependency is added to package public contracts or DTOs."
+      ],
+      "tests": [
+        "Unit: DTO validation and exception-wrapping behavior",
+        "Integration: container resolution for runtime bridge; delegation from package runtime contract to SDK-backed implementation",
+        "Contract: static/architecture checks for no vendor-type leakage",
+        "Determinism controls: use fakes/stubs, not real model calls"
+      ],
+      "risks": [
+        "Risk of creating too-thin an abstraction that adds little value",
+        "Risk of over-generalizing the runtime seam too early",
+        "Risk of SDK type leakage through exceptions, results, or helper utilities"
+      ],
+      "docs": [
+        "Update architecture docs with the runtime bridge layer",
+        "Document package-owned runtime contracts and their purpose"
+      ]
+    },
+    {
+      "title": "P0-I3 Tests: runtime bridge wiring + no-vendor-leak guardrails",
+      "milestone": "P0 — Laravel AI SDK Alignment & Runtime Boundary",
+      "labels": [
+        "type:task",
+        "area:runtime",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Add deterministic test coverage and static guardrails proving that the runtime bridge is correctly wired and that Laravel AI SDK types do not leak into public package contracts.",
+      "rationale": "The runtime bridge is a foundational architectural seam. If it is not continuously protected by tests and boundary checks, later feature work will almost certainly leak SDK details into public APIs.",
+      "scope": [
+        "Add container/binding tests for the runtime bridge",
+        "Add tests for package-owned exception wrapping",
+        "Add static or architecture-level checks for no SDK type leakage in public contract surfaces"
+      ],
+      "out_of_scope": [
+        "Full prompt/tool/memory/vector bridge tests",
+        "Performance/load testing"
+      ],
+      "dependencies": [
+        "P0-I2"
+      ],
+      "acceptance_criteria": [
+        "The runtime bridge is covered by deterministic tests.",
+        "Architecture/static checks fail if SDK types leak into public contracts.",
+        "Runtime exception wrapping is verified."
+      ],
+      "tests": [
+        "Integration: runtime binding and delegation tests",
+        "Contract: architecture/static guardrails",
+        "Determinism controls: no real SDK network execution"
+      ],
+      "risks": [
+        "Risk of test suite relying on unstable SDK internals",
+        "Risk of false confidence if architecture checks are too shallow"
+      ],
+      "docs": [
+        "Update contributor/testing notes if new architecture guardrails are introduced"
+      ]
+    },
+    {
+      "title": "P0-I4 Prompt repository → SDK instruction/message mapper",
+      "milestone": "P0 — Laravel AI SDK Alignment & Runtime Boundary",
+      "labels": [
+        "type:feature",
+        "area:prompts",
+        "area:runtime",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Map package-owned prompt repository output into Laravel AI SDK-compatible runtime inputs while preserving package-owned prompt abstractions.\n\nThe package should continue to own prompt templates, variables, and prompt selection/versioning. The SDK runtime should consume the rendered outcome via an internal mapper rather than by replacing the package prompt system.",
+      "rationale": "Prompt ownership is one of the package’s core differentiators. The package must keep prompt governance and template rendering package-owned, even though execution is handled by Laravel AI SDK.",
+      "scope": [
+        "Define internal mapping from rendered prompt templates into SDK runtime instructions/messages",
+        "Preserve prompt versioning and variable substitution in package space",
+        "Keep SDK prompt/message objects out of public prompt contracts"
+      ],
+      "out_of_scope": [
+        "Tool mapping",
+        "Memory conversation bridge",
+        "Event normalization"
+      ],
+      "dependencies": [
+        "P0-I2"
+      ],
+      "acceptance_criteria": [
+        "Prompt rendering remains package-owned.",
+        "An internal mapper exists from rendered prompt output into SDK runtime input.",
+        "No SDK prompt/message types leak into public prompt contracts or DTOs.",
+        "Existing prompt repository tests remain compatible or are updated deterministically."
+      ],
+      "tests": [
+        "Unit: prompt rendering and mapping behavior",
+        "Integration: rendered prompt passed through the runtime bridge to SDK-backed execution",
+        "Contract: no-vendor-leak checks for prompt contracts"
+      ],
+      "risks": [
+        "Risk of conflating package prompt abstractions with SDK runtime objects",
+        "Risk of losing prompt version governance"
+      ],
+      "docs": [
+        "Update architecture docs to clarify that prompt storage/rendering remains package-owned"
+      ]
+    },
+    {
+      "title": "P0-I5 Tool registry → SDK tool/provider-tool mapper",
+      "milestone": "P0 — Laravel AI SDK Alignment & Runtime Boundary",
+      "labels": [
+        "type:feature",
+        "area:tools",
+        "area:runtime",
+        "priority:P0",
+        "risk:security",
+        "status:ready"
+      ],
+      "summary": "Introduce an internal mapping layer from the package-owned tool registry into Laravel AI SDK tools or provider tools, while preserving package-owned governance, validation, and authorization boundaries.",
+      "rationale": "The package owns tool governance, registration, schema validation, authorization, and policy. Laravel AI SDK may own runtime execution semantics for tools, but package-owned rules must remain authoritative and explicit.",
+      "scope": [
+        "Map package-owned tool definitions into SDK tool/provider-tool objects internally",
+        "Preserve package-owned schema validation",
+        "Preserve package-owned authorization hook and default-deny behavior",
+        "Keep SDK tool objects out of package public contracts"
+      ],
+      "out_of_scope": [
+        "Full memory bridge",
+        "Comprehensive fake strategy",
+        "UI/dashboard work"
+      ],
+      "dependencies": [
+        "P0-I2"
+      ],
+      "acceptance_criteria": [
+        "Package tool contracts and registry remain package-owned.",
+        "Internal mapping exists from package tools into SDK runtime tools/provider tools.",
+        "Default-deny and authorization rules remain enforceable.",
+        "Tool schema validation remains package-owned and deterministic.",
+        "No SDK tool types leak into public tool contracts or README examples."
+      ],
+      "tests": [
+        "Unit: tool mapping and validation behavior",
+        "Integration: package tool registration delegated through SDK-backed runtime",
+        "Contract: architecture/static checks for no vendor-type leakage",
+        "Security: deny-by-default tests remain intact"
+      ],
+      "risks": [
+        "Risk of weakening package tool governance in favor of SDK defaults",
+        "Risk of accidental direct provider-tool usage in package public APIs"
+      ],
+      "docs": [
+        "Update architecture docs to explain tool governance vs tool execution boundary"
+      ]
+    },
+    {
+      "title": "P0-I6 Blueprint compilation layer for SDK-backed execution",
+      "milestone": "P0 — Laravel AI SDK Alignment & Runtime Boundary",
+      "labels": [
+        "type:feature",
+        "area:core",
+        "area:runtime",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Create a blueprint compilation path that converts package-owned blueprints and workflow definitions into package-owned runtime requests executed through the internal SDK runtime bridge.",
+      "rationale": "Blueprints are part of the package’s higher-level workflow model. They must continue to exist as package-owned orchestration primitives rather than exposing raw SDK execution details to consumers.",
+      "scope": [
+        "Define a blueprint-to-runtime compilation layer",
+        "Ensure compiled units target package-owned runtime requests, not raw SDK types",
+        "Support SDK-backed execution without changing blueprint public APIs"
+      ],
+      "out_of_scope": [
+        "Complete pipeline builder implementation",
+        "Memory/vector persistence details",
+        "Docs rewrite"
+      ],
+      "dependencies": [
+        "P0-I2",
+        "P0-I4",
+        "P0-I5"
+      ],
+      "acceptance_criteria": [
+        "Blueprint compilation produces package-owned runtime requests.",
+        "Blueprint public APIs remain package-owned and stable.",
+        "SDK execution remains behind the runtime bridge.",
+        "No raw SDK execution objects are exposed through blueprint APIs."
+      ],
+      "tests": [
+        "Unit: compilation from blueprint inputs to package runtime requests",
+        "Integration: compiled blueprints execute through SDK-backed runtime",
+        "Contract: public blueprint APIs remain free of vendor SDK types"
+      ],
+      "risks": [
+        "Risk of collapsing blueprint abstraction into runtime details",
+        "Risk of introducing overly generic compilation contracts too early"
+      ],
+      "docs": [
+        "Update architecture docs to show blueprint compilation stage"
+      ]
+    },
+    {
+      "title": "P0-I7 Package memory → SDK conversation context bridge",
+      "milestone": "P0 — Laravel AI SDK Alignment & Runtime Boundary",
+      "labels": [
+        "type:feature",
+        "area:memory",
+        "area:runtime",
+        "priority:P0",
+        "risk:security",
+        "status:ready"
+      ],
+      "summary": "Project package-owned conversation memory into SDK-compatible conversation/runtime context while preserving package-owned memory contracts, retention, encryption, and redaction policies.",
+      "rationale": "The package owns memory policy and persistence. Laravel AI SDK may provide conversation-oriented runtime structures, but those must be fed from and reconciled back into package-owned memory abstractions rather than replacing them.",
+      "scope": [
+        "Bridge package-owned conversation history into SDK runtime context",
+        "Preserve package-owned memory contracts and persistence boundaries",
+        "Keep retention/encryption/redaction semantics package-owned"
+      ],
+      "out_of_scope": [
+        "Additional memory drivers",
+        "Summarization strategy redesign",
+        "Observability event normalization"
+      ],
+      "dependencies": [
+        "P0-I2",
+        "P0-I4"
+      ],
+      "acceptance_criteria": [
+        "Package memory remains authoritative.",
+        "An internal bridge exists from package memory into SDK conversation/runtime context.",
+        "Retention, encryption, and no-store policies remain enforceable in package space.",
+        "No SDK conversation types leak into public memory contracts."
+      ],
+      "tests": [
+        "Integration: conversation start/continue flows through SDK-backed runtime",
+        "Contract: no vendor-type leakage in memory contracts",
+        "Security: no-store/redaction/retention semantics remain test-covered"
+      ],
+      "risks": [
+        "Risk of bidirectional drift between package memory state and SDK runtime state",
+        "Risk of leaking conversation payloads into telemetry or SDK-facing helpers"
+      ],
+      "docs": [
+        "Update architecture docs to clarify memory ownership and runtime projection boundary"
+      ]
+    },
+    {
+      "title": "P0-I8 SDK-backed vector adapter strategy + boundary rules",
+      "milestone": "P0 — Laravel AI SDK Alignment & Runtime Boundary",
+      "labels": [
+        "type:feature",
+        "area:vector",
+        "area:runtime",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Define the package strategy for SDK-backed vector/retrieval integration while keeping the package-owned vector port authoritative and preventing SDK type leakage into public vector contracts.",
+      "rationale": "Vector and retrieval work sits on the boundary between package-owned abstractions and SDK/provider-native capabilities. The package must define clear rules before more adapters or retrieval flows are added.",
+      "scope": [
+        "Document and codify vector boundary rules",
+        "Define how package vector ports relate to SDK-backed retrieval capabilities",
+        "Preserve package-owned vector contracts and DTOs"
+      ],
+      "out_of_scope": [
+        "Implementing every optional vector adapter",
+        "Provider-specific retrieval features beyond the agreed strategy"
+      ],
+      "dependencies": [
+        "P0-I2"
+      ],
+      "acceptance_criteria": [
+        "Vector boundary rules are explicit in code/docs/tests.",
+        "Package-owned vector ports remain authoritative.",
+        "SDK-backed retrieval can be introduced internally without leaking SDK types to public vector contracts."
+      ],
+      "tests": [
+        "Contract: architecture/static checks for vector boundary rules",
+        "Unit: if strategy/helper classes are introduced"
+      ],
+      "risks": [
+        "Risk of provider-specific retrieval semantics leaking into package contracts",
+        "Risk of overcommitting to one vector backend too early"
+      ],
+      "docs": [
+        "Update vector architecture notes and adapter strategy documentation"
+      ]
+    },
+    {
+      "title": "P0-I9 Tests: memory/vector bridge behavior",
+      "milestone": "P0 — Laravel AI SDK Alignment & Runtime Boundary",
+      "labels": [
+        "type:task",
+        "area:runtime",
+        "area:memory",
+        "area:vector",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Add deterministic coverage proving that the package memory and vector bridge layers behave correctly with the SDK-backed runtime while preserving package-owned boundaries.",
+      "rationale": "The most fragile parts of SDK alignment are the boundary layers. They need dedicated tests so later feature work does not silently erode package ownership or determinism.",
+      "scope": [
+        "Cover memory bridge behavior",
+        "Cover vector strategy/boundary behavior",
+        "Assert no public SDK-type leakage"
+      ],
+      "out_of_scope": [
+        "Performance/load testing",
+        "Additional adapter implementation tests beyond introduced scope"
+      ],
+      "dependencies": [
+        "P0-I7",
+        "P0-I8"
+      ],
+      "acceptance_criteria": [
+        "Deterministic tests cover memory bridge behavior.",
+        "Deterministic tests cover vector boundary/strategy behavior.",
+        "Static or architecture checks prevent public SDK leakage in memory/vector surfaces."
+      ],
+      "tests": [
+        "Integration: memory bridge flows",
+        "Unit/contract: vector strategy rules",
+        "Architecture/static boundary checks"
+      ],
+      "risks": [
+        "Risk of overfitting tests to SDK internals instead of package contracts"
+      ],
+      "docs": [
+        "Update contributor/testing notes if special boundary-test patterns are introduced"
+      ]
+    },
+    {
+      "title": "P0-I10 Normalize/enrich SDK events into package telemetry",
+      "milestone": "P0 — Laravel AI SDK Alignment & Runtime Boundary",
+      "labels": [
+        "type:feature",
+        "area:observability",
+        "area:runtime",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Normalize Laravel AI SDK runtime events into package-owned, redacted telemetry events that reflect package workflow semantics rather than exposing raw SDK event payloads.",
+      "rationale": "The package owns observability defaults and telemetry contracts. If SDK events are used directly throughout the package, redaction guarantees and package-specific lifecycle semantics will erode.",
+      "scope": [
+        "Listen to or adapt relevant SDK events",
+        "Emit package-owned normalized telemetry events",
+        "Keep telemetry redacted by default",
+        "Preserve package-specific event naming and metadata conventions"
+      ],
+      "out_of_scope": [
+        "Optional dashboards",
+        "External observability sinks",
+        "Full fake strategy"
+      ],
+      "dependencies": [
+        "P0-I2"
+      ],
+      "acceptance_criteria": [
+        "Package-owned telemetry events exist for relevant runtime lifecycle points.",
+        "SDK events are normalized/enriched before crossing package observability boundaries.",
+        "Raw content, secrets, and unsafe payloads remain redacted by default.",
+        "No SDK event classes are required in package public observability APIs."
+      ],
+      "tests": [
+        "Integration: SDK-backed execution emits package telemetry events",
+        "Redaction tests: ensure raw prompt/user content is not emitted by default",
+        "Architecture/static checks for no vendor-type leakage in public event surfaces"
+      ],
+      "risks": [
+        "Risk of accidentally exposing raw SDK payloads",
+        "Risk of duplicate or semantically confusing event streams"
+      ],
+      "docs": [
+        "Update observability docs to distinguish SDK events from package telemetry"
+      ]
+    },
+    {
+      "title": "P1-I1 Config schema + ConfigValidator (fail-fast boot validation)",
+      "milestone": "P1 — Core Workflow Infrastructure",
+      "labels": [
+        "type:feature",
+        "area:core",
+        "priority:P0",
+        "risk:security",
+        "status:ready"
+      ],
+      "summary": "Add a deterministic, fail-fast configuration validation layer that validates the package config schema during boot and prevents invalid provider, memory, resilience, and budget configurations from reaching runtime execution paths.",
+      "rationale": "The package depends on explicit, validated configuration for providers, failover policy, memory drivers, budgets, and resilience settings. Invalid config must fail fast at boot rather than create unclear runtime behavior.",
+      "scope": [
+        "Define the package configuration schema expectations in code",
+        "Implement a `ConfigValidator` service",
+        "Validate required provider/default/failover relationships",
+        "Validate memory/vector driver names and key option types",
+        "Validate resilience and budget ranges"
+      ],
+      "out_of_scope": [
+        "Dynamic provider discovery",
+        "Runtime provider health checks",
+        "Optional docs overhaul beyond config references"
+      ],
+      "dependencies": [
+        "P0-I1",
+        "P1-I2"
+      ],
+      "acceptance_criteria": [
+        "Invalid config fails fast during boot when validation is enabled.",
+        "Provider relationships are validated deterministically.",
+        "Memory/vector driver names are validated.",
+        "Budget and resilience ranges are validated with typed failures.",
+        "Validation logic is package-owned and readable."
+      ],
+      "tests": [
+        "Unit: validator rejects invalid combinations and missing required keys",
+        "Integration: service provider boot fails fast with invalid config when validation is enabled",
+        "Determinism controls: no external IO"
+      ],
+      "risks": [
+        "Risk of over-validating flexible config too early",
+        "Risk of under-validating and allowing silent misconfiguration"
+      ],
+      "docs": [
+        "Document configuration constraints and validation behavior"
+      ]
+    },
+    {
+      "title": "P1-I2 Provider profiles + selection policy over Laravel AI SDK",
+      "milestone": "P1 — Core Workflow Infrastructure",
+      "labels": [
+        "type:feature",
+        "area:core",
+        "area:runtime",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Define package-owned provider profiles and selection policy that sit above Laravel AI SDK execution, including default-provider selection and profile lookup.",
+      "rationale": "The package owns provider policy and failover behavior. That policy should remain package-owned even though actual execution is handled by the SDK runtime bridge.",
+      "scope": [
+        "Define provider profile shape in config",
+        "Implement provider registry/profile selection service",
+        "Select default provider/profile deterministically"
+      ],
+      "out_of_scope": [
+        "Retry/circuit breaker behavior",
+        "Advanced health scoring",
+        "Per-request dynamic cost optimization"
+      ],
+      "dependencies": [
+        "P0-I2",
+        "P1-I1"
+      ],
+      "acceptance_criteria": [
+        "Provider selection policy is package-owned.",
+        "Default provider/profile selection is deterministic and test-covered.",
+        "No SDK provider types leak into public provider-policy contracts."
+      ],
+      "tests": [
+        "Unit: provider selection rules",
+        "Integration: runtime request resolves through selected provider profile",
+        "Contract: no vendor-type leakage in provider policy surfaces"
+      ],
+      "risks": [
+        "Risk of conflating SDK provider configuration with package provider policy"
+      ],
+      "docs": [
+        "Document provider profile config and selection semantics"
+      ]
+    },
+    {
+      "title": "P1-I3 Failover policy + typed exceptions",
+      "milestone": "P1 — Core Workflow Infrastructure",
+      "labels": [
+        "type:feature",
+        "area:core",
+        "area:resilience",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Implement package-owned failover policy and typed exceptions for provider fallback across SDK-backed execution.",
+      "rationale": "Failover is a package-level resilience concern, not a public SDK contract concern. The package must define when and how fallback happens and what errors are surfaced when it fails.",
+      "scope": [
+        "Define failover order semantics",
+        "Implement failover selector/service",
+        "Wrap failover failures in typed package exceptions"
+      ],
+      "out_of_scope": [
+        "Retries/backoff/circuit breaker",
+        "Cross-run learning or adaptive provider scoring"
+      ],
+      "dependencies": [
+        "P1-I2"
+      ],
+      "acceptance_criteria": [
+        "Failover order is explicit and deterministic.",
+        "Fallback across provider profiles is package-owned and test-covered.",
+        "Typed package exceptions exist for failover exhaustion or invalid policy state."
+      ],
+      "tests": [
+        "Unit: failover order and exhaustion behavior",
+        "Integration: SDK-backed runtime invoked via fallback order using deterministic fakes",
+        "Determinism controls: no real network"
+      ],
+      "risks": [
+        "Risk of ambiguous failover semantics if provider and runtime errors are not normalized"
+      ],
+      "docs": [
+        "Document failover semantics and exception model"
+      ]
+    },
+    {
+      "title": "P1-I4 Tests: config validation + provider policy + failover policy",
+      "milestone": "P1 — Core Workflow Infrastructure",
+      "labels": [
+        "type:task",
+        "area:core",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Add deterministic tests for configuration validation, provider selection, and failover behavior.",
+      "rationale": "Configuration and provider policy are early central control planes. They need strong deterministic coverage before more runtime orchestration is layered on top.",
+      "scope": [
+        "Validator tests",
+        "Provider policy tests",
+        "Failover tests"
+      ],
+      "out_of_scope": [
+        "Queue tests",
+        "Observability deep-dive"
+      ],
+      "dependencies": [
+        "P1-I1",
+        "P1-I2",
+        "P1-I3"
+      ],
+      "acceptance_criteria": [
+        "Core config/provider/failover behavior is deterministically covered.",
+        "Regression risk around package boot and provider policy is reduced."
+      ],
+      "tests": [
+        "Unit + integration tests using deterministic fakes only"
+      ],
+      "risks": [
+        "Risk of incomplete coverage around misconfiguration edges"
+      ],
+      "docs": [
+        "Update contributor/testing notes if new helpers are introduced"
+      ]
+    },
+    {
+      "title": "P1-I5 Define pipeline step contracts + RunContext DTO",
+      "milestone": "P1 — Core Workflow Infrastructure",
+      "labels": [
+        "type:feature",
+        "area:core",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Define typed pipeline step contracts and the package-owned `RunContext` DTO used to pass state, inputs, metadata, and counters through workflows.",
+      "rationale": "The pipeline system is the package’s core workflow abstraction. It needs explicit, package-owned contracts and DTOs before builder/runner work can be implemented safely.",
+      "scope": [
+        "Define pipeline step contract(s)",
+        "Define package-owned `RunContext` DTO",
+        "Define step result semantics if needed"
+      ],
+      "out_of_scope": [
+        "Queue jobs",
+        "Observability events",
+        "Advanced graph engine behavior"
+      ],
+      "dependencies": [
+        "P0-I6"
+      ],
+      "acceptance_criteria": [
+        "Pipeline step contracts are explicit and package-owned.",
+        "`RunContext` is typed, readable, and stable for internal workflow use.",
+        "No SDK runtime types leak into pipeline contracts or context."
+      ],
+      "tests": [
+        "Unit: DTO invariants and basic step contract expectations",
+        "Contract: architecture checks for no vendor-type leakage"
+      ],
+      "risks": [
+        "Risk of making RunContext too generic or too mutable too early"
+      ],
+      "docs": [
+        "Document pipeline step and RunContext concepts"
+      ]
+    },
+    {
+      "title": "P1-I6 Implement PipelineBuilder + workflow runner over SDK runtime",
+      "milestone": "P1 — Core Workflow Infrastructure",
+      "labels": [
+        "type:feature",
+        "area:core",
+        "area:runtime",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Implement `PipelineBuilder` and synchronous workflow execution over the package-owned runtime bridge.",
+      "rationale": "The package’s primary user-facing value is workflow composition. The builder and runner must execute package-owned steps while delegating AI execution through the internal SDK runtime seam.",
+      "scope": [
+        "Implement pipeline builder",
+        "Implement synchronous runner",
+        "Integrate runner with package runtime bridge"
+      ],
+      "out_of_scope": [
+        "Queued execution",
+        "Retries/backoff/circuit breaker"
+      ],
+      "dependencies": [
+        "P1-I5",
+        "P0-I6"
+      ],
+      "acceptance_criteria": [
+        "Pipelines can be built from typed steps.",
+        "Synchronous execution works end-to-end over the runtime bridge.",
+        "Workflow composition remains package-owned and SDK-agnostic at public API level."
+      ],
+      "tests": [
+        "Integration: multi-step synchronous pipeline execution",
+        "Unit: builder validation and edge cases",
+        "Determinism controls: runtime fakes/stubs only"
+      ],
+      "risks": [
+        "Risk of overly coupling pipeline execution to one runtime behavior"
+      ],
+      "docs": [
+        "Document basic pipeline builder and runner usage"
+      ]
+    },
+    {
+      "title": "P1-I7 Implement queue job(s) for workflow execution + result handling",
+      "milestone": "P1 — Core Workflow Infrastructure",
+      "labels": [
+        "type:feature",
+        "area:core",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Add queued workflow execution using Laravel queues, including result handling hooks and deterministic failure propagation.",
+      "rationale": "Queued execution is a required capability for real workflows. It must be explicit, testable, and aligned with Laravel package conventions.",
+      "scope": [
+        "Define queue job(s) for workflow execution",
+        "Support queued result handling or callback contract",
+        "Preserve typed failure behavior"
+      ],
+      "out_of_scope": [
+        "Streaming execution",
+        "Advanced scheduling"
+      ],
+      "dependencies": [
+        "P1-I6"
+      ],
+      "acceptance_criteria": [
+        "Workflows can be executed asynchronously via queue jobs.",
+        "Queued failures remain typed and observable.",
+        "Queue integration follows Laravel package conventions."
+      ],
+      "tests": [
+        "Integration: queued workflow execution with queue fakes",
+        "Failure handling tests",
+        "Determinism controls: no network"
+      ],
+      "risks": [
+        "Risk of queue-specific hidden coupling or serialization pitfalls"
+      ],
+      "docs": [
+        "Document queued workflow execution and result handling"
+      ]
+    },
+    {
+      "title": "P1-I8 Tests: pipeline chaining + queued execution (SDK-backed fakes)",
+      "milestone": "P1 — Core Workflow Infrastructure",
+      "labels": [
+        "type:task",
+        "area:core",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Add deterministic integration coverage for pipeline chaining and queued execution using SDK-backed fakes or internal runtime fakes where appropriate.",
+      "rationale": "Pipelines are central to the package. Chaining and queued execution need strong integration coverage before additional capabilities are layered on.",
+      "scope": [
+        "Synchronous multi-step pipeline tests",
+        "Queued execution tests",
+        "Runtime fake/harness use as appropriate"
+      ],
+      "out_of_scope": [
+        "Performance/load tests"
+      ],
+      "dependencies": [
+        "P1-I6",
+        "P1-I7"
+      ],
+      "acceptance_criteria": [
+        "Pipelines are covered end-to-end in deterministic tests.",
+        "Queued execution behavior is covered without real provider calls."
+      ],
+      "tests": [
+        "Integration tests using queue fakes and runtime fakes"
+      ],
+      "risks": [
+        "Risk of over-mocking and missing integration gaps"
+      ],
+      "docs": [
+        "Update contributor/testing notes if new helpers are introduced"
+      ]
+    },
+    {
+      "title": "P1-I9 Service provider bindings + publish tags",
+      "milestone": "P1 — Core Workflow Infrastructure",
+      "labels": [
+        "type:feature",
+        "area:core",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Complete package service provider bindings and publish tags for config, migrations, views (if any), and other package assets.",
+      "rationale": "A Laravel package must bind its services clearly and publish its assets conventionally. This is foundational package wiring work.",
+      "scope": [
+        "Finalize service provider bindings",
+        "Add/verify publish tags",
+        "Ensure package install flow is conventional"
+      ],
+      "out_of_scope": [
+        "End-user docs beyond required usage notes"
+      ],
+      "dependencies": [
+        "P1-I1",
+        "P1-I6"
+      ],
+      "acceptance_criteria": [
+        "All core services are bound through the package service provider.",
+        "Publish tags exist and are coherent.",
+        "Package boot remains deterministic."
+      ],
+      "tests": [
+        "Integration: container resolution and publish-tag sanity"
+      ],
+      "risks": [
+        "Risk of missing bindings or conflicting publish tag names"
+      ],
+      "docs": [
+        "Update install and publishing docs if needed"
+      ]
+    },
+    {
+      "title": "P1-I10 Tests: config publish + container bindings sanity",
+      "milestone": "P1 — Core Workflow Infrastructure",
+      "labels": [
+        "type:task",
+        "area:core",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Add deterministic sanity coverage for config publishing and core container bindings.",
+      "rationale": "Publishing and service container registration are fragile package mechanics that should be regression-guarded early.",
+      "scope": [
+        "Publish-tag sanity tests",
+        "Container binding sanity tests"
+      ],
+      "out_of_scope": [
+        "Deep functional tests already covered elsewhere"
+      ],
+      "dependencies": [
+        "P1-I9"
+      ],
+      "acceptance_criteria": [
+        "Core package bindings and publish paths are covered by tests."
+      ],
+      "tests": [
+        "Integration tests using package testbench setup"
+      ],
+      "risks": [
+        "Risk of brittle assertions against framework internals"
+      ],
+      "docs": [
+        "None unless new contributor guidance is needed"
+      ]
+    },
+    {
+      "title": "P1-I11 Docs: install + quickstart",
+      "milestone": "P1 — Core Workflow Infrastructure",
+      "labels": [
+        "type:docs",
+        "area:docs",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Provide or update package install and quickstart documentation for the now-SDK-backed architecture and basic workflow usage.",
+      "rationale": "Installation and quickstart docs are required for the package to be consumable once core wiring and basic workflow execution exist.",
+      "scope": [
+        "Install docs",
+        "Quickstart docs",
+        "Minimal configuration guidance"
+      ],
+      "out_of_scope": [
+        "Full architecture deep-dive",
+        "Migration guide"
+      ],
+      "dependencies": [
+        "P1-I9",
+        "P1-I10"
+      ],
+      "acceptance_criteria": [
+        "A consumer can install the package and run the documented quickstart.",
+        "Docs align with actual package wiring and defaults."
+      ],
+      "tests": [
+        "Documentation review",
+        "Snippet validation where practical"
+      ],
+      "risks": [
+        "Risk of docs drifting from actual package wiring"
+      ],
+      "docs": [
+        "This issue directly updates docs"
+      ]
+    },
+    {
+      "title": "P2-I1 Define memory contracts",
+      "milestone": "P2 — Conversation Memory & State",
+      "labels": [
+        "type:feature",
+        "area:memory",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Define package-owned memory contracts for conversation persistence, retrieval, retention, and summarization hooks.",
+      "rationale": "Conversation memory is a core package concern and must remain package-owned even though SDK runtime state can project into it.",
+      "scope": [
+        "Define memory contracts",
+        "Define memory-related typed DTOs/exceptions where needed"
+      ],
+      "out_of_scope": [
+        "Concrete drivers",
+        "Queue jobs for purging"
+      ],
+      "dependencies": [
+        "P0-I7"
+      ],
+      "acceptance_criteria": [
+        "Memory contracts are package-owned and explicit.",
+        "No SDK conversation types leak into public memory contracts."
+      ],
+      "tests": [
+        "Contract tests and architecture/static checks"
+      ],
+      "risks": [
+        "Risk of over-generalizing memory abstractions"
+      ],
+      "docs": [
+        "Document memory contracts and boundaries"
+      ]
+    },
+    {
+      "title": "P2-I2 Integrate memory into workflow context",
+      "milestone": "P2 — Conversation Memory & State",
+      "labels": [
+        "type:feature",
+        "area:memory",
+        "area:core",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Integrate package-owned memory into workflow execution context and pipeline state.",
+      "rationale": "Memory becomes useful when it participates directly in workflow execution. This integration should remain package-owned and explicit.",
+      "scope": [
+        "Expose memory integration points in workflow context",
+        "Allow workflows to read/write conversation state via package contracts"
+      ],
+      "out_of_scope": [
+        "Concrete persistence driver behavior"
+      ],
+      "dependencies": [
+        "P2-I1",
+        "P1-I6"
+      ],
+      "acceptance_criteria": [
+        "Workflows can interact with memory via package contracts.",
+        "Memory integration remains package-owned and testable."
+      ],
+      "tests": [
+        "Integration tests for workflow + memory interaction"
+      ],
+      "risks": [
+        "Risk of conflating runtime context with persistence concerns"
+      ],
+      "docs": [
+        "Document how memory participates in workflow execution"
+      ]
+    },
+    {
+      "title": "P2-I3 Tests: conversation start/continue flow",
+      "milestone": "P2 — Conversation Memory & State",
+      "labels": [
+        "type:task",
+        "area:memory",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Add deterministic tests for conversation start/continue flows through package memory integration.",
+      "rationale": "Conversation continuity is a high-risk behavioral area. It needs focused coverage before more persistence features are layered on.",
+      "scope": [
+        "Start conversation tests",
+        "Continue conversation tests"
+      ],
+      "out_of_scope": [
+        "Retention purge behavior"
+      ],
+      "dependencies": [
+        "P2-I2"
+      ],
+      "acceptance_criteria": [
+        "Conversation continuity flows are covered deterministically."
+      ],
+      "tests": [
+        "Integration tests with deterministic stores/fakes"
+      ],
+      "risks": [
+        "Risk of missing edge cases around empty or expired conversations"
+      ],
+      "docs": [
+        "None unless test helpers warrant documentation"
+      ]
+    },
+    {
+      "title": "P2-I4 DB schema + migrations",
+      "milestone": "P2 — Conversation Memory & State",
+      "labels": [
+        "type:feature",
+        "area:memory",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Add database schema and migrations for package-owned conversation persistence.",
+      "rationale": "Database persistence is the first required durable memory driver. It needs explicit schema and package-managed migrations.",
+      "scope": [
+        "Design DB schema",
+        "Add package migrations"
+      ],
+      "out_of_scope": [
+        "Encryption implementation details beyond storage fields",
+        "Additional drivers"
+      ],
+      "dependencies": [
+        "P2-I1"
+      ],
+      "acceptance_criteria": [
+        "Database schema exists and is package-managed.",
+        "Schema supports required conversation/message data and retention metadata."
+      ],
+      "tests": [
+        "Migration tests and schema sanity"
+      ],
+      "risks": [
+        "Risk of schema not supporting future retention/encryption needs"
+      ],
+      "docs": [
+        "Document migration and storage expectations"
+      ]
+    },
+    {
+      "title": "P2-I5 DB driver implementation + retention purge service",
+      "milestone": "P2 — Conversation Memory & State",
+      "labels": [
+        "type:feature",
+        "area:memory",
+        "priority:P0",
+        "risk:security",
+        "status:ready"
+      ],
+      "summary": "Implement the database-backed memory driver and retention purge service.",
+      "rationale": "Durable memory is required, but persistence must remain privacy-aware and retention-aware.",
+      "scope": [
+        "Implement DB memory driver",
+        "Implement retention purge service"
+      ],
+      "out_of_scope": [
+        "Redis/in-memory driver",
+        "Summarization strategy"
+      ],
+      "dependencies": [
+        "P2-I4"
+      ],
+      "acceptance_criteria": [
+        "Database memory driver persists and retrieves conversations/messages.",
+        "Retention purge service removes expired data according to policy.",
+        "Driver remains package-owned and privacy-aware."
+      ],
+      "tests": [
+        "Integration tests for DB driver CRUD behavior",
+        "Retention purge tests"
+      ],
+      "risks": [
+        "Risk of retention behavior removing data too aggressively or not at all",
+        "Risk of persistence logic bypassing encryption/redaction hooks"
+      ],
+      "docs": [
+        "Document DB driver configuration and retention behavior"
+      ]
+    },
+    {
+      "title": "P2-I6 Tests: retention purge + delete semantics",
+      "milestone": "P2 — Conversation Memory & State",
+      "labels": [
+        "type:task",
+        "area:memory",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Add deterministic coverage for retention purge behavior and explicit delete semantics.",
+      "rationale": "Delete and purge behavior are privacy-sensitive and must remain correct as memory evolves.",
+      "scope": [
+        "Retention purge tests",
+        "Explicit delete tests"
+      ],
+      "out_of_scope": [
+        "Summarization behavior"
+      ],
+      "dependencies": [
+        "P2-I5"
+      ],
+      "acceptance_criteria": [
+        "Retention purge and delete semantics are deterministic and covered by tests."
+      ],
+      "tests": [
+        "Integration tests controlling time and persistence state"
+      ],
+      "risks": [
+        "Risk of nondeterministic time-based tests"
+      ],
+      "docs": [
+        "Update retention docs if needed"
+      ]
+    },
+    {
+      "title": "P2-I7 Redis or in-memory driver",
+      "milestone": "P2 — Conversation Memory & State",
+      "labels": [
+        "type:feature",
+        "area:memory",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Provide one ephemeral conversation memory driver (Redis or in-memory) in addition to the database driver.",
+      "rationale": "The package requires at least one ephemeral driver for tests, local workflows, or non-durable execution scenarios.",
+      "scope": [
+        "Implement one ephemeral memory driver",
+        "Expose driver config and selection"
+      ],
+      "out_of_scope": [
+        "All possible memory backends"
+      ],
+      "dependencies": [
+        "P2-I1"
+      ],
+      "acceptance_criteria": [
+        "At least one ephemeral driver exists and is selectable via config.",
+        "Driver behavior is deterministic in tests."
+      ],
+      "tests": [
+        "Driver contract tests and deterministic integration tests"
+      ],
+      "risks": [
+        "Risk of semantic divergence between drivers"
+      ],
+      "docs": [
+        "Document driver options and intended use cases"
+      ]
+    },
+    {
+      "title": "P2-I8 Summarization port + default summarizer stub",
+      "milestone": "P2 — Conversation Memory & State",
+      "labels": [
+        "type:feature",
+        "area:memory",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Define a summarization port and ship a default summarizer stub/hook for conversation summarization.",
+      "rationale": "Summarization is a memory-policy concern the package should own, but it should remain pluggable and optional.",
+      "scope": [
+        "Define summarization port",
+        "Implement default stub or null summarizer",
+        "Wire summarization trigger hooks"
+      ],
+      "out_of_scope": [
+        "Complex summarization quality optimization"
+      ],
+      "dependencies": [
+        "P2-I1",
+        "P2-I2"
+      ],
+      "acceptance_criteria": [
+        "Summarization is package-owned and pluggable.",
+        "A default summarizer stub exists.",
+        "Summarization trigger points are explicit."
+      ],
+      "tests": [
+        "Unit/integration tests for summarization trigger behavior using fakes/stubs"
+      ],
+      "risks": [
+        "Risk of prematurely hard-coding summarization behavior"
+      ],
+      "docs": [
+        "Document summarization hook and default behavior"
+      ]
+    },
+    {
+      "title": "P2-I9 Tests: summarization trigger thresholds + persistence",
+      "milestone": "P2 — Conversation Memory & State",
+      "labels": [
+        "type:task",
+        "area:memory",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Add deterministic coverage for summarization triggers and persistence interactions.",
+      "rationale": "Summarization affects memory continuity and storage behavior, so its triggers and persistence interactions need explicit tests.",
+      "scope": [
+        "Trigger threshold tests",
+        "Persistence interaction tests"
+      ],
+      "out_of_scope": [
+        "Summarization content quality benchmarking"
+      ],
+      "dependencies": [
+        "P2-I8"
+      ],
+      "acceptance_criteria": [
+        "Summarization trigger behavior is deterministic and covered.",
+        "Persistence interactions are tested."
+      ],
+      "tests": [
+        "Integration tests with stub summarizer and deterministic stores"
+      ],
+      "risks": [
+        "Risk of tests becoming coupled to summarizer internals"
+      ],
+      "docs": [
+        "None unless contributor guidance is needed"
+      ]
+    },
+    {
+      "title": "P3-I1 Prompt storage format + PromptRepository",
+      "milestone": "P3 — Prompt & Tool Governance",
+      "labels": [
+        "type:feature",
+        "area:prompts",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Implement the package-owned prompt storage format and `PromptRepository`, including prompt versioning and template lookup.",
+      "rationale": "Prompt governance is a package differentiator and must remain package-owned even though execution is SDK-backed.",
+      "scope": [
+        "Define prompt template structure",
+        "Implement `PromptRepository`",
+        "Support version lookup"
+      ],
+      "out_of_scope": [
+        "Complex prompt composition DSL"
+      ],
+      "dependencies": [
+        "P0-I4"
+      ],
+      "acceptance_criteria": [
+        "Prompts are stored and retrieved via package-owned repository abstractions.",
+        "Versioned prompt lookup is supported and deterministic."
+      ],
+      "tests": [
+        "Unit tests for storage/retrieval/version selection"
+      ],
+      "risks": [
+        "Risk of overcomplicating prompt storage format early"
+      ],
+      "docs": [
+        "Document prompt repository usage"
+      ]
+    },
+    {
+      "title": "P3-I2 Tests: interpolation, missing variables, version selection",
+      "milestone": "P3 — Prompt & Tool Governance",
+      "labels": [
+        "type:task",
+        "area:prompts",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Add deterministic tests for prompt interpolation, missing-variable handling, and version selection.",
+      "rationale": "Prompt rendering errors are high-signal user-facing failures. They require explicit coverage.",
+      "scope": [
+        "Interpolation tests",
+        "Missing-variable tests",
+        "Version-selection tests"
+      ],
+      "out_of_scope": [
+        "Model-quality testing"
+      ],
+      "dependencies": [
+        "P3-I1"
+      ],
+      "acceptance_criteria": [
+        "Prompt rendering edge cases are covered deterministically."
+      ],
+      "tests": [
+        "Unit tests for prompt rendering"
+      ],
+      "risks": [
+        "Risk of missing edge cases around template syntax or variable coercion"
+      ],
+      "docs": [
+        "None unless prompt authoring docs are updated"
+      ]
+    },
+    {
+      "title": "P3-I3 Tool contracts + registry + schema validation",
+      "milestone": "P3 — Prompt & Tool Governance",
+      "labels": [
+        "type:feature",
+        "area:tools",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Implement package-owned tool contracts, registry, and schema validation.",
+      "rationale": "The package must own tool governance and validation regardless of the SDK runtime beneath it.",
+      "scope": [
+        "Define tool contracts",
+        "Implement tool registry",
+        "Implement schema validation"
+      ],
+      "out_of_scope": [
+        "Provider-native tool abstractions beyond the current strategy"
+      ],
+      "dependencies": [
+        "P0-I5"
+      ],
+      "acceptance_criteria": [
+        "Tool contracts and registry are package-owned.",
+        "Schema validation is deterministic and package-owned.",
+        "Tool registration remains explicit."
+      ],
+      "tests": [
+        "Unit tests for registry and validation behavior"
+      ],
+      "risks": [
+        "Risk of schema validation being too weak or too rigid"
+      ],
+      "docs": [
+        "Document tool registry and schema rules"
+      ]
+    },
+    {
+      "title": "P3-I4 Authorization hook + default-deny policy",
+      "milestone": "P3 — Prompt & Tool Governance",
+      "labels": [
+        "type:feature",
+        "area:tools",
+        "priority:P1",
+        "risk:security",
+        "status:ready"
+      ],
+      "summary": "Add package-owned tool authorization hooks and enforce default-deny behavior for tool execution.",
+      "rationale": "Security defaults must remain strict. Tool execution should never be implicitly allowed.",
+      "scope": [
+        "Authorization hook contract",
+        "Default-deny enforcement",
+        "Integration with registry/runtime mapping"
+      ],
+      "out_of_scope": [
+        "Full policy UI or admin tooling"
+      ],
+      "dependencies": [
+        "P3-I3"
+      ],
+      "acceptance_criteria": [
+        "Tool execution is denied unless explicitly allowed.",
+        "Authorization remains package-owned and testable."
+      ],
+      "tests": [
+        "Security tests for deny-by-default and explicit authorization"
+      ],
+      "risks": [
+        "Risk of accidental implicit allow paths"
+      ],
+      "docs": [
+        "Document authorization hook semantics"
+      ]
+    },
+    {
+      "title": "P3-I5 Tests: invalid schema rejection + deny-by-default behavior",
+      "milestone": "P3 — Prompt & Tool Governance",
+      "labels": [
+        "type:task",
+        "area:tools",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Add deterministic coverage for invalid schema rejection and default-deny tool behavior.",
+      "rationale": "These are the package’s critical tool-governance guardrails and must be kept regression-proof.",
+      "scope": [
+        "Invalid-schema tests",
+        "Deny-by-default tests"
+      ],
+      "out_of_scope": [
+        "Performance testing"
+      ],
+      "dependencies": [
+        "P3-I3",
+        "P3-I4"
+      ],
+      "acceptance_criteria": [
+        "Invalid schemas are rejected.",
+        "Tool execution remains deny-by-default in deterministic tests."
+      ],
+      "tests": [
+        "Unit/integration security tests"
+      ],
+      "risks": [
+        "Risk of incomplete negative-path coverage"
+      ],
+      "docs": [
+        "None unless helper guidance is needed"
+      ]
+    },
+    {
+      "title": "P3-I6 `ai:make:tool` scaffold",
+      "milestone": "P3 — Prompt & Tool Governance",
+      "labels": [
+        "type:feature",
+        "area:scaffolding",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Add an artisan command to scaffold package-aligned tool classes.",
+      "rationale": "Scaffolding reduces error-prone manual setup and reinforces package conventions.",
+      "scope": [
+        "Implement `ai:make:tool`",
+        "Generate convention-aligned class template"
+      ],
+      "out_of_scope": [
+        "Context-aware project inspection beyond required basics"
+      ],
+      "dependencies": [
+        "P3-I3"
+      ],
+      "acceptance_criteria": [
+        "`ai:make:tool` generates a convention-aligned tool scaffold.",
+        "Generated files match package namespace/path expectations."
+      ],
+      "tests": [
+        "Command tests with filesystem assertions"
+      ],
+      "risks": [
+        "Risk of scaffolds drifting from current contracts"
+      ],
+      "docs": [
+        "Document the command and generated structure"
+      ]
+    },
+    {
+      "title": "P3-I7 `ai:make:prompt` scaffold",
+      "milestone": "P3 — Prompt & Tool Governance",
+      "labels": [
+        "type:feature",
+        "area:scaffolding",
+        "area:prompts",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Add an artisan command to scaffold package-aligned prompt templates or prompt definition files.",
+      "rationale": "Prompt scaffolding reduces authoring friction and helps enforce repository conventions.",
+      "scope": [
+        "Implement `ai:make:prompt`",
+        "Generate convention-aligned prompt scaffold"
+      ],
+      "out_of_scope": [
+        "A complete prompt editor or UI"
+      ],
+      "dependencies": [
+        "P3-I1"
+      ],
+      "acceptance_criteria": [
+        "`ai:make:prompt` generates a convention-aligned prompt scaffold."
+      ],
+      "tests": [
+        "Command tests with filesystem assertions"
+      ],
+      "risks": [
+        "Risk of generated prompt format drifting from repository expectations"
+      ],
+      "docs": [
+        "Document the command and generated prompt structure"
+      ]
+    },
+    {
+      "title": "P3-I8 Tests: scaffolds generate correct namespaces and paths",
+      "milestone": "P3 — Prompt & Tool Governance",
+      "labels": [
+        "type:task",
+        "area:scaffolding",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Add deterministic tests verifying scaffolds generate the correct namespaces and filesystem paths.",
+      "rationale": "Scaffolding is only useful if it is predictably correct. Path/namespace regressions are easy to introduce and should be test-covered.",
+      "scope": [
+        "Namespace/path tests for generated files"
+      ],
+      "out_of_scope": [
+        "Interactive UX tests"
+      ],
+      "dependencies": [
+        "P3-I6",
+        "P3-I7"
+      ],
+      "acceptance_criteria": [
+        "Generated files have the expected namespaces and paths."
+      ],
+      "tests": [
+        "Command tests with filesystem assertions"
+      ],
+      "risks": [
+        "Risk of brittle path assertions across environments"
+      ],
+      "docs": [
+        "None unless scaffold docs need clarification"
+      ]
+    },
+    {
+      "title": "P4-I1 Retry policy config + backoff DTOs",
+      "milestone": "P4 — Resilience & Orchestration Enhancements",
+      "labels": [
+        "type:feature",
+        "area:resilience",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Implement package-owned retry policy configuration and backoff DTOs.",
+      "rationale": "Retry semantics are package resilience policy and should be explicit, typed, and testable.",
+      "scope": [
+        "Define retry policy config shape",
+        "Define backoff DTOs"
+      ],
+      "out_of_scope": [
+        "Circuit breaker state machine",
+        "Adaptive retry learning"
+      ],
+      "dependencies": [
+        "P1-I1"
+      ],
+      "acceptance_criteria": [
+        "Retry policy config is explicit and validated.",
+        "Backoff DTOs are package-owned and typed."
+      ],
+      "tests": [
+        "Unit tests for config normalization and DTO invariants"
+      ],
+      "risks": [
+        "Risk of retry policy being too rigid or too permissive"
+      ],
+      "docs": [
+        "Document retry policy config"
+      ]
+    },
+    {
+      "title": "P4-I2 Circuit breaker (state tracking + thresholds)",
+      "milestone": "P4 — Resilience & Orchestration Enhancements",
+      "labels": [
+        "type:feature",
+        "area:resilience",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Implement a package-owned circuit breaker with explicit state tracking and thresholds.",
+      "rationale": "Circuit breaking is a package resilience concern that should remain explicit rather than hidden inside provider or SDK behavior.",
+      "scope": [
+        "Implement circuit breaker state machine",
+        "Support threshold-based open/half-open/closed transitions"
+      ],
+      "out_of_scope": [
+        "Distributed breaker coordination across all infrastructures"
+      ],
+      "dependencies": [
+        "P4-I1"
+      ],
+      "acceptance_criteria": [
+        "Circuit breaker state transitions are explicit and test-covered.",
+        "Breaker configuration is package-owned and deterministic."
+      ],
+      "tests": [
+        "Unit tests for state transitions and thresholds"
+      ],
+      "risks": [
+        "Risk of state complexity or hidden time-based nondeterminism"
+      ],
+      "docs": [
+        "Document breaker semantics"
+      ]
+    },
+    {
+      "title": "P4-I3 Tests: transient vs persistent failure behavior + breaker open/close",
+      "milestone": "P4 — Resilience & Orchestration Enhancements",
+      "labels": [
+        "type:task",
+        "area:resilience",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Add deterministic coverage for retry and circuit breaker behavior under transient and persistent failures.",
+      "rationale": "Resilience policies are behavior-heavy and easy to regress. Their state and retry semantics must be test-covered before more runtime complexity is added.",
+      "scope": [
+        "Retry behavior tests",
+        "Circuit breaker transition tests"
+      ],
+      "out_of_scope": [
+        "Load testing"
+      ],
+      "dependencies": [
+        "P4-I1",
+        "P4-I2"
+      ],
+      "acceptance_criteria": [
+        "Transient vs persistent failure behavior is deterministic and covered.",
+        "Circuit breaker open/close behavior is covered."
+      ],
+      "tests": [
+        "Unit/integration tests with controlled time"
+      ],
+      "risks": [
+        "Risk of flaky time-based tests"
+      ],
+      "docs": [
+        "None unless contributor guidance on time control is needed"
+      ]
+    },
+    {
+      "title": "P4-I4 Emit package lifecycle events + failover telemetry",
+      "milestone": "P4 — Resilience & Orchestration Enhancements",
+      "labels": [
+        "type:feature",
+        "area:observability",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Emit package lifecycle events and failover telemetry around workflow execution.",
+      "rationale": "The package owns workflow-level observability and must emit package semantics around retries, failover, and step lifecycle.",
+      "scope": [
+        "Emit package lifecycle events",
+        "Emit failover telemetry"
+      ],
+      "out_of_scope": [
+        "Dashboard UI",
+        "External sinks"
+      ],
+      "dependencies": [
+        "P0-I10",
+        "P1-I6",
+        "P1-I7"
+      ],
+      "acceptance_criteria": [
+        "Lifecycle and failover events are emitted with redacted defaults.",
+        "Events remain package-owned and deterministic."
+      ],
+      "tests": [
+        "Integration tests for event emission and payload shape"
+      ],
+      "risks": [
+        "Risk of duplicate/overlapping telemetry with SDK events"
+      ],
+      "docs": [
+        "Document package lifecycle events and failover telemetry"
+      ]
+    },
+    {
+      "title": "P4-I5 Tests: event emission + redaction defaults",
+      "milestone": "P4 — Resilience & Orchestration Enhancements",
+      "labels": [
+        "type:task",
+        "area:observability",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Add deterministic coverage for event emission and redaction defaults.",
+      "rationale": "Observability events must remain safe by default. Redaction behavior should be explicitly guarded by tests.",
+      "scope": [
+        "Event emission tests",
+        "Redaction default tests"
+      ],
+      "out_of_scope": [
+        "Dashboard tests"
+      ],
+      "dependencies": [
+        "P4-I4"
+      ],
+      "acceptance_criteria": [
+        "Events are emitted as expected.",
+        "Redaction defaults are covered and safe."
+      ],
+      "tests": [
+        "Integration tests with event fakes"
+      ],
+      "risks": [
+        "Risk of accidentally exposing raw content in event payloads"
+      ],
+      "docs": [
+        "None unless event docs are updated"
+      ]
+    },
+    {
+      "title": "P5-I1 Define `VectorStoreInterface` + typed errors",
+      "milestone": "P5 — Vector & Retrieval",
+      "labels": [
+        "type:feature",
+        "area:vector",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Define the package-owned vector store port and typed errors.",
+      "rationale": "Vector/retrieval must remain behind a package-owned port to avoid vendor lock-in leakage and preserve future adapter flexibility.",
+      "scope": [
+        "Define `VectorStoreInterface`",
+        "Define typed vector errors/DTOs"
+      ],
+      "out_of_scope": [
+        "All adapter implementations"
+      ],
+      "dependencies": [
+        "P0-I8"
+      ],
+      "acceptance_criteria": [
+        "Vector store port and typed errors are package-owned and stable.",
+        "No vendor SDK types leak into public vector contracts."
+      ],
+      "tests": [
+        "Contract tests and architecture/static checks"
+      ],
+      "risks": [
+        "Risk of overfitting the port to one backend"
+      ],
+      "docs": [
+        "Document vector port and error model"
+      ]
+    },
+    {
+      "title": "P5-I2 Implement one adapter",
+      "milestone": "P5 — Vector & Retrieval",
+      "labels": [
+        "type:feature",
+        "area:vector",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Implement one concrete vector store adapter behind the package-owned vector port.",
+      "rationale": "The package requires at least one working vector implementation to validate the port and enable retrieval flows.",
+      "scope": [
+        "Implement one vector adapter",
+        "Wire config/selection as needed"
+      ],
+      "out_of_scope": [
+        "All optional adapters"
+      ],
+      "dependencies": [
+        "P5-I1"
+      ],
+      "acceptance_criteria": [
+        "At least one adapter exists and conforms to the vector port.",
+        "Adapter behavior is deterministic in tests."
+      ],
+      "tests": [
+        "Adapter contract compliance tests"
+      ],
+      "risks": [
+        "Risk of port/adapter mismatch if the first adapter drives the design too heavily"
+      ],
+      "docs": [
+        "Document the shipped vector adapter and config"
+      ]
+    },
+    {
+      "title": "P5-I3 Tests: vector store contract suite + adapter compliance",
+      "milestone": "P5 — Vector & Retrieval",
+      "labels": [
+        "type:task",
+        "area:vector",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Add a vector store contract suite and adapter compliance tests.",
+      "rationale": "Adapters are easy to drift. A contract suite keeps all vector adapters aligned to package semantics.",
+      "scope": [
+        "Define contract test suite",
+        "Run adapter compliance tests"
+      ],
+      "out_of_scope": [
+        "Benchmarking"
+      ],
+      "dependencies": [
+        "P5-I2"
+      ],
+      "acceptance_criteria": [
+        "A reusable vector contract suite exists.",
+        "The shipped adapter passes compliance tests."
+      ],
+      "tests": [
+        "Contract tests"
+      ],
+      "risks": [
+        "Risk of under-specifying vector behavior"
+      ],
+      "docs": [
+        "Contributor guidance for new adapters if needed"
+      ]
+    },
+    {
+      "title": "P5-I4 Adapter: RedisVector",
+      "milestone": "P5 — Vector & Retrieval",
+      "labels": [
+        "type:feature",
+        "area:vector",
+        "priority:P2",
+        "status:needs-spec"
+      ],
+      "summary": "Optionally implement a Redis-backed vector adapter if the package chooses to support it.",
+      "rationale": "Multiple adapters may be useful, but only after the port and reference adapter are stable.",
+      "scope": [
+        "Implement Redis-backed adapter if approved"
+      ],
+      "out_of_scope": [
+        "Guaranteeing Redis availability in all deployments"
+      ],
+      "dependencies": [
+        "P5-I1"
+      ],
+      "acceptance_criteria": [
+        "If implemented, the adapter conforms to the vector contract suite."
+      ],
+      "tests": [
+        "Adapter compliance tests"
+      ],
+      "risks": [
+        "Risk of adding operational complexity for optional value"
+      ],
+      "docs": [
+        "Document only if implemented"
+      ]
+    },
+    {
+      "title": "P5-I5 Adapter: Qdrant",
+      "milestone": "P5 — Vector & Retrieval",
+      "labels": [
+        "type:feature",
+        "area:vector",
+        "priority:P2",
+        "status:needs-spec"
+      ],
+      "summary": "Optionally implement a Qdrant adapter if the package chooses to support it.",
+      "rationale": "External vector DB support can be valuable but should not block core package delivery.",
+      "scope": [
+        "Implement Qdrant adapter if approved"
+      ],
+      "out_of_scope": [
+        "Managing Qdrant infrastructure for consumers"
+      ],
+      "dependencies": [
+        "P5-I1"
+      ],
+      "acceptance_criteria": [
+        "If implemented, the adapter conforms to the vector contract suite."
+      ],
+      "tests": [
+        "Adapter compliance tests"
+      ],
+      "risks": [
+        "Risk of backend-specific semantics leaking into the port"
+      ],
+      "docs": [
+        "Document only if implemented"
+      ]
+    },
+    {
+      "title": "P5-I6 Adapter: Pinecone",
+      "milestone": "P5 — Vector & Retrieval",
+      "labels": [
+        "type:feature",
+        "area:vector",
+        "priority:P2",
+        "status:needs-spec"
+      ],
+      "summary": "Optionally implement a Pinecone adapter if the package chooses to support it.",
+      "rationale": "This is optional follow-on work after the vector port is stable.",
+      "scope": [
+        "Implement Pinecone adapter if approved"
+      ],
+      "out_of_scope": [
+        "Managing Pinecone operational concerns beyond configuration guidance"
+      ],
+      "dependencies": [
+        "P5-I1"
+      ],
+      "acceptance_criteria": [
+        "If implemented, the adapter conforms to the vector contract suite."
+      ],
+      "tests": [
+        "Adapter compliance tests"
+      ],
+      "risks": [
+        "Risk of backend-specific semantics leaking into the port"
+      ],
+      "docs": [
+        "Document only if implemented"
+      ]
+    },
+    {
+      "title": "P6-I1 Encryption service abstraction + default implementation",
+      "milestone": "P6 — Compliance & Security Layer",
+      "labels": [
+        "type:feature",
+        "area:security",
+        "priority:P1",
+        "risk:security",
+        "status:ready"
+      ],
+      "summary": "Implement a package-owned encryption service abstraction and default implementation for persisted sensitive data.",
+      "rationale": "Encryption at rest is a required package capability and should remain behind a package-owned abstraction for testing and future changes.",
+      "scope": [
+        "Define encryption service abstraction",
+        "Implement default encryption service"
+      ],
+      "out_of_scope": [
+        "External KMS integration beyond the default implementation"
+      ],
+      "dependencies": [
+        "P2-I5"
+      ],
+      "acceptance_criteria": [
+        "Encryption service is package-owned and testable.",
+        "Persisted sensitive data can be encrypted at rest via the default implementation."
+      ],
+      "tests": [
+        "Unit/integration tests for encryption/decryption behavior"
+      ],
+      "risks": [
+        "Risk of accidental plaintext persistence"
+      ],
+      "docs": [
+        "Document encryption defaults and extension points"
+      ]
+    },
+    {
+      "title": "P6-I2 Redactor service",
+      "milestone": "P6 — Compliance & Security Layer",
+      "labels": [
+        "type:feature",
+        "area:security",
+        "area:observability",
+        "priority:P1",
+        "risk:security",
+        "status:ready"
+      ],
+      "summary": "Implement a package-owned redactor service for telemetry/logging and related safe-output surfaces.",
+      "rationale": "Redaction is central to safe observability defaults and should not be left to ad hoc call-site behavior.",
+      "scope": [
+        "Define redactor service",
+        "Integrate with observability-safe output paths"
+      ],
+      "out_of_scope": [
+        "A complete PII detection ML system"
+      ],
+      "dependencies": [
+        "P4-I4"
+      ],
+      "acceptance_criteria": [
+        "A package-owned redactor exists and is usable by observability paths.",
+        "Safe-output defaults remain enforceable."
+      ],
+      "tests": [
+        "Unit tests for redaction rules",
+        "Integration tests with telemetry/event payloads"
+      ],
+      "risks": [
+        "Risk of incomplete redaction coverage or over-redaction"
+      ],
+      "docs": [
+        "Document redaction defaults and extensibility"
+      ]
+    },
+    {
+      "title": "P6-I3 Purge jobs for retention policies",
+      "milestone": "P6 — Compliance & Security Layer",
+      "labels": [
+        "type:feature",
+        "area:security",
+        "area:memory",
+        "priority:P1",
+        "risk:security",
+        "status:ready"
+      ],
+      "summary": "Implement purge jobs or scheduled services for retention policies.",
+      "rationale": "Retention needs an operational enforcement mechanism beyond one-off purge calls.",
+      "scope": [
+        "Implement purge jobs/services",
+        "Wire retention-policy execution points"
+      ],
+      "out_of_scope": [
+        "Complex data-lifecycle analytics"
+      ],
+      "dependencies": [
+        "P2-I5",
+        "P2-I6"
+      ],
+      "acceptance_criteria": [
+        "Retention purge can be executed operationally via package jobs/services.",
+        "Purge behavior remains deterministic and privacy-aware."
+      ],
+      "tests": [
+        "Integration tests for purge job/service behavior"
+      ],
+      "risks": [
+        "Risk of destructive purge bugs if policy boundaries are wrong"
+      ],
+      "docs": [
+        "Document purge-job behavior and scheduling expectations"
+      ]
+    },
+    {
+      "title": "P6-I4 Tests: encryption at rest, redaction correctness, purge behavior",
+      "milestone": "P6 — Compliance & Security Layer",
+      "labels": [
+        "type:task",
+        "area:security",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Add deterministic coverage for encryption-at-rest, redaction correctness, and purge behavior.",
+      "rationale": "Security/privacy defaults are high-risk and should be protected with explicit regression tests.",
+      "scope": [
+        "Encryption tests",
+        "Redaction tests",
+        "Purge behavior tests"
+      ],
+      "out_of_scope": [
+        "Formal security audit"
+      ],
+      "dependencies": [
+        "P6-I1",
+        "P6-I2",
+        "P6-I3"
+      ],
+      "acceptance_criteria": [
+        "Encryption, redaction, and purge behavior are deterministically covered."
+      ],
+      "tests": [
+        "Unit + integration tests"
+      ],
+      "risks": [
+        "Risk of incomplete edge-case coverage for security-sensitive behavior"
+      ],
+      "docs": [
+        "None unless contributor guidance is updated"
+      ]
+    },
+    {
+      "title": "P7-I1 Fake runtime + fake provider policy + fake tool runner + fake vector store + fake memory store",
+      "milestone": "P7 — Testing Harness & Observability",
+      "labels": [
+        "type:feature",
+        "area:observability",
+        "area:runtime",
+        "priority:P2",
+        "status:ready"
+      ],
+      "summary": "Provide first-class package fakes for the runtime, provider policy, tool execution, vector store, and memory store.",
+      "rationale": "The package needs its own deterministic test harness in addition to whatever lower-level SDK fakes exist, because package-owned policies and behaviors must be testable in isolation.",
+      "scope": [
+        "Implement package fakes for runtime, provider policy, tools, vector store, and memory"
+      ],
+      "out_of_scope": [
+        "Mocking every optional adapter or external sink"
+      ],
+      "dependencies": [
+        "P0-I11"
+      ],
+      "acceptance_criteria": [
+        "Package fakes exist for core package-owned surfaces.",
+        "Fakes behave deterministically and support package test patterns."
+      ],
+      "tests": [
+        "Unit/integration tests for fake behavior"
+      ],
+      "risks": [
+        "Risk of fake behavior diverging from real package semantics"
+      ],
+      "docs": [
+        "Document package fakes and their intended use"
+      ]
+    },
+    {
+      "title": "P7-I2 Assertion helpers",
+      "milestone": "P7 — Testing Harness & Observability",
+      "labels": [
+        "type:feature",
+        "area:observability",
+        "priority:P2",
+        "status:ready"
+      ],
+      "summary": "Provide package-level assertion helpers for common workflow, event, and state expectations.",
+      "rationale": "Assertion helpers improve readability and consistency of package and consumer tests.",
+      "scope": [
+        "Implement assertion helpers for package flows"
+      ],
+      "out_of_scope": [
+        "A full testing DSL"
+      ],
+      "dependencies": [
+        "P7-I1"
+      ],
+      "acceptance_criteria": [
+        "Assertion helpers exist for common package testing scenarios."
+      ],
+      "tests": [
+        "Tests for helper behavior"
+      ],
+      "risks": [
+        "Risk of helpers hiding too much detail"
+      ],
+      "docs": [
+        "Document assertion helpers"
+      ]
+    },
+    {
+      "title": "P7-I3 Tests: fakes behave like real flows from a package perspective",
+      "milestone": "P7 — Testing Harness & Observability",
+      "labels": [
+        "type:task",
+        "area:observability",
+        "priority:P2",
+        "status:ready"
+      ],
+      "summary": "Add deterministic tests proving package fakes behave like real flows from the package’s perspective.",
+      "rationale": "Fakes are only useful if they preserve package semantics closely enough to catch real regressions.",
+      "scope": [
+        "Behavioral comparison tests for fakes"
+      ],
+      "out_of_scope": [
+        "Benchmarking fake vs real performance"
+      ],
+      "dependencies": [
+        "P7-I1",
+        "P7-I2"
+      ],
+      "acceptance_criteria": [
+        "Core package fakes are regression-covered against expected package semantics."
+      ],
+      "tests": [
+        "Integration-style tests using fakes"
+      ],
+      "risks": [
+        "Risk of false confidence if fake behavior is under-specified"
+      ],
+      "docs": [
+        "None unless fake guidance needs clarification"
+      ]
+    },
+    {
+      "title": "P7-I4 Pulse widgets / Nightwatch integration",
+      "milestone": "P7 — Testing Harness & Observability",
+      "labels": [
+        "type:feature",
+        "area:observability",
+        "priority:P2",
+        "status:needs-spec"
+      ],
+      "summary": "Optionally add Pulse widgets or Nightwatch integration for richer package observability.",
+      "rationale": "This can be useful, but it is optional and should not block core package delivery.",
+      "scope": [
+        "Optional dashboards/widgets"
+      ],
+      "out_of_scope": [
+        "Core required telemetry layer"
+      ],
+      "dependencies": [
+        "P4-I4"
+      ],
+      "acceptance_criteria": [
+        "If implemented, dashboards integrate cleanly with package telemetry."
+      ],
+      "tests": [
+        "Optional integration tests"
+      ],
+      "risks": [
+        "Risk of overcommitting to optional observability UI work"
+      ],
+      "docs": [
+        "Document only if implemented"
+      ]
+    },
+    {
+      "title": "P8-I1 ProjectInspector",
+      "milestone": "P8 — Context-Aware Scaffolding",
+      "labels": [
+        "type:feature",
+        "area:scaffolding",
+        "priority:P2",
+        "status:ready"
+      ],
+      "summary": "Implement a `ProjectInspector` that safely detects Laravel/package context needed for scaffolding decisions.",
+      "rationale": "Context-aware scaffolding should inspect project state safely rather than guess or overwrite blindly.",
+      "scope": [
+        "Implement `ProjectInspector`",
+        "Detect relevant package/app context for scaffolds"
+      ],
+      "out_of_scope": [
+        "Project mutation beyond inspection"
+      ],
+      "dependencies": [
+        "P3-I6",
+        "P3-I7"
+      ],
+      "acceptance_criteria": [
+        "`ProjectInspector` safely detects relevant context for scaffolding decisions."
+      ],
+      "tests": [
+        "Unit tests for detection logic"
+      ],
+      "risks": [
+        "Risk of brittle environment assumptions"
+      ],
+      "docs": [
+        "Document inspector role if public/internal guidance is needed"
+      ]
+    },
+    {
+      "title": "P8-I2 `ai:make:agent` and `ai:make:pipeline`",
+      "milestone": "P8 — Context-Aware Scaffolding",
+      "labels": [
+        "type:feature",
+        "area:scaffolding",
+        "area:core",
+        "priority:P2",
+        "status:ready"
+      ],
+      "summary": "Add scaffold commands for agents and pipelines using package conventions and project inspection.",
+      "rationale": "As the package matures, higher-level scaffolding should help users and contributors adopt its workflow model safely and consistently.",
+      "scope": [
+        "Implement `ai:make:agent`",
+        "Implement `ai:make:pipeline`",
+        "Use project inspection where needed"
+      ],
+      "out_of_scope": [
+        "Interactive UI wizard"
+      ],
+      "dependencies": [
+        "P8-I1"
+      ],
+      "acceptance_criteria": [
+        "Agent and pipeline scaffolds generate convention-aligned code.",
+        "Scaffolds avoid unsafe overwrite/default behavior."
+      ],
+      "tests": [
+        "Command tests with filesystem assertions"
+      ],
+      "risks": [
+        "Risk of generating code that falls out of sync with current conventions"
+      ],
+      "docs": [
+        "Document scaffold commands"
+      ]
+    },
+    {
+      "title": "P8-I3 Tests: detection correctness + generated code compiles",
+      "milestone": "P8 — Context-Aware Scaffolding",
+      "labels": [
+        "type:task",
+        "area:scaffolding",
+        "priority:P2",
+        "status:ready"
+      ],
+      "summary": "Add deterministic coverage for project inspection correctness and generated code validity.",
+      "rationale": "Context-aware scaffolding increases complexity and needs coverage to stay safe and useful.",
+      "scope": [
+        "Detection correctness tests",
+        "Generated code compile/sanity tests"
+      ],
+      "out_of_scope": [
+        "Manual UX review"
+      ],
+      "dependencies": [
+        "P8-I1",
+        "P8-I2"
+      ],
+      "acceptance_criteria": [
+        "Inspection and scaffold generation remain deterministic and regression-covered."
+      ],
+      "tests": [
+        "Filesystem and syntax/compile sanity tests"
+      ],
+      "risks": [
+        "Risk of environment-specific scaffold behavior"
+      ],
+      "docs": [
+        "None unless helper guidance is needed"
+      ]
+    },
+    {
+      "title": "P9-I1 README: install + quickstart + configuration reference",
+      "milestone": "P9 — Documentation & Patterns",
+      "labels": [
+        "type:docs",
+        "area:docs",
+        "priority:P2",
+        "status:ready"
+      ],
+      "summary": "Maintain the README as the concise install, quickstart, and configuration reference for the package.",
+      "rationale": "The README is the primary consumer entry point and should remain aligned with real package behavior and defaults.",
+      "scope": [
+        "Install docs",
+        "Quickstart",
+        "Configuration reference"
+      ],
+      "out_of_scope": [
+        "Full architecture deep dive"
+      ],
+      "dependencies": [
+        "P0-I12",
+        "P1-I11"
+      ],
+      "acceptance_criteria": [
+        "README reflects current installation and configuration reality.",
+        "Quickstart remains aligned with package-owned workflow abstractions."
+      ],
+      "tests": [
+        "Documentation review",
+        "Snippet verification where feasible"
+      ],
+      "risks": [
+        "Risk of the README becoming stale as features land"
+      ],
+      "docs": [
+        "This issue directly updates README"
+      ]
+    },
+    {
+      "title": "P9-I2 Architecture docs: module map + contracts + SDK bridge",
+      "milestone": "P9 — Documentation & Patterns",
+      "labels": [
+        "type:docs",
+        "area:docs",
+        "priority:P2",
+        "status:ready"
+      ],
+      "summary": "Maintain architecture documentation that clearly explains the module map, package-owned contracts, and internal SDK bridge boundary.",
+      "rationale": "The package’s value depends on a clean architecture story. Contributors need authoritative guidance on module ownership and boundary rules.",
+      "scope": [
+        "Document module map",
+        "Document package-owned contracts",
+        "Document internal SDK bridge boundary"
+      ],
+      "out_of_scope": [
+        "End-user tutorials"
+      ],
+      "dependencies": [
+        "P0-I12"
+      ],
+      "acceptance_criteria": [
+        "Architecture docs clearly show module boundaries and the SDK bridge.",
+        "Public vs internal contract rules are explicit."
+      ],
+      "tests": [
+        "Documentation review"
+      ],
+      "risks": [
+        "Risk of architecture docs diverging from implementation"
+      ],
+      "docs": [
+        "This issue directly updates architecture docs"
+      ]
+    },
+    {
+      "title": "P9-I3 Example app or examples/ folder + CI validation",
+      "milestone": "P9 — Documentation & Patterns",
+      "labels": [
+        "type:docs",
+        "area:docs",
+        "priority:P2",
+        "status:ready"
+      ],
+      "summary": "Provide a runnable example app or `examples/` folder that demonstrates the package’s intended SDK-backed workflow patterns, and validate it in CI where practical.",
+      "rationale": "Examples are the most concrete way to teach the package’s opinionated workflow model and keep docs honest.",
+      "scope": [
+        "Add example app or examples directory",
+        "Show package-owned workflows over the SDK-backed runtime",
+        "Validate examples in CI where practical"
+      ],
+      "out_of_scope": [
+        "Production-ready demo application"
+      ],
+      "dependencies": [
+        "P1-I11",
+        "P0-I12"
+      ],
+      "acceptance_criteria": [
+        "At least one example demonstrates the intended package workflow style.",
+        "Examples are validated in CI where practical.",
+        "Examples do not encourage direct public SDK-type usage through package APIs."
+      ],
+      "tests": [
+        "CI example validation where feasible",
+        "Documentation review"
+      ],
+      "risks": [
+        "Risk of example drift if not validated"
+      ],
+      "docs": [
+        "Document how examples are intended to be used"
+      ]
+    },
+    {
+      "title": "P0-I11 SDK-backed fake/testing strategy",
+      "milestone": "P0 — Laravel AI SDK Alignment & Runtime Boundary",
+      "labels": [
+        "type:task",
+        "area:observability",
+        "area:runtime",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Define the package testing strategy for an SDK-backed architecture, including where package fakes remain necessary and where SDK fakes should be preferred.",
+      "rationale": "As the package aligns to Laravel AI SDK, its tests must remain deterministic and network-free while still exercising meaningful integration behavior. This requires a deliberate fake/stub strategy rather than ad hoc mocking.",
+      "scope": [
+        "Document when to use SDK fakes vs package fakes",
+        "Add baseline fake/testing harness guidance for runtime-aligned modules",
+        "Preserve deterministic test standards"
+      ],
+      "out_of_scope": [
+        "Full fake implementation matrix for every module",
+        "Optional dashboards or external telemetry sinks"
+      ],
+      "dependencies": [
+        "P0-I2",
+        "P0-I10"
+      ],
+      "acceptance_criteria": [
+        "A clear testing strategy exists for SDK-backed package modules.",
+        "Deterministic, network-free testing remains the default.",
+        "Guidance distinguishes package-owned policy tests from runtime integration tests.",
+        "Existing tests remain compatible with the new strategy."
+      ],
+      "tests": [
+        "Documentation/spec-oriented issue; add tests only if new helpers or fakes are introduced",
+        "Determinism controls: no live provider calls"
+      ],
+      "risks": [
+        "Risk of fragmented testing practices across modules",
+        "Risk of over-relying on one fake layer and missing contract gaps"
+      ],
+      "docs": [
+        "Update contributor/testing docs with the fake strategy"
+      ],
+      "execution_note": "Intentionally deferred until the final stabilization wave so the SDK-backed testing strategy reflects the finished runtime, fake, telemetry, and contributor harness surfaces."
+    },
+    {
+      "title": "P0-I12 Docs: package positioning, install, architecture, migration notes",
+      "milestone": "P0 — Laravel AI SDK Alignment & Runtime Boundary",
+      "labels": [
+        "type:docs",
+        "area:docs",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Realign all project-facing docs so they consistently describe the package as an opinionated application/workflow layer built on Laravel AI SDK, with package-owned contracts and SDK-backed execution.\n\nThis includes README, architecture docs, installation docs, and migration notes for any assumptions that changed as part of the runtime-alignment work.",
+      "rationale": "The project currently states the Laravel AI SDK intent in high-level docs, but the roadmap and package positioning have not yet been made operational and consistent. Documentation must be explicit about what the SDK owns versus what the package owns.",
+      "scope": [
+        "README positioning update",
+        "Install/quickstart update",
+        "Architecture/module map update",
+        "Contract/boundary documentation",
+        "Migration notes where assumptions changed"
+      ],
+      "out_of_scope": [
+        "Marketing copy overhaul",
+        "End-user tutorials beyond necessary quickstart changes",
+        "Example app unless explicitly included elsewhere"
+      ],
+      "dependencies": [
+        "P0-I1",
+        "P0-I2",
+        "P0-I4",
+        "P0-I5",
+        "P0-I7",
+        "P0-I10"
+      ],
+      "acceptance_criteria": [
+        "README explicitly states that Laravel AI SDK is the runtime substrate.",
+        "Docs clearly distinguish package-owned public contracts from internal SDK integration.",
+        "Install docs accurately describe dependency and setup requirements.",
+        "Architecture docs show the internal SDK bridge layer and module boundaries.",
+        "Any changed assumptions include upgrade or migration notes."
+      ],
+      "tests": [
+        "Documentation review checklist",
+        "Example snippets validated where feasible",
+        "CI validation for examples if examples are included"
+      ],
+      "risks": [
+        "Risk of docs overstating what is already implemented",
+        "Risk of leaving old standalone-runtime language in place",
+        "Risk of confusing package responsibilities vs SDK responsibilities"
+      ],
+      "docs": [
+        "This issue is itself the docs/update note vehicle"
+      ],
+      "execution_note": "Intentionally deferred until the final stabilization wave so package positioning, install, architecture, and migration notes describe the final package shape rather than a moving target."
+    }
+  ],
+  "execution_order": [
+    "P0-I1 Add laravel/ai as an explicit dependency + install/config wiring",
+    "P0-I2 Define package-owned runtime contracts + internal SDK runtime bridge",
+    "P0-I3 Tests: runtime bridge wiring + no-vendor-leak guardrails",
+    "P0-I4 Prompt repository → SDK instruction/message mapper",
+    "P0-I5 Tool registry → SDK tool/provider-tool mapper",
+    "P0-I6 Blueprint compilation layer for SDK-backed execution",
+    "P0-I7 Package memory → SDK conversation context bridge",
+    "P0-I8 SDK-backed vector adapter strategy + boundary rules",
+    "P0-I9 Tests: memory/vector bridge behavior",
+    "P0-I10 Normalize/enrich SDK events into package telemetry",
+    "P1-I1 Config schema + ConfigValidator (fail-fast boot validation)",
+    "P1-I2 Provider profiles + selection policy over Laravel AI SDK",
+    "P1-I3 Failover policy + typed exceptions",
+    "P1-I4 Tests: config validation + provider policy + failover policy",
+    "P1-I5 Define pipeline step contracts + RunContext DTO",
+    "P1-I6 Implement PipelineBuilder + workflow runner over SDK runtime",
+    "P1-I7 Implement queue job(s) for workflow execution + result handling",
+    "P1-I8 Tests: pipeline chaining + queued execution (SDK-backed fakes)",
+    "P1-I9 Service provider bindings + publish tags",
+    "P1-I10 Tests: config publish + container bindings sanity",
+    "P1-I11 Docs: install + quickstart",
+    "P2-I1 Define memory contracts",
+    "P2-I2 Integrate memory into workflow context",
+    "P2-I3 Tests: conversation start/continue flow",
+    "P2-I4 DB schema + migrations",
+    "P2-I5 DB driver implementation + retention purge service",
+    "P2-I6 Tests: retention purge + delete semantics",
+    "P2-I7 Redis or in-memory driver",
+    "P2-I8 Summarization port + default summarizer stub",
+    "P2-I9 Tests: summarization trigger thresholds + persistence",
+    "P3-I1 Prompt storage format + PromptRepository",
+    "P3-I2 Tests: interpolation, missing variables, version selection",
+    "P3-I3 Tool contracts + registry + schema validation",
+    "P3-I4 Authorization hook + default-deny policy",
+    "P3-I5 Tests: invalid schema rejection + deny-by-default behavior",
+    "P3-I6 ai:make:tool scaffold",
+    "P3-I7 ai:make:prompt scaffold",
+    "P3-I8 Tests: scaffolds generate correct namespaces and paths",
+    "P4-I1 Retry policy config + backoff DTOs",
+    "P4-I2 Circuit breaker (state tracking + thresholds)",
+    "P4-I3 Tests: transient vs persistent failure behavior + breaker open/close",
+    "P4-I4 Emit package lifecycle events + failover telemetry",
+    "P4-I5 Tests: event emission + redaction defaults",
+    "P5-I1 Define VectorStoreInterface + typed errors",
+    "P5-I2 Implement one adapter",
+    "P5-I3 Tests: vector store contract suite + adapter compliance",
+    "P5-I4 Adapter: RedisVector",
+    "P5-I5 Adapter: Qdrant",
+    "P5-I6 Adapter: Pinecone",
+    "P6-I1 Encryption service abstraction + default implementation",
+    "P6-I2 Redactor service",
+    "P6-I3 Purge jobs for retention policies",
+    "P6-I4 Tests: encryption at rest, redaction correctness, purge behavior",
+    "P7-I1 Fake runtime + fake provider policy + fake tool runner + fake vector store + fake memory store",
+    "P7-I2 Assertion helpers",
+    "P7-I3 Tests: fakes behave like real flows from a package perspective",
+    "P7-I4 Pulse widgets / Nightwatch integration",
+    "P8-I1 ProjectInspector",
+    "P8-I2 ai:make:agent and ai:make:pipeline",
+    "P8-I3 Tests: detection correctness + generated code compiles",
+    "P9-I1 README: install + quickstart + configuration reference",
+    "P9-I2 Architecture docs: module map + contracts + SDK bridge",
+    "P9-I3 Example app or examples/ folder + CI validation",
+    "P0-I11 SDK-backed fake/testing strategy",
+    "P0-I12 Docs: package positioning, install, architecture, migration notes"
+  ]
+}

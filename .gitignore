@@ -30,6 +30,3 @@ phpstan.neon
 testbench.yaml
 /docs
 /coverage
-
-plan
-scripts
