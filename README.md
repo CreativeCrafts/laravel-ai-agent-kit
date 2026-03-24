@@ -273,6 +273,21 @@ $purger = app(ConversationRetentionPurger::class);
 $purger->purgeExpired();
 ~~~
 
+Run retention purge operationally through the package command:
+
+~~~bash
+php artisan ai:purge:conversations
+php artisan ai:purge:conversations --queued --connection=redis --queue=ai-maintenance
+~~~
+
+Schedule the purge command from your application scheduler:
+
+~~~php
+use Illuminate\Support\Facades\Schedule;
+
+Schedule::command('ai:purge:conversations')->daily();
+~~~
+
 Use the default summarizer through the summarization contract:
 
 ~~~php
