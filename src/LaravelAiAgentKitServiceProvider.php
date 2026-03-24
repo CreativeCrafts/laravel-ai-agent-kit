@@ -6,6 +6,7 @@ namespace CreativeCrafts\LaravelAiAgentKit;
 
 use CreativeCrafts\LaravelAiAgentKit\Commands\MakePromptCommand;
 use CreativeCrafts\LaravelAiAgentKit\Commands\MakeToolCommand;
+use CreativeCrafts\LaravelAiAgentKit\Commands\PurgeConversationsCommand;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\BlueprintCompiler;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\BlueprintRunner;
@@ -41,6 +42,7 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\InMemoryConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\NullConversationSummarizer;
 use CreativeCrafts\LaravelAiAgentKit\Memory\RedisConversationStore;
+use CreativeCrafts\LaravelAiAgentKit\Memory\RetentionPurgeService;
 use CreativeCrafts\LaravelAiAgentKit\Memory\StoreBackedConversationContextManager;
 use CreativeCrafts\LaravelAiAgentKit\Observability\SdkTelemetryNormalizer;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\InMemoryPromptRepository;
@@ -77,7 +79,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
           ->hasViews()
           ->hasMigration('create_ai_agent_conversations_table')
           ->hasMigration('create_ai_agent_conversation_messages_table')
-          ->hasCommands([MakePromptCommand::class, MakeToolCommand::class]);
+          ->hasCommands([MakePromptCommand::class, MakeToolCommand::class, PurgeConversationsCommand::class]);
     }
 
     public function packageRegistered(): void
@@ -247,6 +249,16 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
                 'redis' => $app->make(RedisConversationStore::class),
                 default => throw new RuntimeException('Unsupported memory driver.'),
             };
+        });
+
+        $this->app->singleton(RetentionPurgeService::class, function (Application $app): RetentionPurgeService {
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
+            return new RetentionPurgeService(
+                purger: $app->make(ConversationRetentionPurger::class),
+                memoryDriver: $this->memoryDriver($config),
+            );
         });
 
         $this->app->singleton(StoreBackedConversationContextManager::class, function (Application $app): StoreBackedConversationContextManager {
