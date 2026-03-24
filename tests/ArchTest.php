@@ -26,9 +26,13 @@ arch('public vector contracts and strategy types do not depend on laravel ai sdk
   ->not->toUse('Laravel\\Ai');
 
 arch('public observability events do not depend on laravel ai sdk types')
-  ->expect('CreativeCrafts\LaravelAiAgentKit\Observability\Events')
-  ->not->toUse('Laravel\Ai');
+  ->expect('CreativeCrafts\\LaravelAiAgentKit\\Observability\\Events')
+  ->not->toUse('Laravel\\Ai');
 
 arch('public testing fakes do not depend on laravel ai sdk types')
-  ->expect('CreativeCrafts\LaravelAiAgentKit\Testing\Fakes')
-  ->not->toUse('Laravel\Ai');
+  ->expect('CreativeCrafts\\LaravelAiAgentKit\\Testing\\Fakes')
+  ->not->toUse('Laravel\\Ai');
+
+arch('public testing assertions do not depend on laravel ai sdk types')
+  ->expect('CreativeCrafts\\LaravelAiAgentKit\\Testing\\Assertions')
+  ->not->toUse('Laravel\\Ai');

@@ -33,6 +33,29 @@ $fakeRuntime = new FakeAiRuntime([
 app()->instance(AiRuntime::class, $fakeRuntime);
 ~~~
 
+## Assertion Helpers
+
+The package also ships assertion helpers under `CreativeCrafts\LaravelAiAgentKit\Testing\Assertions\PackageAssertions`.
+
+These helpers are intended for common fake-driven expectations such as:
+
+- runtime execution counts and last-request inspection
+- default-provider selection and failover lookups
+- tool execution assertions
+- conversation existence/missing state assertions
+- vector storage and deletion assertions
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Testing\Assertions\PackageAssertions;
+
+PackageAssertions::assertRuntimeExecutedTimes($fakeRuntime, 1);
+PackageAssertions::assertLastRuntimeRequest($fakeRuntime, function ($request): void {
+    expect($request->runId)->toBe('run-001');
+});
+~~~
+
+The internal Pest test suite also wires convenience expectations for the same helpers, but the package-owned helper class remains the stable assertion surface.
+
 ## Usage Guidance
 
 Prefer package fakes when you need to test:
@@ -45,8 +68,11 @@ Prefer package fakes when you need to test:
 
 Prefer Laravel AI SDK fakes when you need to validate the package’s SDK integration layer itself.
 
+Use assertion helpers to keep tests readable, but avoid hiding the package behavior under a large custom DSL. The helpers should clarify common expectations, not replace explicit flow setup.
+
 ## Determinism Rules
 
 - Do not use network calls in package tests.
 - Use explicit timestamps when retention or time-based behavior matters.
 - Keep fake behavior readable and close to package contracts rather than provider-specific internals.
+- Keep assertion helpers focused on common package expectations rather than framework internals.

@@ -47,15 +47,27 @@ final class FakeToolRunner implements ToolRegistry
           'required' => [],
           'additionalProperties' => true,
         ], $result) implements Tool {
+            private string $name;
+
+            /**
+             * @var array<string, mixed>
+             */
+            private array $schema;
+
+            /**
+             * @var array<string, mixed>|Closure(array<string, mixed>): array<string, mixed>
+             */
+            private array|Closure $result;
+
             /**
              * @param array<string, mixed> $schema
              * @param array<string, mixed>|Closure(array<string, mixed>): array<string, mixed> $result
              */
-            public function __construct(
-                private readonly string $name,
-                private readonly array $schema,
-                private readonly array|Closure $result,
-            ) {
+            public function __construct(string $name, array $schema, array|Closure $result)
+            {
+                $this->name = $name;
+                $this->schema = $schema;
+                $this->result = $result;
             }
 
             public function name(): string
@@ -63,11 +75,18 @@ final class FakeToolRunner implements ToolRegistry
                 return $this->name;
             }
 
+            /**
+             * @return array<string, mixed>
+             */
             public function inputSchema(): array
             {
                 return $this->schema;
             }
 
+            /**
+             * @param array<string, mixed> $input
+             * @return array<string, mixed>
+             */
             public function execute(array $input): array
             {
                 if ($this->result instanceof Closure) {
