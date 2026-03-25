@@ -199,7 +199,11 @@ final class MakeAgentCommand extends Command
             $normalized = $segment;
 
             if ($segment === $className && Str::endsWith($segment, 'Agent')) {
-                $normalized = Str::beforeLast($segment, 'Agent');
+                $stripped = Str::beforeLast($segment, 'Agent');
+
+                if ($stripped !== '') {
+                    $normalized = $stripped;
+                }
             }
 
             $nameSegments[] = Str::of($normalized)
