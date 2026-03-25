@@ -70,6 +70,18 @@ Prefer Laravel AI SDK fakes when you need to validate the package’s SDK integr
 
 Use assertion helpers to keep tests readable, but avoid hiding the package behavior under a large custom DSL. The helpers should clarify common expectations, not replace explicit flow setup.
 
+## Scaffolding Commands
+
+The package ships scaffolding commands for the current workflow surface:
+
+- `php artisan ai:make:tool Support/LookupCustomer`
+- `php artisan ai:make:prompt Support.Reply --prompt-version=2.1.0`
+- `php artisan ai:make:agent Support/ReplyAgent`
+- `php artisan ai:make:pipeline Support/ReplyPipeline`
+
+The agent and pipeline commands use `ProjectInspector` to derive the active PSR-4 root namespace and source paths before generating files. They fail safely when the destination already exists unless
+`--force` is supplied.
+
 ## Determinism Rules
 
 - Do not use network calls in package tests.
