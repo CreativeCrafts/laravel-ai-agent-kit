@@ -21,15 +21,17 @@ it('generates an agent scaffold with the expected normalized path namespace and 
     $contents = file_get_contents($generatedPath);
     $baseNamespace = $context->agentsNamespace();
 
-    expect($baseNamespace)->not->toBeNull();
-
-    expect($contents)->not
+    expect($baseNamespace)->not
+      ->toBeNull()
+      ->and($contents)->not
       ->toBeFalse()
       ->and($contents)->toContain(sprintf('namespace %s\\Support;', $baseNamespace))
       ->and($contents)->toContain('final class ReviewAgent')
       ->and($contents)->toContain('public function blueprint(array $variables = []): PromptBlueprint')
       ->and($contents)->toContain("return LaravelAiAgentKit::prompt('support.review')")
       ->and($contents)->toContain('->withInstructions([');
+
+    makeAgentCommandTestAssertCompiles($generatedPath);
 
     makeAgentCommandTestCleanup($generatedPath);
 });
@@ -68,15 +70,17 @@ it('overwrites an existing generated agent file when the force option is supplie
     $contents = file_get_contents($generatedPath);
     $baseNamespace = $context->agentsNamespace();
 
-    expect($baseNamespace)->not->toBeNull();
-
-    expect($contents)->not
+    expect($baseNamespace)->not
+      ->toBeNull()
+      ->and($contents)->not
       ->toBeFalse()
       ->and($contents)->not
       ->toBe('stale-agent')
       ->and($contents)->toContain(sprintf('namespace %s;', $baseNamespace))
       ->and($contents)->toContain('final class ForcedAgent')
       ->and($contents)->toContain("return LaravelAiAgentKit::prompt('forced')");
+
+    makeAgentCommandTestAssertCompiles($generatedPath);
 
     makeAgentCommandTestCleanup($generatedPath);
 });
@@ -130,4 +134,22 @@ function makeAgentCommandTestCleanup(string $path): void
 
         break;
     }
+}
+
+function makeAgentCommandTestAssertCompiles(string $path): void
+{
+    $command = sprintf(
+        '%s -l %s 2>&1',
+        escapeshellarg(PHP_BINARY),
+        escapeshellarg($path),
+    );
+
+    $output = [];
+    $exitCode = 1;
+
+    exec($command, $output, $exitCode);
+
+    expect($exitCode)
+      ->toBe(0)
+      ->and(implode("\n", $output))->toContain('No syntax errors detected');
 }

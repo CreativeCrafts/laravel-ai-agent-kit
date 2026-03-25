@@ -21,15 +21,17 @@ it('generates a pipeline scaffold with the expected normalized path namespace an
     $contents = file_get_contents($generatedPath);
     $baseNamespace = $context->pipelinesNamespace();
 
-    expect($baseNamespace)->not->toBeNull();
-
-    expect($contents)->not
+    expect($baseNamespace)->not
+      ->toBeNull()
+      ->and($contents)->not
       ->toBeFalse()
       ->and($contents)->toContain(sprintf('namespace %s\\Support;', $baseNamespace))
       ->and($contents)->toContain('final class ReviewPipeline implements QueuedPipelineDefinition')
       ->and($contents)->toContain('public function build(): Pipeline')
       ->and($contents)->toContain('return PipelineBuilder::make()')
       ->and($contents)->toContain('// ->addStep(new FirstPipelineStep())');
+
+    makePipelineCommandTestAssertCompiles($generatedPath);
 
     makePipelineCommandTestCleanup($generatedPath);
 });
@@ -68,15 +70,17 @@ it('overwrites an existing generated pipeline file when the force option is supp
     $contents = file_get_contents($generatedPath);
     $baseNamespace = $context->pipelinesNamespace();
 
-    expect($baseNamespace)->not->toBeNull();
-
-    expect($contents)->not
+    expect($baseNamespace)->not
+      ->toBeNull()
+      ->and($contents)->not
       ->toBeFalse()
       ->and($contents)->not
       ->toBe('stale-pipeline')
       ->and($contents)->toContain(sprintf('namespace %s;', $baseNamespace))
       ->and($contents)->toContain('final class ForcedPipeline implements QueuedPipelineDefinition')
       ->and($contents)->toContain('return PipelineBuilder::make()');
+
+    makePipelineCommandTestAssertCompiles($generatedPath);
 
     makePipelineCommandTestCleanup($generatedPath);
 });
@@ -130,4 +134,22 @@ function makePipelineCommandTestCleanup(string $path): void
 
         break;
     }
+}
+
+function makePipelineCommandTestAssertCompiles(string $path): void
+{
+    $command = sprintf(
+        '%s -l %s 2>&1',
+        escapeshellarg(PHP_BINARY),
+        escapeshellarg($path),
+    );
+
+    $output = [];
+    $exitCode = 1;
+
+    exec($command, $output, $exitCode);
+
+    expect($exitCode)
+      ->toBe(0)
+      ->and(implode("\n", $output))->toContain('No syntax errors detected');
 }
