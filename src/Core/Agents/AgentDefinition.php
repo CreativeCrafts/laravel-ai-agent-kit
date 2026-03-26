@@ -33,9 +33,9 @@ final readonly class AgentDefinition
             throw new InvalidArgumentException('Agent definitions require a non-empty primaryProviderProfile.');
         }
 
-        $this->assertUniqueNonEmptyList($this->requiredCapabilities, 'requiredCapabilities');
-        $this->assertUniqueNonEmptyList($this->fallbackProviderProfiles, 'fallbackProviderProfiles');
-        $this->assertUniqueNonEmptyList($this->delegationTargets, 'delegationTargets');
+        $this->assertUniqueNonEmptyStringList($this->requiredCapabilities, 'requiredCapabilities');
+        $this->assertUniqueNonEmptyStringList($this->fallbackProviderProfiles, 'fallbackProviderProfiles');
+        $this->assertUniqueNonEmptyStringList($this->delegationTargets, 'delegationTargets');
 
         if (in_array($this->primaryProviderProfile, $this->fallbackProviderProfiles, true)) {
             throw new InvalidArgumentException('Agent definition fallbackProviderProfiles must not include the primaryProviderProfile.');
@@ -61,18 +61,32 @@ final readonly class AgentDefinition
     }
 
     /**
-     * @param list<string> $values
+     * @param array<mixed> $values
      */
-    private function assertUniqueNonEmptyList(array $values, string $field): void
+    private function assertUniqueNonEmptyStringList(array $values, string $field): void
     {
+        $normalized = [];
+
         foreach ($values as $value) {
-            if ($value === '') {
-                throw new InvalidArgumentException(sprintf('Agent definition %s entries must be non-empty strings.', $field));
+            if (!is_string($value) || $value === '') {
+                throw new InvalidArgumentException(
+                    sprintf(
+                        'Agent definition %s entries must be non-empty strings.',
+                        $field,
+                    ),
+                );
             }
+
+            $normalized[] = $value;
         }
 
-        if (count(array_unique($values)) !== count($values)) {
-            throw new InvalidArgumentException(sprintf('Agent definition %s entries must be unique.', $field));
+        if (count(array_unique($normalized)) !== count($normalized)) {
+            throw new InvalidArgumentException(
+                sprintf(
+                    'Agent definition %s entries must be unique.',
+                    $field,
+                ),
+            );
         }
     }
 }

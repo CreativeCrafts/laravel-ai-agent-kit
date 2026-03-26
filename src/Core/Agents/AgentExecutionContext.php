@@ -39,6 +39,16 @@ final readonly class AgentExecutionContext
             throw new InvalidArgumentException('Agent execution contexts require a non-empty providerProfile.');
         }
 
+        if (!in_array($this->providerProfile, $this->agent->providerProfiles(), true)) {
+            throw new InvalidArgumentException(
+                sprintf(
+                    'Agent execution context providerProfile [%s] is not declared by agent [%s].',
+                    $this->providerProfile,
+                    $this->agent->key,
+                ),
+            );
+        }
+
         if ($this->task === '') {
             throw new InvalidArgumentException('Agent execution contexts require a non-empty task.');
         }
