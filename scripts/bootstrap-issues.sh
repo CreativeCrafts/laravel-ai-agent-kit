@@ -46,7 +46,83 @@ if ! gh auth status >/dev/null 2>&1; then
   exit 1
 fi
 
-jq empty "${CATALOG_PATH}" >/dev/null
+validate_catalog_shape() {
+  if ! jq empty "${CATALOG_PATH}" >/dev/null; then
+    echo "Catalog JSON is invalid: ${CATALOG_PATH}" >&2
+    exit 1
+  fi
+
+  if ! jq -e '
+    has("labels") and (.labels | type == "array") and
+    has("milestones") and (.milestones | type == "array") and
+    has("issues") and (.issues | type == "array") and
+    ((has("execution_order") | not) or (.execution_order | type == "array"))
+  ' "${CATALOG_PATH}" >/dev/null; then
+    echo "Catalog must contain top-level arrays: labels, milestones, issues, and optional execution_order." >&2
+    exit 1
+  fi
+
+  if ! jq -e '
+    all(.labels[];
+      (.name | type == "string") and
+      (.color | type == "string") and
+      (.description | type == "string")
+    )
+  ' "${CATALOG_PATH}" >/dev/null; then
+    echo "Catalog labels must each contain string fields: name, color, description." >&2
+    exit 1
+  fi
+
+  if ! jq -e '
+    all(.milestones[];
+      (.title | type == "string") and
+      (.description | type == "string")
+    )
+  ' "${CATALOG_PATH}" >/dev/null; then
+    echo "Catalog milestones must each contain string fields: title, description." >&2
+    exit 1
+  fi
+
+  if ! jq -e '
+    all(.issues[];
+      (.title | type == "string") and
+      (.milestone | type == "string") and
+      (.labels | type == "array") and
+      (.summary | type == "string") and
+      (.rationale | type == "string") and
+      (.scope | type == "array") and
+      (.out_of_scope | type == "array") and
+      (.dependencies | type == "array") and
+      (.acceptance_criteria | type == "array") and
+      (.tests | type == "array") and
+      (.risks | type == "array") and
+      (.docs | type == "array") and
+      ((has("execution_note") | not) or (.execution_note | type == "string"))
+    )
+  ' "${CATALOG_PATH}" >/dev/null; then
+    echo "Catalog issues must contain the expected string and array fields used by bootstrap-issues.sh." >&2
+    exit 1
+  fi
+
+  if ! jq -e '
+    ((.execution_order // []) | all(.[]; type == "string")) and
+    ((.execution_order // []) - [.issues[].title] | length == 0)
+  ' "${CATALOG_PATH}" >/dev/null; then
+    echo "Catalog execution_order must contain only issue titles that exist in .issues[].title." >&2
+    exit 1
+  fi
+
+  if ! jq -e '
+    ([.milestones[].title] | length) == ([.milestones[].title] | unique | length) and
+    ([.issues[].title] | length) == ([.issues[].title] | unique | length) and
+    ([.labels[].name] | length) == ([.labels[].name] | unique | length)
+  ' "${CATALOG_PATH}" >/dev/null; then
+    echo "Catalog labels, milestones, and issues must have unique names/titles." >&2
+    exit 1
+  fi
+}
+
+validate_catalog_shape
 
 existing_labels="$({
   gh label list --repo "${REPO}" --limit 500 --json name --jq '.[].name' 2>/dev/null || true

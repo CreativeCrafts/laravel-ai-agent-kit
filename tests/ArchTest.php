@@ -36,3 +36,18 @@ arch('public testing fakes do not depend on laravel ai sdk types')
 arch('public testing assertions do not depend on laravel ai sdk types')
   ->expect('CreativeCrafts\\LaravelAiAgentKit\\Testing\\Assertions')
   ->not->toUse('Laravel\\Ai');
+
+arch('public agent contracts and dto surfaces do not depend on laravel ai sdk types')
+  ->expect([
+    'CreativeCrafts\\LaravelAiAgentKit\\Contracts\\Agents',
+    'CreativeCrafts\\LaravelAiAgentKit\\Contracts\\Orchestration',
+    'CreativeCrafts\\LaravelAiAgentKit\\Core\\Agents\\AgentDefinition',
+    'CreativeCrafts\\LaravelAiAgentKit\\Core\\Agents\\AgentExecutionContext',
+    'CreativeCrafts\\LaravelAiAgentKit\\Core\\Agents\\AgentExecutionResult',
+    'CreativeCrafts\\LaravelAiAgentKit\\Core\\Orchestration\\DelegationProposal',
+    'CreativeCrafts\\LaravelAiAgentKit\\Core\\Orchestration\\ExecutionTraceRecord',
+    'CreativeCrafts\\LaravelAiAgentKit\\Core\\Orchestration\\HandoffPayload',
+    'CreativeCrafts\\LaravelAiAgentKit\\Core\\Orchestration\\OrchestrationRequest',
+    'CreativeCrafts\\LaravelAiAgentKit\\Core\\Orchestration\\OrchestrationResult',
+  ])
+  ->not->toUse('Laravel\\Ai');
