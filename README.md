@@ -148,6 +148,28 @@ $defaultProvider = $selector->selectDefault();
 $provider = $registry->get('null');
 ~~~
 
+Register first-class agents explicitly through the package agent registry in your application service provider:
+
+~~~php
+use App\Agents\CancellationAgent;
+use App\Agents\CustomerSupportAgent;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\AgentRegistry;
+use Illuminate\Support\ServiceProvider;
+
+final class AppServiceProvider extends ServiceProvider
+{
+    public function boot(AgentRegistry $agents): void
+    {
+        $agents->registerMany([
+            CustomerSupportAgent::class,
+            CancellationAgent::class,
+        ]);
+    }
+}
+~~~
+
+Registered agents are resolved through the Laravel container and looked up by the stable agent key returned from their package-owned `AgentDefinition`.
+
 Build and run a synchronous pipeline with typed steps:
 
 ~~~php
@@ -377,6 +399,19 @@ $registry->register(new class () implements Tool
     }
 });
 ~~~
+
+Configure a package-level tool authorizer (defaults to deny-all) through `config/ai-agent-kit.php`:
+
+~~~php
+'tools' => [
+    'authorizer' => \CreativeCrafts\LaravelAiAgentKit\Tools\DenyAllToolAuthorizer::class,
+    'provider_tools' => [
+        // ...
+    ],
+],
+~~~
+
+Tool input schema `type: array` accepts both list and associative PHP arrays; use `type: object` when map-only semantics are required.
 
 Generate a tool or prompt scaffold:
 

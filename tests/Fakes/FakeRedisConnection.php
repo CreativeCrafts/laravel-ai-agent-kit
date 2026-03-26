@@ -19,6 +19,7 @@ final class FakeRedisConnection
     public function command(string $name, array $arguments): mixed
     {
         return match (strtoupper($name)) {
+            'PING' => 'PONG',
             'GET' => $this->get((string)($arguments[0] ?? '')),
             'SET' => $this->set(
                 (string)($arguments[0] ?? ''),

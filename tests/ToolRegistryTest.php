@@ -134,6 +134,45 @@ it('rejects invalid tool input before execution', function () {
     $registry->execute('notify.user', ['user_id' => '7', 'extra' => true]);
 })->throws(InvalidToolInputException::class, 'missing required property [message]');
 
+it('accepts associative arrays for properties declared as array type', function () {
+    $registry = new InMemoryToolRegistry(
+        authorizer: new class () implements ToolAuthorizer {
+          public function authorize(Tool $tool, array $input): bool
+          {
+              return true;
+          }
+      },
+        tools: [
+        new class () implements Tool {
+            public function name(): string
+            {
+                return 'settings.save';
+            }
+
+            public function inputSchema(): array
+            {
+                return [
+                  'type' => 'object',
+                  'properties' => [
+                    'settings' => ['type' => 'array'],
+                  ],
+                  'required' => ['settings'],
+                  'additionalProperties' => false,
+                ];
+            }
+
+            public function execute(array $input): array
+            {
+                return ['ok' => true, 'settings' => $input['settings']];
+            }
+        },
+      ],
+    );
+
+    expect($registry->execute('settings.save', ['settings' => ['theme' => 'dark', 'language' => 'en']]))
+      ->toBe(['ok' => true, 'settings' => ['theme' => 'dark', 'language' => 'en']]);
+});
+
 it('rejects invalid tool schemas at registration time', function () {
     (new InMemoryToolRegistry())->register(
         new class () implements Tool {

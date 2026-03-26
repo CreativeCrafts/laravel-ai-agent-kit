@@ -24,6 +24,15 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
         private string $driverName,
         private ?int $retentionDays = null,
     ) {
+        if (!$this->app->bound('redis')) {
+            throw new RuntimeException('Redis memory driver requires a bound [redis] service in the container.');
+        }
+
+        try {
+            $this->command('ping', []);
+        } catch (Throwable $throwable) {
+            throw new RuntimeException('Redis memory driver requires [redis] to resolve to a valid redis manager exposing a [connection] method.', $throwable->getCode(), previous: $throwable);
+        }
     }
 
     /**
@@ -134,15 +143,6 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
     }
 
     /**
-     * @throws BindingResolutionException
-     * @throws Throwable
-     */
-    private function getValue(string $key): mixed
-    {
-        return $this->command('GET', [$key]);
-    }
-
-    /**
      * @param list<mixed> $arguments
      * @throws BindingResolutionException
      * @throws Throwable
@@ -153,6 +153,15 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
           ->make('redis')
           ->connection($this->connectionName)
           ->command($name, $arguments);
+    }
+
+    /**
+     * @throws BindingResolutionException
+     * @throws Throwable
+     */
+    private function getValue(string $key): mixed
+    {
+        return $this->command('GET', [$key]);
     }
 
     private function keyFor(ConversationId $conversationId): string

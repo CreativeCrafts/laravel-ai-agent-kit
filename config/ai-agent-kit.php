@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+use CreativeCrafts\LaravelAiAgentKit\Tools\DenyAllToolAuthorizer;
 
 return [
     /*
@@ -180,6 +181,8 @@ return [
     |
     */
   'tools' => [
+    'authorizer' => DenyAllToolAuthorizer::class,
+
     'provider_tools' => [
         // 'web.search' => [
         //     'type' => 'web_search',

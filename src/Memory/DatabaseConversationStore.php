@@ -139,22 +139,31 @@ final readonly class DatabaseConversationStore implements ConversationStore
                   ->update($conversationPayload);
 
                 $conversationRecordId = $existingRecordId;
-                $connection
-                  ->table($this->messagesTable)
-                  ->where('conversation_record_id', $conversationRecordId)
-                  ->delete();
             }
 
-            if ($conversation->messages === []) {
-                return;
-            }
+            $existingMessageIds = $connection
+              ->table($this->messagesTable)
+              ->where('conversation_record_id', $conversationRecordId)
+              ->pluck('message_id')
+              ->all();
 
-            $rows = [];
+            /** @var list<string> $existingMessageIds */
+            $existingMessageIds = array_values(array_filter($existingMessageIds, static fn (mixed $id): bool => is_string($id) && $id !== ''));
+
+            $incomingMessageIds = [];
+            $newRows = [];
 
             foreach ($conversation->messages as $index => $message) {
-                $rows[] = [
+                $messageId = $message->id->toString();
+                $incomingMessageIds[] = $messageId;
+
+                if (in_array($messageId, $existingMessageIds, true)) {
+                    continue;
+                }
+
+                $newRows[] = [
                   'conversation_record_id' => $conversationRecordId,
-                  'message_id' => $message->id->toString(),
+                  'message_id' => $messageId,
                   'sequence' => $index + 1,
                   'role' => $message->role->value,
                   'content_ciphertext' => $this->encodeStringPayload('messages.content_ciphertext', $message->content),
@@ -165,7 +174,19 @@ final readonly class DatabaseConversationStore implements ConversationStore
                 ];
             }
 
-            $connection->table($this->messagesTable)->insert($rows);
+            $messageIdsToDelete = array_values(array_diff($existingMessageIds, $incomingMessageIds));
+
+            if ($messageIdsToDelete !== []) {
+                $connection
+                  ->table($this->messagesTable)
+                  ->where('conversation_record_id', $conversationRecordId)
+                  ->whereIn('message_id', $messageIdsToDelete)
+                  ->delete();
+            }
+
+            if ($newRows !== []) {
+                $connection->table($this->messagesTable)->insert($newRows);
+            }
         });
     }
 
@@ -175,7 +196,10 @@ final readonly class DatabaseConversationStore implements ConversationStore
           ->connection()
           ->table($this->conversationsTable)
           ->where('conversation_id', $conversationId->toString())
-          ->delete();
+          ->whereNull('deleted_at')
+          ->update([
+            'deleted_at' => date('Y-m-d H:i:s'),
+          ]);
     }
 
     private function connection(): Connection

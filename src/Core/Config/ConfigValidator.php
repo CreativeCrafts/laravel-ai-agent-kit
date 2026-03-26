@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Config;
 
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\Exceptions\InvalidConfigurationException;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\enums\BackoffStrategy;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
@@ -519,6 +520,24 @@ final readonly class ConfigValidator
         }
 
         $tools = $config['tools'];
+
+        if (array_key_exists('authorizer', $tools)) {
+            $authorizer = $tools['authorizer'];
+
+            if (!is_string($authorizer) || $authorizer === '') {
+                throw InvalidConfigurationException::invalidValue(
+                    'tools.authorizer',
+                    'Must be a non-empty class-string implementing the ToolAuthorizer contract.',
+                );
+            }
+
+            if (!class_exists($authorizer) || !is_a($authorizer, ToolAuthorizer::class, true)) {
+                throw InvalidConfigurationException::invalidValue(
+                    'tools.authorizer',
+                    'Must reference a class implementing the ToolAuthorizer contract.',
+                );
+            }
+        }
 
         if (!array_key_exists('provider_tools', $tools)) {
             return;

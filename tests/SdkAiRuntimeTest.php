@@ -260,7 +260,7 @@ it('continues a stored package conversation through the runtime bridge and persi
 
     expect($result->metadata['package_conversation_id'])
       ->toBe('conv-runtime-001')
-      ->and($result->metadata['projected_message_count'])->toBe(2)
+      ->and($result->metadata['projected_message_count'])->toBe(3)
       ->and($persistedConversation?->messageCount())->toBe(5)
       ->and($persistedConversation?->messages[3]->content)->toBe('New follow-up question')
       ->and($persistedConversation?->messages[4]->content)->toBe('Follow-up response')
@@ -271,11 +271,13 @@ it('continues a stored package conversation through the runtime bridge and persi
         $messages = is_array($messages) ? array_values($messages) : array_values(iterator_to_array($messages));
 
         return str_contains($prompt->agent->instructions(), 'Remember the customer prefers concise replies.')
-          && count($messages) === 2
+          && count($messages) === 3
           && $messages[0] instanceof UserMessage
-          && $messages[0]->content === 'Previous question'
-          && $messages[1] instanceof AssistantMessage
-          && $messages[1]->content === 'Previous answer';
+          && $messages[0]->content === '[system-context] Remember the customer prefers concise replies.'
+          && $messages[1] instanceof UserMessage
+          && $messages[1]->content === 'Previous question'
+          && $messages[2] instanceof AssistantMessage
+          && $messages[2]->content === 'Previous answer';
     });
 });
 

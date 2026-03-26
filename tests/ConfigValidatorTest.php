@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\ConfigValidator;
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\Exceptions\InvalidConfigurationException;
+use CreativeCrafts\LaravelAiAgentKit\Tools\DenyAllToolAuthorizer;
 
 it('validates a minimal configuration', function () {
     /** @var ConfigValidator $validator */
@@ -499,3 +500,63 @@ it('rejects file search provider-native tools without stores', function () {
       ],
     ]);
 })->throws(InvalidConfigurationException::class, 'tools.provider_tools.docs.search.stores');
+
+it('validates tool authorizer class configuration', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'null' => [
+          'driver' => 'null',
+          'enabled' => true,
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'null',
+      'failover_order' => ['null'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 1,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+      'tools' => [
+        'authorizer' => DenyAllToolAuthorizer::class,
+        'provider_tools' => [],
+      ],
+    ]);
+
+    expect(true)->toBeTrue();
+});
+
+it('rejects tool authorizer class values that do not implement the contract', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'null' => [
+          'driver' => 'null',
+          'enabled' => true,
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'null',
+      'failover_order' => ['null'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 1,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+      'tools' => [
+        'authorizer' => stdClass::class,
+        'provider_tools' => [],
+      ],
+    ]);
+})->throws(InvalidConfigurationException::class, 'tools.authorizer');

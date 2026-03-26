@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\QueuedPipelineDispatcher;
+use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\Exceptions\InvalidPipelineResultHandlerException;
+use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\Exceptions\InvalidQueuedPipelineDefinitionException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\Exceptions\QueuedPipelineExecutionException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\Jobs\RunQueuedPipelineJob;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\LaravelQueuedPipelineDispatcher;
@@ -103,3 +105,39 @@ it('wraps queued pipeline failures and preserves the previous exception chain', 
           ->and(TestPipelineResultHandler::$failures[0]['throwable']->getMessage())->toContain('failed during synchronous execution');
     }
 });
+
+it('preserves the original queued pipeline throwable when the result handler failure callback also fails', function () {
+    TestPipelineResultHandler::$throwOnFailure = true;
+
+    $job = new RunQueuedPipelineJob(
+        pipelineDefinition: FailingQueuedPipelineDefinition::class,
+        context: new RunContext(runId: 'run-failure-handler-throws'),
+        resultHandler: TestPipelineResultHandler::class,
+    );
+
+    $job->handle(
+        runner: app(PipelineRunner::class),
+        app: app(Application::class),
+    );
+})->throws(QueuedPipelineExecutionException::class, 'failed during execution');
+
+it('fails synchronously when dispatching an invalid queued pipeline definition class', function () {
+    /** @var QueuedPipelineDispatcher $dispatcher */
+    $dispatcher = app(QueuedPipelineDispatcher::class);
+
+    $dispatcher->dispatch(
+        pipelineDefinition: TestPipelineResultHandler::class,
+        context: new RunContext(runId: 'run-invalid-definition'),
+    );
+})->throws(InvalidQueuedPipelineDefinitionException::class);
+
+it('fails synchronously when dispatching an invalid result handler class', function () {
+    /** @var QueuedPipelineDispatcher $dispatcher */
+    $dispatcher = app(QueuedPipelineDispatcher::class);
+
+    $dispatcher->dispatch(
+        pipelineDefinition: TestQueuedPipelineDefinition::class,
+        context: new RunContext(runId: 'run-invalid-handler'),
+        resultHandler: TestQueuedPipelineDefinition::class,
+    );
+})->throws(InvalidPipelineResultHandlerException::class);
