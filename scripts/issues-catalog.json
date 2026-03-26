@@ -171,6 +171,10 @@
     {
       "title": "P9 — Documentation & Patterns",
       "description": "Keep docs, examples, and architecture guidance aligned with the SDK-backed package design."
+    },
+    {
+      "title": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "description": "Introduce package-owned multi-agent orchestration, governed delegation and handoff, provider-profile routing, and flagship blueprints built on top of the SDK-backed workflow substrate."
     }
   ],
   "issues": [
@@ -1578,7 +1582,7 @@
       ]
     },
     {
-      "title": "P3-I6 `ai:make:tool` scaffold",
+      "title": "P3-I6 ai:make:tool scaffold",
       "milestone": "P3 — Prompt & Tool Governance",
       "labels": [
         "type:feature",
@@ -1613,7 +1617,7 @@
       ]
     },
     {
-      "title": "P3-I7 `ai:make:prompt` scaffold",
+      "title": "P3-I7 ai:make:prompt scaffold",
       "milestone": "P3 — Prompt & Tool Governance",
       "labels": [
         "type:feature",
@@ -1862,7 +1866,7 @@
       ]
     },
     {
-      "title": "P5-I1 Define `VectorStoreInterface` + typed errors",
+      "title": "P5-I1 Define VectorStoreInterface + typed errors",
       "milestone": "P5 — Vector & Retrieval",
       "labels": [
         "type:feature",
@@ -2385,7 +2389,7 @@
       ]
     },
     {
-      "title": "P8-I2 `ai:make:agent` and `ai:make:pipeline`",
+      "title": "P8-I2 ai:make:agent and ai:make:pipeline",
       "milestone": "P8 — Context-Aware Scaffolding",
       "labels": [
         "type:feature",
@@ -2665,6 +2669,562 @@
         "This issue is itself the docs/update note vehicle"
       ],
       "execution_note": "Intentionally deferred until the final stabilization wave so package positioning, install, architecture, and migration notes describe the final package shape rather than a moving target."
+    },
+    {
+      "title": "P10-I1 Define agent/orchestration contracts + DTOs",
+      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "labels": [
+        "type:feature",
+        "area:core",
+        "area:runtime",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Introduce package-owned multi-agent orchestration contracts and typed DTOs for agents, orchestration requests and results, execution context, delegation, handoff payloads, and execution trace metadata.",
+      "rationale": "The package already has runtime, workflow, prompt, tool, and provider foundations. Multi-agent orchestration should be introduced as a package-owned capability with explicit contracts before any flagship blueprint is implemented.",
+      "scope": [
+        "Define `Agent` contract",
+        "Define `AgentDefinition`",
+        "Define `AgentExecutionContext`",
+        "Define `AgentExecutionResult`",
+        "Define `DelegationProposal`",
+        "Define `HandoffPayload`",
+        "Define `OrchestrationRequest`",
+        "Define `OrchestrationResult`",
+        "Define execution trace DTOs and correlation identifiers"
+      ],
+      "out_of_scope": [
+        "Orchestrator implementation",
+        "Provider selection logic",
+        "Concrete blueprint implementation",
+        "Dashboards or UI"
+      ],
+      "dependencies": [
+        "P8-I3"
+      ],
+      "acceptance_criteria": [
+        "Package-owned contracts exist for multi-agent orchestration.",
+        "DTOs are typed, readable, and package-owned.",
+        "No provider SDK types leak into public orchestration contracts.",
+        "Delegation and handoff are represented as distinct concepts.",
+        "The orchestration ID and per-execution ID model is explicit in public DTOs."
+      ],
+      "tests": [
+        "Unit: DTO invariant tests",
+        "Contract: architecture/static checks for no vendor leakage in orchestration contracts",
+        "Determinism controls: no real provider calls and no network access"
+      ],
+      "risks": [
+        "Risk of over-generalizing the orchestration surface too early",
+        "Risk of making execution context too broad or too mutable"
+      ],
+      "docs": [
+        "Architecture docs must later explain the orchestration contracts and boundary rules"
+      ]
+    },
+    {
+      "title": "P10-I2 Implement agent registry + Laravel container resolution",
+      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "labels": [
+        "type:feature",
+        "area:core",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Implement a package-owned agent registry that resolves first-class PHP agent classes through the Laravel container and exposes deterministic lookup by agent key.",
+      "rationale": "Agents are the primary unit of specialization in the proposed model. The application must be able to register them explicitly and the package must resolve them predictably.",
+      "scope": [
+        "Define `AgentRegistry` contract where it crosses module boundaries",
+        "Support explicit application registration of agent classes",
+        "Resolve agents through the Laravel container",
+        "Support deterministic lookup by stable agent key",
+        "Validate duplicate or missing agent registrations"
+      ],
+      "out_of_scope": [
+        "Dynamic config-only agents as the primary model",
+        "Orchestration routing logic",
+        "Provider execution behavior"
+      ],
+      "dependencies": [
+        "P10-I1"
+      ],
+      "acceptance_criteria": [
+        "First-class PHP agents can be registered explicitly by the application.",
+        "Agents resolve deterministically via the container by stable key.",
+        "Duplicate agent keys fail deterministically.",
+        "Missing agents fail with typed package exceptions."
+      ],
+      "tests": [
+        "Integration: registration and resolution tests",
+        "Negative-path tests for duplicate and missing agents",
+        "Determinism controls: no real provider execution"
+      ],
+      "risks": [
+        "Risk of implicit auto-discovery introducing hidden behavior",
+        "Risk of container resolution ambiguity for agent keys"
+      ],
+      "docs": [
+        "Document the recommended Laravel application registration pattern for agents"
+      ]
+    },
+    {
+      "title": "P10-I3 Implement orchestrator core + execution tree + final orchestration result",
+      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "labels": [
+        "type:feature",
+        "area:core",
+        "area:runtime",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Implement the core orchestrator that executes agents, assigns orchestration and execution identifiers, records execution lineage, and returns a final orchestration result.",
+      "rationale": "The orchestrator is the authoritative control plane. It must own execution identity, result assembly, and trace construction rather than allowing agents to manipulate orchestration state directly.",
+      "scope": [
+        "Implement `AgentOrchestrator`",
+        "Assign one orchestration ID per workflow",
+        "Assign one execution ID per agent execution",
+        "Track parent-child execution lineage",
+        "Return one final orchestration result with compact summary",
+        "Support synchronous orchestration flow"
+      ],
+      "out_of_scope": [
+        "Provider selection and fallback policy",
+        "Delegation policy approval",
+        "Queued orchestration execution",
+        "Blueprint-specific business logic"
+      ],
+      "dependencies": [
+        "P10-I1",
+        "P10-I2"
+      ],
+      "acceptance_criteria": [
+        "One orchestration ID spans the whole workflow.",
+        "One execution ID exists per agent execution.",
+        "Parent-child lineage is tracked explicitly.",
+        "The final orchestration result includes final status, final agent, final output, and summary.",
+        "Public orchestration results do not expose provider-specific internals."
+      ],
+      "tests": [
+        "Integration: deterministic multi-step orchestration tests",
+        "Execution-tree and orchestration-summary assertions using fakes",
+        "Determinism controls: no real provider calls"
+      ],
+      "risks": [
+        "Risk of leaking internal execution details into the public result surface",
+        "Risk of coupling orchestration state too tightly to one execution style"
+      ],
+      "docs": [
+        "Architecture docs must describe orchestration ID vs execution ID semantics"
+      ]
+    },
+    {
+      "title": "P10-I4 Implement delegation/handoff policy engine",
+      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "labels": [
+        "type:feature",
+        "area:core",
+        "area:security",
+        "priority:P0",
+        "risk:security",
+        "status:ready"
+      ],
+      "summary": "Implement a policy engine that evaluates agent-proposed delegation and handoff actions and authoritatively approves, rejects, or rewrites them.",
+      "rationale": "Agents should be able to propose routing, but the package must remain governed. The orchestrator must remain the final authority for delegation and ownership transfer.",
+      "scope": [
+        "Support policy modes: `static_only`, `dynamic_with_allowlist`, and `dynamic_full_registry`",
+        "Validate target agent permissions",
+        "Support `delegate_and_resume`",
+        "Support `transfer_control`",
+        "Enforce max delegation depth and step limits",
+        "Support typed rejection reasons"
+      ],
+      "out_of_scope": [
+        "Human approval UI",
+        "Arbitrary autonomous routing without policy controls",
+        "A full application RBAC system"
+      ],
+      "dependencies": [
+        "P10-I3"
+      ],
+      "acceptance_criteria": [
+        "Agents can propose delegation and handoff actions.",
+        "The orchestrator approves, rejects, or rewrites proposals according to policy.",
+        "Delegation and handoff remain distinct in behavior and trace output.",
+        "The default mode is safe and deterministic.",
+        "Invalid proposals fail with typed package exceptions or typed orchestration failure states."
+      ],
+      "tests": [
+        "Integration: policy approval and rejection tests",
+        "Negative-path tests for invalid target agents and max depth",
+        "Behavioral tests distinguishing delegation from ownership transfer"
+      ],
+      "risks": [
+        "Risk of ambiguous routing semantics if delegation and handoff are blurred",
+        "Risk of unsafe open routing if defaults are too permissive"
+      ],
+      "docs": [
+        "Document delegation modes and the safe default policy"
+      ]
+    },
+    {
+      "title": "P10-I5 Implement provider profile assignment + capability compatibility for agents",
+      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "labels": [
+        "type:feature",
+        "area:core",
+        "area:runtime",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Add agent-level provider profile assignment, fallback candidates, and capability validation so agents can run on different providers without leaking provider specifics into workflow logic.",
+      "rationale": "The package supports multiple providers, but orchestration must remain provider-neutral. Agents should declare a primary provider profile plus explicit fallback candidates, while the orchestrator performs final profile selection.",
+      "scope": [
+        "Define provider-profile selection rules for agents",
+        "Define an agent capability declaration model",
+        "Validate provider-profile capability compatibility before execution",
+        "Support primary provider profile plus fallback candidates",
+        "Emit typed failures for unsupported capability and profile combinations"
+      ],
+      "out_of_scope": [
+        "Dynamic arbitrary provider choice outside agent constraints",
+        "Provider-specific endpoint details in public contracts",
+        "Adding new provider SDKs beyond the current runtime substrate"
+      ],
+      "dependencies": [
+        "P10-I1",
+        "P10-I3"
+      ],
+      "acceptance_criteria": [
+        "Agents declare a primary provider profile and allowed fallback profiles.",
+        "Agents declare required capabilities explicitly.",
+        "The orchestrator validates profile compatibility before execution.",
+        "Provider selection remains package-owned and auditable.",
+        "Capability mismatches fail explicitly."
+      ],
+      "tests": [
+        "Unit: provider-profile compatibility tests",
+        "Integration: fallback selection tests",
+        "Negative-path tests for unsupported capability and profile combinations",
+        "Contract: no-vendor-leak checks for new public orchestration and provider contracts"
+      ],
+      "risks": [
+        "Risk of provider-specific semantics bleeding into public orchestration logic",
+        "Risk of brittle capability mapping if the capability model is under-specified"
+      ],
+      "docs": [
+        "Document agent provider-profile configuration and capability semantics"
+      ]
+    },
+    {
+      "title": "P10-I6 Implement handoff payload model + history sharing modes",
+      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "labels": [
+        "type:feature",
+        "area:core",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Implement structured-first handoff payload handling with optional natural-language notes and support for configurable history-sharing modes.",
+      "rationale": "Downstream agents need focused, least-privilege context. The package should default to curated handoff payloads plus summary rather than unconstrained full-history sharing.",
+      "scope": [
+        "Validate structured handoff payloads",
+        "Support optional natural-language handoff notes",
+        "Support `payload_only`, `payload_plus_summary`, and `full_history` modes",
+        "Default to `payload_plus_summary`"
+      ],
+      "out_of_scope": [
+        "Full transcript exposure by default",
+        "A semantic summarization redesign"
+      ],
+      "dependencies": [
+        "P10-I4"
+      ],
+      "acceptance_criteria": [
+        "Handoff payloads are structured-first and validated.",
+        "Natural-language notes are optional and supplemental.",
+        "History sharing modes are explicit and deterministic.",
+        "The default mode is safe and aligned to least-privilege context sharing."
+      ],
+      "tests": [
+        "Unit: handoff payload validation tests",
+        "Integration: history-mode behavior tests",
+        "Trace assertions for handoff context propagation"
+      ],
+      "risks": [
+        "Risk of payloads becoming too loose and note-driven",
+        "Risk of context bloat if full history becomes the de facto path"
+      ],
+      "docs": [
+        "Document handoff payload semantics and history-sharing modes"
+      ]
+    },
+    {
+      "title": "P10-I7 Emit orchestration lifecycle events + redacted trace metadata",
+      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "labels": [
+        "type:feature",
+        "area:observability",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Emit package-owned orchestration lifecycle events for agent execution, delegation, handoff, provider selection, and orchestration completion, with redacted-by-default payloads.",
+      "rationale": "Multi-agent orchestration without first-class telemetry becomes hard to debug and unsafe to operate. Events must remain package-owned and redacted by default.",
+      "scope": [
+        "Emit events for orchestration start and completion",
+        "Emit events for agent execution start and completion",
+        "Emit events for delegation proposed, approved, and rejected",
+        "Emit events for ownership transfer",
+        "Emit events for provider profile selection and failover",
+        "Preserve redacted metadata-only defaults"
+      ],
+      "out_of_scope": [
+        "Pulse or Nightwatch UI",
+        "External observability sinks"
+      ],
+      "dependencies": [
+        "P10-I3",
+        "P10-I4",
+        "P10-I5"
+      ],
+      "acceptance_criteria": [
+        "Events are emitted at the correct orchestration boundaries.",
+        "Payloads include orchestration and execution correlation identifiers.",
+        "Raw user content and secrets are excluded by default.",
+        "Events remain package-owned rather than exposing provider-SDK event classes."
+      ],
+      "tests": [
+        "Integration: deterministic event fake tests",
+        "Security: redaction payload tests",
+        "Correlation propagation tests"
+      ],
+      "risks": [
+        "Risk of duplicate or confusing overlap with existing runtime telemetry",
+        "Risk of accidentally exposing raw content in event payloads"
+      ],
+      "docs": [
+        "Update observability docs with orchestration-specific event semantics"
+      ]
+    },
+    {
+      "title": "P10-I8 Package fakes + assertion helpers for orchestration flows",
+      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "labels": [
+        "type:task",
+        "area:core",
+        "area:observability",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Extend the existing package fake and assertion layer to support orchestration-specific testing patterns such as delegation approval, ownership transfer, execution trees, and final orchestration results.",
+      "rationale": "The package already has a testing harness. Multi-agent orchestration adds new high-value behavior that must remain easy to test without real provider calls.",
+      "scope": [
+        "Extend package fakes for orchestration scenarios",
+        "Add assertion helpers for execution tree and handoff summary expectations",
+        "Add deterministic orchestration result assertions"
+      ],
+      "out_of_scope": [
+        "Replacing existing fake layers",
+        "Live provider integration tests"
+      ],
+      "dependencies": [
+        "P10-I3",
+        "P10-I4",
+        "P10-I7"
+      ],
+      "acceptance_criteria": [
+        "Orchestration flows can be tested deterministically with package fakes.",
+        "Assertion helpers cover common orchestration scenarios.",
+        "Fake behavior aligns closely enough with real package semantics for regression testing."
+      ],
+      "tests": [
+        "Tests for the new orchestration fakes and assertion helpers themselves",
+        "Comparison-style package-flow tests using fakes"
+      ],
+      "risks": [
+        "Risk of fake divergence from real orchestration semantics"
+      ],
+      "docs": [
+        "Update contributor guidance with orchestration testing patterns"
+      ]
+    },
+    {
+      "title": "P10-I9 `TextToStructuredEvaluation` blueprint over orchestrator",
+      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "labels": [
+        "type:feature",
+        "area:core",
+        "area:prompts",
+        "priority:P0",
+        "status:needs-spec"
+      ],
+      "summary": "Implement the first flagship blueprint, `TextToStructuredEvaluation`, as a package-owned multi-agent workflow that produces one final structured evaluation result from a single orchestration call.",
+      "rationale": "This is one of the must-ship capabilities in `plan/SYSTEM-PROMPT.md`. It should be the first real workflow built on top of the orchestration core, proving the package can deliver opinionated AI workflows rather than only low-level primitives.",
+      "scope": [
+        "Implement an entry coordinator agent",
+        "Implement an internal specialist analysis and evaluation flow",
+        "Define a fixed top-level output DTO with configurable enabled dimensions",
+        "Integrate prompt and version selection into the workflow",
+        "Return one final orchestration result"
+      ],
+      "out_of_scope": [
+        "Arbitrary caller-defined output schemas",
+        "Unrestricted self-routing without orchestration policy",
+        "Audio input support"
+      ],
+      "dependencies": [
+        "P10-I3",
+        "P10-I4",
+        "P10-I5",
+        "P10-I6"
+      ],
+      "acceptance_criteria": [
+        "One blueprint call returns one final structured result.",
+        "Internal specialist work is hidden behind orchestration rather than exposed as public API steps.",
+        "The output DTO is package-owned and stable.",
+        "Dimensions are configurable within the fixed result schema.",
+        "No provider-specific payloads leak into public result contracts."
+      ],
+      "tests": [
+        "Integration: deterministic blueprint execution tests using package fakes",
+        "Output-shape validation tests",
+        "Delegation trace tests for coordinator-to-specialist flow"
+      ],
+      "risks": [
+        "Risk of overfitting the first blueprint to one narrow use case",
+        "Risk of unclear result-shape semantics if dimensions are under-specified"
+      ],
+      "docs": [
+        "Document public usage and the output schema"
+      ]
+    },
+    {
+      "title": "P10-I10 Tests: `TextToStructuredEvaluation` deterministic multi-agent flow",
+      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "labels": [
+        "type:task",
+        "area:core",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Add deterministic end-to-end coverage for `TextToStructuredEvaluation` across orchestration, provider selection, delegation, and final structured result assembly.",
+      "rationale": "The first flagship workflow must be strongly regression-guarded because it validates the orchestration core and becomes a reference implementation for later workflows.",
+      "scope": [
+        "Add deterministic blueprint flow tests",
+        "Assert orchestration summary behavior",
+        "Assert provider profile routing behavior",
+        "Assert output DTO structure and semantics"
+      ],
+      "out_of_scope": [
+        "Live provider calls",
+        "Benchmark or performance testing"
+      ],
+      "dependencies": [
+        "P10-I9"
+      ],
+      "acceptance_criteria": [
+        "The full workflow is covered in deterministic tests.",
+        "Internal agent delegation is regression-guarded.",
+        "The final orchestration result is verified rather than only one internal agent result."
+      ],
+      "tests": [
+        "Integration-style package tests using fakes only",
+        "Determinism controls: no live provider calls and no network access"
+      ],
+      "risks": [
+        "Risk of over-mocking if fake behavior is too shallow"
+      ],
+      "docs": [
+        "None unless testing guidance needs expansion"
+      ]
+    },
+    {
+      "title": "P10-I11 `AudioToTextToEvaluation` blueprint over orchestrator",
+      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "labels": [
+        "type:feature",
+        "area:core",
+        "area:prompts",
+        "priority:P1",
+        "status:needs-spec"
+      ],
+      "summary": "Implement `AudioToTextToEvaluation` as the second flagship workflow, composed over the same orchestration core and using transcription plus structured evaluation stages.",
+      "rationale": "This is also explicitly must-ship in `plan/SYSTEM-PROMPT.md`. It should be implemented after the text-only blueprint so that transcription becomes a composition problem, not a fresh orchestration design problem.",
+      "scope": [
+        "Implement a transcription stage",
+        "Implement analysis and evaluation orchestration stages",
+        "Return one final structured orchestration result"
+      ],
+      "out_of_scope": [
+        "Live audio-provider dependency in tests",
+        "Waveform tooling or UI",
+        "Open-ended media pipelines"
+      ],
+      "dependencies": [
+        "P10-I9"
+      ],
+      "acceptance_criteria": [
+        "Audio input can be transcribed and evaluated through one orchestration call.",
+        "The final result remains package-owned and typed.",
+        "The workflow reuses orchestration primitives rather than bypassing them."
+      ],
+      "tests": [
+        "Integration: deterministic multi-stage blueprint tests with fakes and stubs",
+        "Output-shape validation tests"
+      ],
+      "risks": [
+        "Risk of capability mismatches across transcription and evaluation provider profiles",
+        "Risk of audio-specific concerns bleeding into core orchestration surfaces"
+      ],
+      "docs": [
+        "Document audio blueprint usage and provider-profile requirements"
+      ]
+    },
+    {
+      "title": "P10-I12 Docs: multi-agent orchestration architecture + workflow authoring",
+      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "labels": [
+        "type:docs",
+        "area:docs",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Document the new orchestration architecture, agent authoring model, delegation semantics, provider-profile assignment, and flagship blueprint usage.",
+      "rationale": "This capability changes the package’s core value proposition. It needs explicit docs for contributors and consumers before later release-hardening work.",
+      "scope": [
+        "Document orchestration architecture",
+        "Document agent authoring guidance",
+        "Document delegation and handoff semantics",
+        "Document provider-profile assignment rules",
+        "Document orchestration result semantics",
+        "Document flagship blueprint usage examples"
+      ],
+      "out_of_scope": [
+        "Marketing-site content",
+        "A production demo application"
+      ],
+      "dependencies": [
+        "P10-I3",
+        "P10-I9",
+        "P10-I11"
+      ],
+      "acceptance_criteria": [
+        "Architecture docs show the orchestration boundary clearly.",
+        "Docs distinguish agent logic from provider adapters.",
+        "Docs explain delegation vs handoff semantics.",
+        "Docs explain the final orchestration result structure.",
+        "Examples avoid leaking provider-specific APIs into package public usage."
+      ],
+      "tests": [
+        "Documentation review",
+        "Snippet verification where practical"
+      ],
+      "risks": [
+        "Risk of docs drifting if written too early",
+        "Risk of under-documenting provider-profile behavior"
+      ],
+      "docs": [
+        "This issue directly updates orchestration and workflow authoring docs"
+      ]
     }
   ],
   "execution_order": [
@@ -2728,6 +3288,18 @@
     "P8-I1 ProjectInspector",
     "P8-I2 ai:make:agent and ai:make:pipeline",
     "P8-I3 Tests: detection correctness + generated code compiles",
+    "P10-I1 Define agent/orchestration contracts + DTOs",
+    "P10-I2 Implement agent registry + Laravel container resolution",
+    "P10-I3 Implement orchestrator core + execution tree + final orchestration result",
+    "P10-I4 Implement delegation/handoff policy engine",
+    "P10-I5 Implement provider profile assignment + capability compatibility for agents",
+    "P10-I6 Implement handoff payload model + history sharing modes",
+    "P10-I7 Emit orchestration lifecycle events + redacted trace metadata",
+    "P10-I8 Package fakes + assertion helpers for orchestration flows",
+    "P10-I9 `TextToStructuredEvaluation` blueprint over orchestrator",
+    "P10-I10 Tests: `TextToStructuredEvaluation` deterministic multi-agent flow",
+    "P10-I11 `AudioToTextToEvaluation` blueprint over orchestrator",
+    "P10-I12 Docs: multi-agent orchestration architecture + workflow authoring",
     "P9-I1 README: install + quickstart + configuration reference",
     "P9-I2 Architecture docs: module map + contracts + SDK bridge",
     "P9-I3 Example app or examples/ folder + CI validation",
