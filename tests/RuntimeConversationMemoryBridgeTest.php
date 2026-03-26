@@ -13,6 +13,7 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessageRole;
 use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
@@ -73,12 +74,15 @@ it('projects package-owned conversation memory into runtime context', function (
     );
 
     expect($projected->projectedMessageCount())
-      ->toBe(2)
+      ->toBe(4)
       ->and($projected->systemInstructions)->toBe(['System memory'])
       ->and($projected->messages[0])->toBeInstanceOf(UserMessage::class)
-      ->and($projected->messages[0]->content)->toBe('Historic user message')
-      ->and($projected->messages[1])->toBeInstanceOf(AssistantMessage::class)
-      ->and($projected->messages[1]->content)->toBe('Historic assistant message');
+      ->and($projected->messages[0]->content)->toBe('[system-context] System memory')
+      ->and($projected->messages[1])->toBeInstanceOf(UserMessage::class)
+      ->and($projected->messages[1]->content)->toBe('Historic user message')
+      ->and($projected->messages[2])->toBeInstanceOf(AssistantMessage::class)
+      ->and($projected->messages[2]->content)->toBe('Historic assistant message')
+      ->and($projected->messages[3])->toBeInstanceOf(ToolResultMessage::class);
 });
 
 it('reconciles runtime output back into package-owned memory deterministically', function () {

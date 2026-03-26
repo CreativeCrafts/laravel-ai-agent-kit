@@ -193,7 +193,7 @@ final class InMemoryToolRegistry implements ToolRegistry
             'integer' => is_int($value),
             'number' => is_int($value) || is_float($value),
             'boolean' => is_bool($value),
-            'array' => is_array($value) && array_is_list($value),
+            'array' => is_array($value),
             'object' => is_array($value) && !array_is_list($value),
             default => false,
         };

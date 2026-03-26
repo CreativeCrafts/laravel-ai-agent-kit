@@ -200,7 +200,64 @@ it('updates existing conversations and preserves delete semantics through the co
 
     expect($store->find($conversationId))
       ->toBeNull()
-      ->and(DB::table('ai_agent_conversation_messages')->count())->toBe(0);
+      ->and(DB::table('ai_agent_conversations')->where('conversation_id', 'conv-update')->whereNotNull('deleted_at')->exists())->toBeTrue();
+});
+
+it('persists existing messages incrementally instead of rewriting unchanged rows', function (): void {
+    $store = app(ConversationStore::class);
+    $startedAt = new DateTimeImmutable('2026-03-14T09:00:00+00:00');
+    $updatedAt = new DateTimeImmutable('2026-03-14T09:10:00+00:00');
+    $conversationId = new ConversationId('conv-incremental');
+
+    $store->save(
+        new Conversation(
+            id: $conversationId,
+            createdAt: $startedAt,
+            updatedAt: $startedAt,
+            messages: [
+          new ConversationMessage(
+              id: new MessageId('msg-stable'),
+              role: ConversationMessageRole::User,
+              content: 'Stable content',
+              createdAt: $startedAt,
+          ),
+        ],
+        ),
+    );
+
+    $stableRowBefore = DB::table('ai_agent_conversation_messages')->where('message_id', 'msg-stable')->first();
+
+    $store->save(
+        new Conversation(
+            id: $conversationId,
+            createdAt: $startedAt,
+            updatedAt: $updatedAt,
+            messages: [
+          new ConversationMessage(
+              id: new MessageId('msg-stable'),
+              role: ConversationMessageRole::User,
+              content: 'Stable content',
+              createdAt: $startedAt,
+          ),
+          new ConversationMessage(
+              id: new MessageId('msg-added'),
+              role: ConversationMessageRole::Assistant,
+              content: 'Added content',
+              createdAt: $updatedAt,
+          ),
+        ],
+        ),
+    );
+
+    $stableRowAfter = DB::table('ai_agent_conversation_messages')->where('message_id', 'msg-stable')->first();
+
+    expect($stableRowBefore)
+      ->not
+      ->toBeNull()
+      ->and($stableRowAfter)->not
+      ->toBeNull()
+      ->and($stableRowBefore?->id)->toBe($stableRowAfter?->id)
+      ->and(DB::table('ai_agent_conversation_messages')->where('conversation_record_id', $stableRowAfter?->conversation_record_id)->count())->toBe(2);
 });
 
 it('purges expired conversations according to the configured retention window', function (): void {

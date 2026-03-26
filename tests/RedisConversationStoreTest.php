@@ -28,6 +28,13 @@ it('binds the redis conversation store and retention purger contracts', function
       ->and(app(ConversationRetentionPurger::class))->toBeInstanceOf(RedisConversationStore::class);
 });
 
+it('fails fast when redis memory driver is configured but redis manager binding is missing', function (): void {
+    app()->forgetInstance('redis');
+    app()->offsetUnset('redis');
+
+    app(ConversationStore::class);
+})->throws(RuntimeException::class, 'requires a bound [redis] service');
+
 it('persists and reloads conversations through the redis-backed store', function (): void {
     $store = app(ConversationStore::class);
     $startedAt = new DateTimeImmutable('2026-03-14T09:00:00+00:00');

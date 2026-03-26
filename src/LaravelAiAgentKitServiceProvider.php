@@ -9,6 +9,7 @@ use CreativeCrafts\LaravelAiAgentKit\Commands\MakePipelineCommand;
 use CreativeCrafts\LaravelAiAgentKit\Commands\MakePromptCommand;
 use CreativeCrafts\LaravelAiAgentKit\Commands\MakeToolCommand;
 use CreativeCrafts\LaravelAiAgentKit\Commands\PurgeConversationsCommand;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\AgentRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\BlueprintCompiler;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\BlueprintRunner;
@@ -29,6 +30,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\Redactor;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreInterface;
+use CreativeCrafts\LaravelAiAgentKit\Core\Agents\ContainerAgentRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\ConfigValidator;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\LaravelQueuedPipelineDispatcher;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\SynchronousPipelineRunner;
@@ -92,6 +94,14 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 
     public function packageRegistered(): void
     {
+        $this->app->singleton(ContainerAgentRegistry::class, function (Application $app): ContainerAgentRegistry {
+            return new ContainerAgentRegistry($app);
+        });
+
+        $this->app->singleton(AgentRegistry::class, function (Application $app): AgentRegistry {
+            return $app->make(ContainerAgentRegistry::class);
+        });
+
         $this->app->singleton(ConfigValidator::class, function (Application $app): ConfigValidator {
             /** @var ConfigRepository $config */
             $config = $app->make(ConfigRepository::class);
@@ -292,7 +302,25 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         });
 
         $this->app->singleton(ToolAuthorizer::class, function (Application $app): ToolAuthorizer {
-            return $app->make(DenyAllToolAuthorizer::class);
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+            $authorizerClass = $config->get('ai-agent-kit.tools.authorizer', DenyAllToolAuthorizer::class);
+
+            if (!is_string($authorizerClass) || $authorizerClass === '') {
+                throw new RuntimeException('Configuration key [ai-agent-kit.tools.authorizer] must be a non-empty class-string implementing the ToolAuthorizer contract.');
+            }
+
+            if (!class_exists($authorizerClass) || !is_a($authorizerClass, ToolAuthorizer::class, true)) {
+                throw new RuntimeException("Configured tool authorizer [{$authorizerClass}] must implement the ToolAuthorizer contract.");
+            }
+
+            $authorizer = $app->make($authorizerClass);
+
+            if (!$authorizer instanceof ToolAuthorizer) {
+                throw new RuntimeException("Resolved tool authorizer [{$authorizerClass}] must implement the ToolAuthorizer contract.");
+            }
+
+            return $authorizer;
         });
 
         $this->app->singleton(InMemoryToolRegistry::class, function (Application $app): InMemoryToolRegistry {
@@ -386,7 +414,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return $app->make(SynchronousPipelineRunner::class);
         });
 
-        $this->app->singleton(LaravelQueuedPipelineDispatcher::class, function (): LaravelQueuedPipelineDispatcher {
+        $this->app->singleton(LaravelQueuedPipelineDispatcher::class, function (Application $app): LaravelQueuedPipelineDispatcher {
             return new LaravelQueuedPipelineDispatcher();
         });
 
@@ -428,6 +456,10 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 
         if ($enabled) {
             $app->make(ConfigValidator::class)->validateCurrentConfig();
+        }
+
+        if ($this->memoryDriver($config) === 'redis') {
+            $app->make(RedisConversationStore::class);
         }
 
         $normalizer = $app->make(SdkTelemetryNormalizer::class);

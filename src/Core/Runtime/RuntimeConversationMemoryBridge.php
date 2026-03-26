@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Runtime;
 
-use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\RunContext;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\ConversationContextBridgeException;
 use CreativeCrafts\LaravelAiAgentKit\Memory\Conversation;
+use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessage;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessageRole;
 use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
@@ -16,6 +16,7 @@ use DateTimeImmutable;
 use Illuminate\Support\Str;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\AgentResponse;
 
@@ -132,26 +133,26 @@ final readonly class RuntimeConversationMemoryBridge
 
             if ($message->role === ConversationMessageRole::System) {
                 $systemInstructions[] = $message->content;
-
-                continue;
             }
 
-            $projected = $this->projectMessage($message);
-
-            if ($projected instanceof Message) {
-                $messages[] = $projected;
-            }
+            $messages[] = $this->projectMessage($message);
         }
 
         return [$messages, $systemInstructions];
     }
 
-    private function projectMessage(ConversationMessage $message): ?Message
+    private function projectMessage(ConversationMessage $message): Message
     {
         return match ($message->role) {
             ConversationMessageRole::User => new UserMessage($message->content),
             ConversationMessageRole::Assistant => new AssistantMessage($message->content),
-            ConversationMessageRole::Tool, ConversationMessageRole::System => null,
+            ConversationMessageRole::Tool => new ToolResultMessage(collect([
+              [
+                'output' => $message->content,
+                'metadata' => $message->metadata,
+              ],
+            ])),
+            ConversationMessageRole::System => new UserMessage('[system-context] ' . $message->content),
         };
     }
 

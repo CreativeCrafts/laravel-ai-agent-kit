@@ -6,6 +6,7 @@ namespace CreativeCrafts\LaravelAiAgentKit\Tests\Fakes;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineResultHandler;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\RunContext;
+use RuntimeException;
 use Throwable;
 
 final class TestPipelineResultHandler implements PipelineResultHandler
@@ -20,10 +21,13 @@ final class TestPipelineResultHandler implements PipelineResultHandler
      */
     public static array $failures = [];
 
+    public static bool $throwOnFailure = false;
+
     public static function reset(): void
     {
         self::$successes = [];
         self::$failures = [];
+        self::$throwOnFailure = false;
     }
 
     public function handleSuccess(RunContext $context): void
@@ -33,6 +37,10 @@ final class TestPipelineResultHandler implements PipelineResultHandler
 
     public function handleFailure(RunContext $context, Throwable $throwable): void
     {
+        if (self::$throwOnFailure) {
+            throw new RuntimeException('Result handler failed while processing pipeline failure.');
+        }
+
         self::$failures[] = [
           'context' => $context,
           'throwable' => $throwable,

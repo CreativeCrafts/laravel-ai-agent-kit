@@ -31,8 +31,8 @@ class RunQueuedPipelineJob implements ShouldQueue
     public ?int $timeout = null;
 
     /**
-     * @param  class-string<QueuedPipelineDefinition>  $pipelineDefinition
-     * @param  class-string<PipelineResultHandler>|null  $resultHandler
+     * @param class-string<QueuedPipelineDefinition> $pipelineDefinition
+     * @param class-string<PipelineResultHandler>|null $resultHandler
      */
     public function __construct(
         public readonly string $pipelineDefinition,
@@ -62,7 +62,7 @@ class RunQueuedPipelineJob implements ShouldQueue
     {
         $definition = $app->make($this->pipelineDefinition);
 
-        if (! $definition instanceof QueuedPipelineDefinition) {
+        if (!$definition instanceof QueuedPipelineDefinition) {
             throw InvalidQueuedPipelineDefinitionException::forClass($this->pipelineDefinition);
         }
 
@@ -73,7 +73,13 @@ class RunQueuedPipelineJob implements ShouldQueue
 
             $resultHandler?->handleSuccess($result);
         } catch (Throwable $throwable) {
-            $resultHandler?->handleFailure($this->context, $throwable);
+            if ($resultHandler instanceof PipelineResultHandler) {
+                try {
+                    $resultHandler->handleFailure($this->context, $throwable);
+                } catch (Throwable) {
+                    // Preserve the original pipeline failure as the canonical cause.
+                }
+            }
 
             throw QueuedPipelineExecutionException::forPipeline($this->pipelineDefinition, $throwable);
         }
@@ -102,7 +108,7 @@ class RunQueuedPipelineJob implements ShouldQueue
 
         $resultHandler = $app->make($this->resultHandler);
 
-        if (! $resultHandler instanceof PipelineResultHandler) {
+        if (!$resultHandler instanceof PipelineResultHandler) {
             throw InvalidPipelineResultHandlerException::forClass($this->resultHandler);
         }
 

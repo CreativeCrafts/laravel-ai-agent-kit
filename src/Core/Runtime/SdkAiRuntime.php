@@ -47,8 +47,8 @@ final readonly class SdkAiRuntime implements AiRuntime
             throw RuntimeExecutionException::forRequest($request->runId, $throwable);
         }
 
-        $promptTokens = $response->usage->promptTokens;
-        $completionTokens = $response->usage->completionTokens;
+        $promptTokens = $response->usage->promptTokens ?? 0;
+        $completionTokens = $response->usage->completionTokens ?? 0;
 
         $usage = [
           'prompt_tokens' => $promptTokens,
