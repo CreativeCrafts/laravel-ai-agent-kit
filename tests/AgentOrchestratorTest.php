@@ -190,6 +190,7 @@ it('respects payload-only handoff history mode and does not leak parent metadata
             entryAgent: 'payload-only-delegator.agent',
             task: 'Validate payload-only metadata scope',
             input: ['probe' => 'payload_only'],
+            conversationId: new ConversationId('conv-payload-only-001'),
             metadata: [
           'sensitive_key' => 'do-not-leak',
           '_orchestrator.internal_marker' => 'internal-only',
@@ -206,6 +207,7 @@ it('respects payload-only handoff history mode and does not leak parent metadata
       ->and($result->finalOutput['seen_internal_marker'])->toBe('missing')
       ->and($result->finalOutput['seen_delegated_by_agent'])->toBe('payload-only-delegator.agent')
       ->and($result->finalOutput['seen_requested_outcome'])->toBe('Report visible metadata fields.')
+      ->and($result->finalOutput['seen_conversation_id'])->toBe('conv-payload-only-001')
       ->and($result->finalOutput['history_summary'])->toBeNull();
 });
 

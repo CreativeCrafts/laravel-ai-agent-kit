@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\ConfigValidator;
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\Exceptions\InvalidConfigurationException;
+use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\DelegationPolicyMode;
 use CreativeCrafts\LaravelAiAgentKit\Tools\DenyAllToolAuthorizer;
 
 it('validates a minimal configuration', function () {
@@ -27,6 +28,38 @@ it('validates a minimal configuration', function () {
         'max_total_timeout_seconds' => 1,
         'max_tokens' => null,
         'max_cost_usd' => null,
+      ],
+    ]);
+
+    expect(true)->toBeTrue();
+});
+
+it('accepts delegation policy mode configured as enum instance', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'null' => [
+          'driver' => 'null',
+          'enabled' => true,
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'null',
+      'failover_order' => ['null'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 1,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+      'orchestration' => [
+        'delegation_policy' => [
+          'mode' => DelegationPolicyMode::DYNAMIC_WITH_ALLOWLIST,
+        ],
       ],
     ]);
 

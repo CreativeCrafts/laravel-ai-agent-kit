@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Orchestration;
 
-use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\AgentRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\DelegationPolicyEngine;
@@ -14,6 +13,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionResult;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\Exceptions\OrchestrationDepthExceededException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\Exceptions\OrchestrationStepLimitExceededException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\Exceptions\UnsupportedAgentExecutionResultException;
+use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
@@ -456,6 +456,12 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
 
         if ($proposal->handoff->note !== null) {
             $childMetadata[self::META_HISTORY_SUMMARY] = $proposal->handoff->note;
+        }
+
+        $conversationId = $metadata[self::META_CONVERSATION_ID] ?? null;
+
+        if (is_string($conversationId) && $conversationId !== '') {
+            $childMetadata[self::META_CONVERSATION_ID] = $conversationId;
         }
 
         $childMetadata[self::META_DELEGATED_BY_AGENT] = $parentAgentKey;

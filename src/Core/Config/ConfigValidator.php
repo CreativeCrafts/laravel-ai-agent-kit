@@ -265,8 +265,15 @@ final readonly class ConfigValidator
         if (array_key_exists('mode', $delegationPolicy)) {
             $mode = $delegationPolicy['mode'];
 
+            if ($mode instanceof DelegationPolicyMode) {
+                $mode = $mode->value;
+            }
+
             if (!is_string($mode) || $mode === '') {
-                throw InvalidConfigurationException::invalidValue('orchestration.delegation_policy.mode', 'Must be a non-empty string.');
+                throw InvalidConfigurationException::invalidValue(
+                    'orchestration.delegation_policy.mode',
+                    'Must be a non-empty string or a delegation policy mode enum.',
+                );
             }
 
             if (!in_array($mode, array_map(static fn (DelegationPolicyMode $candidate): string => $candidate->value, DelegationPolicyMode::cases()), true)) {
