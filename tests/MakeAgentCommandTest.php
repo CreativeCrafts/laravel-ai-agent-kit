@@ -26,10 +26,12 @@ it('generates an agent scaffold with the expected normalized path namespace and 
       ->and($contents)->not
       ->toBeFalse()
       ->and($contents)->toContain(sprintf('namespace %s\\Support;', $baseNamespace))
-      ->and($contents)->toContain('final class ReviewAgent')
+      ->and($contents)->toContain('final class ReviewAgent implements Agent')
+      ->and($contents)->toContain('function definition(): AgentDefinition')
+      ->and($contents)->toContain('function handle(AgentExecutionContext $context): AgentExecutionResult')
+      ->and($contents)->toContain("key: 'support.review'")
       ->and($contents)->toContain('public function blueprint(array $variables = []): PromptBlueprint')
-      ->and($contents)->toContain("return LaravelAiAgentKit::prompt('support.review')")
-      ->and($contents)->toContain('->withInstructions([');
+      ->and($contents)->toContain("return LaravelAiAgentKit::prompt('support.review')");
 
     makeAgentCommandTestAssertCompiles($generatedPath);
 
@@ -77,7 +79,8 @@ it('overwrites an existing generated agent file when the force option is supplie
       ->and($contents)->not
       ->toBe('stale-agent')
       ->and($contents)->toContain(sprintf('namespace %s;', $baseNamespace))
-      ->and($contents)->toContain('final class ForcedAgent')
+      ->and($contents)->toContain('final class ForcedAgent implements Agent')
+      ->and($contents)->toContain("key: 'forced'")
       ->and($contents)->toContain("return LaravelAiAgentKit::prompt('forced')");
 
     makeAgentCommandTestAssertCompiles($generatedPath);

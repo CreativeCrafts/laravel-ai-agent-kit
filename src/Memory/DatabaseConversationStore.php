@@ -141,38 +141,87 @@ final readonly class DatabaseConversationStore implements ConversationStore
                 $conversationRecordId = $existingRecordId;
             }
 
-            $existingMessageIds = $connection
+            $existingMessages = $connection
               ->table($this->messagesTable)
               ->where('conversation_record_id', $conversationRecordId)
-              ->pluck('message_id')
-              ->all();
-
-            /** @var list<string> $existingMessageIds */
-            $existingMessageIds = array_values(array_filter($existingMessageIds, static fn (mixed $id): bool => is_string($id) && $id !== ''));
+              ->get()
+              ->keyBy('message_id');
 
             $incomingMessageIds = [];
             $newRows = [];
+            $updates = [];
 
             foreach ($conversation->messages as $index => $message) {
                 $messageId = $message->id->toString();
                 $incomingMessageIds[] = $messageId;
+                $sequence = $index + 1;
+                $contentCiphertext = $this->encodeStringPayload('messages.content_ciphertext', $message->content);
+                $metadataCiphertext = $this->encodeArrayPayload('messages.metadata_ciphertext', $message->metadata);
 
-                if (in_array($messageId, $existingMessageIds, true)) {
+                $existing = $existingMessages->get($messageId);
+
+                if ($existing !== null) {
+                    $existingSequence = $this->normalizeIntValue($existing->sequence ?? null, 'messages.sequence');
+                    $existingRole = $this->requireStringValue($existing, 'role');
+                    $existingContentCiphertext = $this->requireStringValue($existing, 'content_ciphertext');
+                    $existingMetadataCiphertext = $existing->metadata_ciphertext ?? null;
+                    if ($existingMetadataCiphertext !== null && !is_string($existingMetadataCiphertext)) {
+                        throw ConversationStoreException::payloadDecodingFailed(
+                            'messages.metadata_ciphertext',
+                            new RuntimeException('Record field [messages.metadata_ciphertext] must be a string or null.'),
+                        );
+                    }
+
+                    $shouldUpdate = $existingSequence !== $sequence
+                      || $existingRole !== $message->role->value
+                      || $existingContentCiphertext !== $contentCiphertext
+                      || ($existingMetadataCiphertext ?? '') !== ($metadataCiphertext ?? '');
+
+                    if ($shouldUpdate) {
+                        $updates[] = [
+                          'message_id' => $messageId,
+                          'payload' => [
+                            'sequence' => $sequence,
+                            'role' => $message->role->value,
+                            'content_ciphertext' => $contentCiphertext,
+                            'metadata_ciphertext' => $metadataCiphertext,
+                            'token_count' => null,
+                            'updated_at' => $message->createdAt->format('Y-m-d H:i:s'),
+                          ],
+                        ];
+                    }
+
                     continue;
                 }
 
                 $newRows[] = [
                   'conversation_record_id' => $conversationRecordId,
                   'message_id' => $messageId,
-                  'sequence' => $index + 1,
+                  'sequence' => $sequence,
                   'role' => $message->role->value,
-                  'content_ciphertext' => $this->encodeStringPayload('messages.content_ciphertext', $message->content),
-                  'metadata_ciphertext' => $this->encodeArrayPayload('messages.metadata_ciphertext', $message->metadata),
+                  'content_ciphertext' => $contentCiphertext,
+                  'metadata_ciphertext' => $metadataCiphertext,
                   'token_count' => null,
                   'created_at' => $message->createdAt->format('Y-m-d H:i:s'),
                   'updated_at' => null,
                 ];
             }
+
+            foreach ($updates as $update) {
+                $connection
+                  ->table($this->messagesTable)
+                  ->where('conversation_record_id', $conversationRecordId)
+                  ->where('message_id', $update['message_id'])
+                  ->update($update['payload']);
+            }
+
+            /** @var list<string> $existingMessageIds */
+            $existingMessageIds = array_values(
+                array_filter(
+                    $existingMessages->keys()->all(),
+                    static fn (mixed $id): bool => is_string($id) && $id !== '',
+                ),
+            );
 
             $messageIdsToDelete = array_values(array_diff($existingMessageIds, $incomingMessageIds));
 

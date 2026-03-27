@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Commands;
 
+use CreativeCrafts\LaravelAiAgentKit\Scaffolding\ProjectInspector;
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -28,12 +29,24 @@ final class MakeToolCommand extends Command
             return self::FAILURE;
         }
 
+        $projectContext = (new ProjectInspector($this->laravel->basePath()))->inspect();
+        $rootNamespace = $projectContext->rootNamespace;
+
+        if ($rootNamespace === null || $rootNamespace === '') {
+            $this->components->error('Unable to determine the PSR-4 root namespace for tool scaffolding.');
+
+            return self::FAILURE;
+        }
+
         $relativeClass = Str::startsWith($normalizedName, 'Tools\\')
           ? $normalizedName
           : 'Tools\\' . $normalizedName;
 
-        $fullyQualifiedClass = 'CreativeCrafts\\LaravelAiAgentKit\\' . $relativeClass;
-        $destinationPath = $this->destinationPath($relativeClass);
+        $fullyQualifiedClass = rtrim($rootNamespace, '\\') . '\\' . $relativeClass;
+        $destinationPath = $this->destinationPath(
+            sourceDirectory: $projectContext->sourceDirectory,
+            relativeClass: $relativeClass,
+        );
 
         if (is_file($destinationPath) && !$this->option('force')) {
             $this->components->error(
@@ -111,11 +124,9 @@ final class MakeToolCommand extends Command
         return implode('\\', $normalizedSegments);
     }
 
-    private function destinationPath(string $relativeClass): string
+    private function destinationPath(string $sourceDirectory, string $relativeClass): string
     {
-        $projectRoot = $this->laravel->basePath();
-
-        return $projectRoot . '/src/' . str_replace('\\', '/', $relativeClass) . '.php';
+        return rtrim($sourceDirectory, DIRECTORY_SEPARATOR) . '/' . str_replace('\\', '/', $relativeClass) . '.php';
     }
 
     private function relativeProjectPath(string $absolutePath): string

@@ -27,12 +27,6 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
         if (!$this->app->bound('redis')) {
             throw new RuntimeException('Redis memory driver requires a bound [redis] service in the container.');
         }
-
-        try {
-            $this->command('ping', []);
-        } catch (Throwable $throwable) {
-            throw new RuntimeException('Redis memory driver requires [redis] to resolve to a valid redis manager exposing a [connection] method.', $throwable->getCode(), previous: $throwable);
-        }
     }
 
     /**
@@ -117,7 +111,7 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
         $purged = 0;
         $threshold = $now ?? new DateTimeImmutable();
 
-        foreach ($this->keys($this->pattern()) as $key) {
+        foreach ($this->scanKeys($this->pattern()) as $key) {
             $payload = $this->getValue($key);
 
             if (!is_string($payload)) {
@@ -335,26 +329,30 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
     }
 
     /**
-     * @return list<string>
+     * @return iterable<string>
      * @throws Throwable
      */
-    private function keys(string $pattern): array
+    private function scanKeys(string $pattern, int $count = 100): iterable
     {
-        $keys = $this->command('KEYS', [$pattern]);
+        $cursor = '0';
 
-        if (!is_array($keys)) {
-            return [];
-        }
+        do {
+            $response = $this->command('SCAN', [$cursor, 'MATCH', $pattern, 'COUNT', $count]);
 
-        $resolved = [];
-
-        foreach ($keys as $key) {
-            if (is_string($key)) {
-                $resolved[] = $key;
+            if (!is_array($response) || count($response) !== 2) {
+                return;
             }
-        }
 
-        return $resolved;
+            [$cursor, $keys] = $response;
+
+            if (is_array($keys)) {
+                foreach ($keys as $key) {
+                    if (is_string($key)) {
+                        yield $key;
+                    }
+                }
+            }
+        } while ($cursor !== '0');
     }
 
     private function pattern(): string

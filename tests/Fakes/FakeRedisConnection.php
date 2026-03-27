@@ -27,6 +27,7 @@ final class FakeRedisConnection
             ),
             'DEL' => $this->del((string)($arguments[0] ?? '')),
             'KEYS' => $this->keys((string)($arguments[0] ?? '')),
+            'SCAN' => $this->scan($arguments),
             default => throw new RuntimeException("Unsupported fake redis command [{$name}]."),
         };
     }
@@ -75,5 +76,24 @@ final class FakeRedisConnection
         sort($keys);
 
         return $keys;
+    }
+
+    /**
+     * @param list<mixed> $arguments
+     * @return array{0: string, 1: list<string>}
+     */
+    private function scan(array $arguments): array
+    {
+        $pattern = '*';
+        $matchIndex = array_search('MATCH', array_map(static fn ($value) => is_string($value) ? strtoupper($value) : $value, $arguments), true);
+
+        if ($matchIndex !== false) {
+            $candidate = $arguments[$matchIndex + 1] ?? '*';
+            if (is_string($candidate) && $candidate !== '') {
+                $pattern = $candidate;
+            }
+        }
+
+        return ['0', $this->keys($pattern)];
     }
 }

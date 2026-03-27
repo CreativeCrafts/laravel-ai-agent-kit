@@ -318,7 +318,7 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
             payload: array_merge($payload, $result->output),
             metadata: $continueMetadata,
             parentExecutionId: $executionId,
-            depth: $depth + 1,
+            depth: $depth,
             step: $step + 1,
             trace: $trace,
         );

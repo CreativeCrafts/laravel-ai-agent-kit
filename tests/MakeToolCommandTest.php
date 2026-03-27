@@ -2,9 +2,12 @@
 
 declare(strict_types=1);
 
+use CreativeCrafts\LaravelAiAgentKit\Scaffolding\ProjectInspector;
 use Illuminate\Console\Command as ConsoleCommand;
+use CreativeCrafts\LaravelAiAgentKit\Scaffolding\ProjectContext;
 
 it('generates a tool scaffold with the expected normalized path namespace and stub content', function () {
+    $context = makeToolCommandTestContext();
     $generatedPath = makeToolCommandTestPath('Admin\\SendAlert');
 
     makeToolCommandTestCleanup($generatedPath);
@@ -16,10 +19,12 @@ it('generates a tool scaffold with the expected normalized path namespace and st
     expect(is_file($generatedPath))->toBeTrue();
 
     $contents = file_get_contents($generatedPath);
+    $toolsNamespace = $context->toolsNamespace();
 
     expect($contents)->not
       ->toBeFalse()
-      ->and($contents)->toContain('namespace CreativeCrafts\\LaravelAiAgentKit\\Tools\\Admin;')
+      ->and($toolsNamespace)->not->toBeNull()
+      ->and($contents)->toContain(sprintf('namespace %s\\Admin;', $toolsNamespace))
       ->and($contents)->toContain('final class SendAlert implements Tool')
       ->and($contents)->toContain("return 'send.alert';")
       ->and($contents)->toContain("'type' => 'object'")
@@ -48,6 +53,7 @@ it('does not overwrite an existing generated file without the force option', fun
 });
 
 it('overwrites an existing generated file when the force option is supplied', function () {
+    $context = makeToolCommandTestContext();
     $generatedPath = makeToolCommandTestPath('ForcedTool');
 
     makeToolCommandTestCleanup($generatedPath);
@@ -61,12 +67,14 @@ it('overwrites an existing generated file when the force option is supplied', fu
     ])->assertSuccessful();
 
     $contents = file_get_contents($generatedPath);
+    $toolsNamespace = $context->toolsNamespace();
 
     expect($contents)->not
       ->toBeFalse()
       ->and($contents)->not
       ->toBe('stale-content')
-      ->and($contents)->toContain('namespace CreativeCrafts\\LaravelAiAgentKit\\Tools;')
+      ->and($toolsNamespace)->not->toBeNull()
+      ->and($contents)->toContain(sprintf('namespace %s;', $toolsNamespace))
       ->and($contents)->toContain('final class ForcedTool implements Tool')
       ->and($contents)->toContain("return 'forced.tool';");
 
@@ -78,7 +86,7 @@ it('overwrites an existing generated file when the force option is supplied', fu
  */
 function makeToolCommandTestPath(string $relativeClass): string
 {
-    return base_path('src/Tools/' . str_replace('\\', '/', $relativeClass) . '.php');
+    return makeToolCommandTestContext()->toolsDirectory() . '/' . str_replace('\\', '/', $relativeClass) . '.php';
 }
 
 function makeToolCommandTestEnsureDirectoryExists(string $directory): void
@@ -97,7 +105,7 @@ function makeToolCommandTestCleanup(string $path): void
     }
 
     $directory = dirname($path);
-    $root = base_path('src/Tools');
+    $root = makeToolCommandTestContext()->toolsDirectory();
 
     while ($directory !== $root && str_starts_with($directory, $root)) {
         if (!is_dir($directory)) {
@@ -117,4 +125,9 @@ function makeToolCommandTestCleanup(string $path): void
 
         break;
     }
+}
+
+function makeToolCommandTestContext(): ProjectContext
+{
+    return (new ProjectInspector(base_path()))->inspect();
 }
