@@ -10,9 +10,12 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationResult;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\SynchronousAgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorContinueAgent;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorGreetingAgent;
+use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorHistoryMetadataProbeAgent;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorInvalidDelegationAgent;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorLoopAAgent;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorLoopBAgent;
+use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorNullNoteDelegatorAgent;
+use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorPayloadOnlyDelegatorAgent;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorRefundAgent;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorSupportAgent;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorTransferAgent;
@@ -28,6 +31,9 @@ beforeEach(function (): void {
       OrchestratorInvalidDelegationAgent::class,
       OrchestratorLoopAAgent::class,
       OrchestratorLoopBAgent::class,
+      OrchestratorPayloadOnlyDelegatorAgent::class,
+      OrchestratorNullNoteDelegatorAgent::class,
+      OrchestratorHistoryMetadataProbeAgent::class,
     ]);
 });
 
@@ -125,6 +131,55 @@ it('supports continue results by reinvoking the same agent with updated context'
       ->and($result->trace[0]->resultKind)->toBe('continue')
       ->and($result->trace[1]->resultKind)->toBe('complete')
       ->and($result->trace[1]->parentExecutionId)->toBe($result->trace[0]->executionId);
+});
+
+it('respects payload-only handoff history mode and does not leak parent metadata to delegated agents', function () {
+    $result = (new SynchronousAgentOrchestrator(
+        agentRegistry: app(AgentRegistry::class),
+    ))->run(
+        new OrchestrationRequest(
+            entryAgent: 'payload-only-delegator.agent',
+            task: 'Validate payload-only metadata scope',
+            input: ['probe' => 'payload_only'],
+            metadata: [
+          'sensitive_key' => 'do-not-leak',
+          '_orchestrator.internal_marker' => 'internal-only',
+          '_orchestrator.history_summary' => 'Parent summary that should not be forwarded in payload-only mode.',
+        ],
+        ),
+    );
+
+    expect($result->completed())
+      ->toBeTrue()
+      ->and($result->finalAgent)->toBe('history-metadata-probe.agent')
+      ->and($result->finalOutput['payload_probe'])->toBe('payload_only')
+      ->and($result->finalOutput['seen_sensitive_key'])->toBe('missing')
+      ->and($result->finalOutput['seen_internal_marker'])->toBe('missing')
+      ->and($result->finalOutput['seen_delegated_by_agent'])->toBe('payload-only-delegator.agent')
+      ->and($result->finalOutput['seen_requested_outcome'])->toBe('Report visible metadata fields.')
+      ->and($result->finalOutput['history_summary'])->toBeNull();
+});
+
+it('keeps existing orchestrator history summary when delegation note is omitted', function () {
+    $result = (new SynchronousAgentOrchestrator(
+        agentRegistry: app(AgentRegistry::class),
+    ))->run(
+        new OrchestrationRequest(
+            entryAgent: 'null-note-delegator.agent',
+            task: 'Validate null-note summary preservation',
+            input: ['probe' => 'null_note'],
+            metadata: [
+          '_orchestrator.history_summary' => 'Existing summary that must be preserved.',
+        ],
+        ),
+    );
+
+    expect($result->completed())
+      ->toBeTrue()
+      ->and($result->finalAgent)->toBe('history-metadata-probe.agent')
+      ->and($result->finalOutput['payload_probe'])->toBe('null_note')
+      ->and($result->finalOutput['seen_delegated_by_agent'])->toBe('null-note-delegator.agent')
+      ->and($result->finalOutput['history_summary'])->toBe('Existing summary that must be preserved.');
 });
 
 it('throws when an agent delegates to a target that is not allowed by its definition', function () {

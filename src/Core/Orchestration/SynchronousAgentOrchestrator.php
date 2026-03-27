@@ -390,10 +390,25 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
      */
     private function childMetadata(string $parentAgentKey, DelegationProposal $proposal, array $metadata): array
     {
-        return array_merge($metadata, [
-          self::META_HISTORY_SUMMARY => $proposal->handoff->note,
-          self::META_DELEGATED_BY_AGENT => $parentAgentKey,
-          self::META_REQUESTED_OUTCOME => $proposal->handoff->requestedOutcome,
-        ]);
+        $childMetadata = $proposal->handoff->sharesFullHistory()
+          ? $metadata
+          : [];
+
+        if ($proposal->handoff->historyMode === HandoffPayload::HISTORY_PAYLOAD_PLUS_SUMMARY) {
+            $existingSummary = $this->historySummary($metadata);
+
+            if ($existingSummary !== null) {
+                $childMetadata[self::META_HISTORY_SUMMARY] = $existingSummary;
+            }
+        }
+
+        if ($proposal->handoff->note !== null) {
+            $childMetadata[self::META_HISTORY_SUMMARY] = $proposal->handoff->note;
+        }
+
+        $childMetadata[self::META_DELEGATED_BY_AGENT] = $parentAgentKey;
+        $childMetadata[self::META_REQUESTED_OUTCOME] = $proposal->handoff->requestedOutcome;
+
+        return $childMetadata;
     }
 }
