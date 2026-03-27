@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Orchestration;
 
+use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\AgentRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\DelegationPolicyEngine;
+use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionContext;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionResult;
-use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\Exceptions\InvalidDelegationTargetException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\Exceptions\OrchestrationDepthExceededException;
+use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\Exceptions\OrchestrationStepLimitExceededException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\Exceptions\UnsupportedAgentExecutionResultException;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -17,6 +20,7 @@ use InvalidArgumentException;
 final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
 {
     private const string META_HISTORY_SUMMARY = '_orchestrator.history_summary';
+    private const string META_CONVERSATION_ID = '_orchestrator.conversation_id';
     private const string META_DELEGATED_BY_AGENT = '_orchestrator.delegated_by_agent';
     private const string META_REQUESTED_OUTCOME = '_orchestrator.requested_outcome';
     private const string META_CONTINUED_FROM_EXECUTION_ID = '_orchestrator.continued_from_execution_id';
@@ -37,10 +41,16 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
 
     public function __construct(
         private AgentRegistry $agentRegistry,
+        private ?DelegationPolicyEngine $delegationPolicyEngine = null,
         private int $maxExecutionDepth = 25,
+        private int $maxExecutionSteps = 50,
     ) {
         if ($this->maxExecutionDepth < 1) {
             throw new InvalidArgumentException('SynchronousAgentOrchestrator maxExecutionDepth must be greater than zero.');
+        }
+
+        if ($this->maxExecutionSteps < 1) {
+            throw new InvalidArgumentException('SynchronousAgentOrchestrator maxExecutionSteps must be greater than zero.');
         }
     }
 
@@ -48,15 +58,21 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
     {
         $orchestrationId = (string)Str::uuid();
         $trace = [];
+        $metadata = $request->metadata;
+
+        if ($request->conversationId instanceof ConversationId) {
+            $metadata[self::META_CONVERSATION_ID] = $request->conversationId->toString();
+        }
 
         $outcome = $this->executeAgent(
             orchestrationId: $orchestrationId,
             agentKey: $request->entryAgent,
             task: $request->task,
             payload: $request->input,
-            metadata: $request->metadata,
+            metadata: $metadata,
             parentExecutionId: null,
             depth: 1,
+            step: 1,
             trace: $trace,
         );
 
@@ -80,7 +96,8 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
      *   final_agent: string,
      *   final_execution_id: string,
      *   final_output: array<string, mixed>,
-     *   summary: string
+     *   summary: string,
+     *   step_count: int
      * }
      */
     private function executeAgent(
@@ -91,15 +108,10 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
         array $metadata,
         ?string $parentExecutionId,
         int $depth,
+        int $step,
         array &$trace,
     ): array {
-        if ($depth > $this->maxExecutionDepth) {
-            throw OrchestrationDepthExceededException::forAgent(
-                agentKey: $agentKey,
-                depth: $depth,
-                maxDepth: $this->maxExecutionDepth,
-            );
-        }
+        $this->guardExecutionLimits($agentKey, $depth, $step);
 
         $agent = $this->agentRegistry->get($agentKey);
         $definition = $agent->definition();
@@ -128,6 +140,7 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
                 definitionKey: $definition->key,
                 providerProfile: $definition->primaryProviderProfile,
                 executionId: $executionId,
+                step: $step,
                 result: $result,
                 trace: $trace,
             ),
@@ -138,6 +151,7 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
                 metadata: $metadata,
                 parentExecutionId: $parentExecutionId,
                 depth: $depth,
+                step: $step,
                 definitionKey: $definition->key,
                 providerProfile: $definition->primaryProviderProfile,
                 executionId: $executionId,
@@ -151,8 +165,8 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
                 metadata: $metadata,
                 parentExecutionId: $parentExecutionId,
                 depth: $depth,
-                definitionKey: $definition->key,
-                allowedTargets: $definition->delegationTargets,
+                step: $step,
+                definition: $definition,
                 providerProfile: $definition->primaryProviderProfile,
                 executionId: $executionId,
                 result: $result,
@@ -164,6 +178,25 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
                 supportedKinds: self::SUPPORTED_RESULT_KINDS,
             ),
         };
+    }
+
+    private function guardExecutionLimits(string $agentKey, int $depth, int $step): void
+    {
+        if ($depth > $this->maxExecutionDepth) {
+            throw OrchestrationDepthExceededException::forAgent(
+                agentKey: $agentKey,
+                depth: $depth,
+                maxDepth: $this->maxExecutionDepth,
+            );
+        }
+
+        if ($step > $this->maxExecutionSteps) {
+            throw OrchestrationStepLimitExceededException::forAgent(
+                agentKey: $agentKey,
+                step: $step,
+                maxSteps: $this->maxExecutionSteps,
+            );
+        }
     }
 
     /**
@@ -185,7 +218,8 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
      *   final_agent: string,
      *   final_execution_id: string,
      *   final_output: array<string, mixed>,
-     *   summary: string
+     *   summary: string,
+     *   step_count: int
      * }
      */
     private function handleTerminalResult(
@@ -195,6 +229,7 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
         string $definitionKey,
         string $providerProfile,
         string $executionId,
+        int $step,
         AgentExecutionResult $result,
         array &$trace,
     ): array {
@@ -223,6 +258,7 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
               $definitionKey,
               $result->kind,
           ),
+          'step_count' => $step,
         ];
     }
 
@@ -235,7 +271,8 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
      *   final_agent: string,
      *   final_execution_id: string,
      *   final_output: array<string, mixed>,
-     *   summary: string
+     *   summary: string,
+     *   step_count: int
      * }
      */
     private function handleContinueResult(
@@ -245,12 +282,21 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
         array $metadata,
         ?string $parentExecutionId,
         int $depth,
+        int $step,
         string $definitionKey,
         string $providerProfile,
         string $executionId,
         AgentExecutionResult $result,
         array &$trace,
     ): array {
+        $continueMetadata = array_merge($metadata, [
+          self::META_CONTINUED_FROM_EXECUTION_ID => $executionId,
+        ]);
+
+        if (is_string($result->summary) && $result->summary !== '') {
+            $continueMetadata[self::META_HISTORY_SUMMARY] = $result->summary;
+        }
+
         $trace[] = new ExecutionTraceRecord(
             orchestrationId: $orchestrationId,
             executionId: $executionId,
@@ -270,12 +316,10 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
             agentKey: $definitionKey,
             task: $task,
             payload: array_merge($payload, $result->output),
-            metadata: array_merge($metadata, [
-            self::META_HISTORY_SUMMARY => $result->summary,
-            self::META_CONTINUED_FROM_EXECUTION_ID => $executionId,
-          ]),
+            metadata: $continueMetadata,
             parentExecutionId: $executionId,
             depth: $depth + 1,
+            step: $step + 1,
             trace: $trace,
         );
     }
@@ -283,14 +327,14 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
     /**
      * @param array<string, mixed> $payload
      * @param array<string, mixed> $metadata
-     * @param list<string> $allowedTargets
      * @param list<ExecutionTraceRecord> $trace
      * @return array{
      *   status: string,
      *   final_agent: string,
      *   final_execution_id: string,
      *   final_output: array<string, mixed>,
-     *   summary: string
+     *   summary: string,
+     *   step_count: int
      * }
      */
     private function handleDelegationResult(
@@ -300,8 +344,8 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
         array $metadata,
         ?string $parentExecutionId,
         int $depth,
-        string $definitionKey,
-        array $allowedTargets,
+        int $step,
+        AgentDefinition $definition,
         string $providerProfile,
         string $executionId,
         AgentExecutionResult $result,
@@ -311,59 +355,58 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
 
         if (!$proposal instanceof DelegationProposal) {
             throw UnsupportedAgentExecutionResultException::forKind(
-                agentKey: $definitionKey,
+                agentKey: $definition->key,
                 kind: $result->kind,
                 supportedKinds: self::SUPPORTED_RESULT_KINDS,
             );
         }
 
-        if (!in_array($proposal->targetAgent, $allowedTargets, true)) {
-            throw InvalidDelegationTargetException::forAgent(
-                agentKey: $definitionKey,
-                targetAgent: $proposal->targetAgent,
-                allowedTargets: $allowedTargets,
-            );
-        }
+        $policyDecision = $this->delegationPolicyEngine()->evaluate($definition, $proposal);
+        $approvedProposal = $policyDecision->proposal;
 
         $trace[] = new ExecutionTraceRecord(
             orchestrationId: $orchestrationId,
             executionId: $executionId,
             parentExecutionId: $parentExecutionId,
-            agentKey: $definitionKey,
+            agentKey: $definition->key,
             providerProfile: $providerProfile,
             resultKind: $result->kind,
-            targetAgent: $proposal->targetAgent,
+            targetAgent: $approvedProposal->targetAgent,
             summary: $result->summary,
             metadata: [
             'task' => $task,
-            'delegation_mode' => $proposal->mode,
-            'handoff_task' => $proposal->handoff->task,
-            'history_mode' => $proposal->handoff->historyMode,
+            'delegation_mode' => $approvedProposal->mode,
+            'handoff_task' => $approvedProposal->handoff->task,
+            'history_mode' => $approvedProposal->handoff->historyMode,
+            'policy_mode' => $policyDecision->mode->value,
+            'policy_rewritten' => $policyDecision->rewritten,
+            'proposed_target_agent' => $policyDecision->originalTargetAgent,
           ],
         );
 
         $delegatedOutcome = $this->executeAgent(
             orchestrationId: $orchestrationId,
-            agentKey: $proposal->targetAgent,
-            task: $proposal->handoff->task,
-            payload: $proposal->handoff->payload,
+            agentKey: $approvedProposal->targetAgent,
+            task: $approvedProposal->handoff->task,
+            payload: $approvedProposal->handoff->payload,
             metadata: $this->childMetadata(
-                parentAgentKey: $definitionKey,
-                proposal: $proposal,
+                parentAgentKey: $definition->key,
+                proposal: $approvedProposal,
                 metadata: $metadata,
             ),
             parentExecutionId: $executionId,
             depth: $depth + 1,
+            step: $step + 1,
             trace: $trace,
         );
 
-        if ($proposal->transfersControl()) {
+        if ($approvedProposal->transfersControl()) {
             return $delegatedOutcome;
         }
 
         return $this->executeAgent(
             orchestrationId: $orchestrationId,
-            agentKey: $definitionKey,
+            agentKey: $definition->key,
             task: $task,
             payload: array_merge($payload, [
             'delegated_result' => $delegatedOutcome['final_output'],
@@ -380,7 +423,16 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
           ]),
             parentExecutionId: $delegatedOutcome['final_execution_id'],
             depth: $depth + 1,
+            step: $delegatedOutcome['step_count'] + 1,
             trace: $trace,
+        );
+    }
+
+    private function delegationPolicyEngine(): DelegationPolicyEngine
+    {
+        return $this->delegationPolicyEngine ?? new ConfigurableDelegationPolicyEngine(
+            agentRegistry: $this->agentRegistry,
+            mode: DelegationPolicyMode::STATIC_ONLY,
         );
     }
 

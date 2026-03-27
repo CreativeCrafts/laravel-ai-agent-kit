@@ -31,6 +31,7 @@ final class OrchestratorHistoryMetadataProbeAgent implements Agent
             'seen_internal_marker' => $context->metadataValue('_orchestrator.internal_marker', 'missing'),
             'seen_delegated_by_agent' => $context->metadataValue('_orchestrator.delegated_by_agent'),
             'seen_requested_outcome' => $context->metadataValue('_orchestrator.requested_outcome'),
+            'seen_conversation_id' => $context->metadataValue('_orchestrator.conversation_id'),
             'history_summary' => $context->historySummary,
           ],
             summary: 'History metadata probe completed.',
