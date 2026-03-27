@@ -19,6 +19,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationRetentionPurger;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationSummarizer;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Prompts\PromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
@@ -32,6 +33,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreInterface;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\ContainerAgentRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\ConfigValidator;
+use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\SynchronousAgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\LaravelQueuedPipelineDispatcher;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\SynchronousPipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredFailoverProviderSelector;
@@ -100,6 +102,16 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 
         $this->app->singleton(AgentRegistry::class, function (Application $app): AgentRegistry {
             return $app->make(ContainerAgentRegistry::class);
+        });
+
+        $this->app->singleton(SynchronousAgentOrchestrator::class, function (Application $app): SynchronousAgentOrchestrator {
+            return new SynchronousAgentOrchestrator(
+                agentRegistry: $app->make(AgentRegistry::class),
+            );
+        });
+
+        $this->app->singleton(AgentOrchestrator::class, function (Application $app): AgentOrchestrator {
+            return $app->make(SynchronousAgentOrchestrator::class);
         });
 
         $this->app->singleton(ConfigValidator::class, function (Application $app): ConfigValidator {
