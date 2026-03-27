@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+
 use CreativeCrafts\LaravelAiAgentKit\Tools\DenyAllToolAuthorizer;
 
 return [
@@ -73,11 +74,30 @@ return [
     */
   'budgets' => [
     'max_steps' => (int)env('AI_AGENT_KIT_MAX_STEPS', 20),
+    'max_orchestration_depth' => (int)env('AI_AGENT_KIT_MAX_ORCHESTRATION_DEPTH', 25),
     'max_tool_calls' => (int)env('AI_AGENT_KIT_MAX_TOOL_CALLS', 50),
     'max_retries_per_step' => (int)env('AI_AGENT_KIT_MAX_RETRIES_PER_STEP', 2),
     'max_total_timeout_seconds' => (int)env('AI_AGENT_KIT_MAX_TOTAL_TIMEOUT_SECONDS', 120),
     'max_tokens' => env('AI_AGENT_KIT_MAX_TOKENS') === null ? null : (int)env('AI_AGENT_KIT_MAX_TOKENS'),
     'max_cost_usd' => env('AI_AGENT_KIT_MAX_COST_USD') === null ? null : (float)env('AI_AGENT_KIT_MAX_COST_USD'),
+  ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Orchestration
+    |--------------------------------------------------------------------------
+    |
+    | Delegation policy controls how agent handoffs are approved. Static mode
+    | honors only each agent's declared delegation targets. Dynamic modes can
+    | expand allowed targets with explicit allowlists or full registry access.
+    |
+    */
+  'orchestration' => [
+    'delegation_policy' => [
+      'mode' => (string)env('AI_AGENT_KIT_ORCHESTRATION_DELEGATION_POLICY_MODE', 'static_only'),
+      'allowlist' => [],
+      'rewrites' => [],
+    ],
   ],
 
     /*

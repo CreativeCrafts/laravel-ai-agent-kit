@@ -6,6 +6,7 @@ namespace CreativeCrafts\LaravelAiAgentKit\Core\Config;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\Exceptions\InvalidConfigurationException;
+use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\DelegationPolicyMode;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\enums\BackoffStrategy;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 
@@ -120,6 +121,7 @@ final readonly class ConfigValidator
         }
 
         $this->validateBudgets($config);
+        $this->validateOrchestration($config);
         $this->validateResilience($config);
         $this->validateMemory($config);
         $this->validateVector($config);
@@ -197,6 +199,7 @@ final readonly class ConfigValidator
 
         $intKeys = [
           'max_steps',
+          'max_orchestration_depth',
           'max_tool_calls',
           'max_retries_per_step',
           'max_total_timeout_seconds',
@@ -231,6 +234,55 @@ final readonly class ConfigValidator
             if ($value < 0) {
                 throw InvalidConfigurationException::invalidValue("budgets.{$key}", 'Must be >= 0.');
             }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function validateOrchestration(array $config): void
+    {
+        if (!array_key_exists('orchestration', $config)) {
+            return;
+        }
+
+        if (!is_array($config['orchestration'])) {
+            throw InvalidConfigurationException::invalidType('orchestration', 'array');
+        }
+
+        $orchestration = $config['orchestration'];
+
+        if (!array_key_exists('delegation_policy', $orchestration)) {
+            return;
+        }
+
+        if (!is_array($orchestration['delegation_policy'])) {
+            throw InvalidConfigurationException::invalidType('orchestration.delegation_policy', 'array');
+        }
+
+        $delegationPolicy = $orchestration['delegation_policy'];
+
+        if (array_key_exists('mode', $delegationPolicy)) {
+            $mode = $delegationPolicy['mode'];
+
+            if (!is_string($mode) || $mode === '') {
+                throw InvalidConfigurationException::invalidValue('orchestration.delegation_policy.mode', 'Must be a non-empty string.');
+            }
+
+            if (!in_array($mode, array_map(static fn (DelegationPolicyMode $candidate): string => $candidate->value, DelegationPolicyMode::cases()), true)) {
+                throw InvalidConfigurationException::invalidValue(
+                    'orchestration.delegation_policy.mode',
+                    sprintf('Must be one of [%s].', implode(', ', array_map(static fn (DelegationPolicyMode $candidate): string => $candidate->value, DelegationPolicyMode::cases()))),
+                );
+            }
+        }
+
+        if (array_key_exists('allowlist', $delegationPolicy) && !is_array($delegationPolicy['allowlist'])) {
+            throw InvalidConfigurationException::invalidType('orchestration.delegation_policy.allowlist', 'array');
+        }
+
+        if (array_key_exists('rewrites', $delegationPolicy) && !is_array($delegationPolicy['rewrites'])) {
+            throw InvalidConfigurationException::invalidType('orchestration.delegation_policy.rewrites', 'array');
         }
     }
 

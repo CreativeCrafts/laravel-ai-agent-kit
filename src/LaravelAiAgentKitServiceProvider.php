@@ -20,6 +20,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationRetentionPurge
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationSummarizer;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\DelegationPolicyEngine;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Prompts\PromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
@@ -33,6 +34,8 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreInterface;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\ContainerAgentRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\ConfigValidator;
+use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\ConfigurableDelegationPolicyEngine;
+use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\DelegationPolicyMode;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\SynchronousAgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\LaravelQueuedPipelineDispatcher;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\SynchronousPipelineRunner;
@@ -104,9 +107,31 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return $app->make(ContainerAgentRegistry::class);
         });
 
+        $this->app->singleton(ConfigurableDelegationPolicyEngine::class, function (Application $app): ConfigurableDelegationPolicyEngine {
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
+            return new ConfigurableDelegationPolicyEngine(
+                agentRegistry: $app->make(AgentRegistry::class),
+                mode: $this->delegationPolicyModeConfig($config, 'ai-agent-kit.orchestration.delegation_policy.mode'),
+                allowlist: $this->delegationPolicyAllowlistConfig($config, 'ai-agent-kit.orchestration.delegation_policy.allowlist'),
+                rewrites: $this->delegationPolicyRewritesConfig($config, 'ai-agent-kit.orchestration.delegation_policy.rewrites'),
+            );
+        });
+
+        $this->app->singleton(DelegationPolicyEngine::class, function (Application $app): DelegationPolicyEngine {
+            return $app->make(ConfigurableDelegationPolicyEngine::class);
+        });
+
         $this->app->singleton(SynchronousAgentOrchestrator::class, function (Application $app): SynchronousAgentOrchestrator {
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
             return new SynchronousAgentOrchestrator(
                 agentRegistry: $app->make(AgentRegistry::class),
+                delegationPolicyEngine: $app->make(DelegationPolicyEngine::class),
+                maxExecutionDepth: $this->positiveIntConfig($config, 'ai-agent-kit.budgets.max_orchestration_depth', 25),
+                maxExecutionSteps: $this->positiveIntConfig($config, 'ai-agent-kit.budgets.max_steps', 50),
             );
         });
 
@@ -481,6 +506,129 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         $events->listen(AgentPrompted::class, [$normalizer, 'handleAgentPrompted']);
         $events->listen(InvokingTool::class, [$normalizer, 'handleInvokingTool']);
         $events->listen(ToolInvoked::class, [$normalizer, 'handleToolInvoked']);
+    }
+
+    private function delegationPolicyModeConfig(ConfigRepository $config, string $key): DelegationPolicyMode
+    {
+        $value = $config->get($key, DelegationPolicyMode::STATIC_ONLY->value);
+
+        if ($value instanceof DelegationPolicyMode) {
+            return $value;
+        }
+
+        if (!is_string($value) || $value === '') {
+            throw new RuntimeException("Configuration key [{$key}] must be a non-empty string or a delegation policy mode enum.");
+        }
+
+        $mode = DelegationPolicyMode::tryFrom($value);
+
+        if ($mode === null) {
+            throw new RuntimeException(
+                sprintf(
+                    'Configuration key [%s] must be one of [%s].',
+                    $key,
+                    implode(', ', array_map(static fn (DelegationPolicyMode $candidate): string => $candidate->value, DelegationPolicyMode::cases())),
+                ),
+            );
+        }
+
+        return $mode;
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private function delegationPolicyAllowlistConfig(ConfigRepository $config, string $key): array
+    {
+        $allowlist = $this->arrayConfig($config, $key);
+        $normalized = [];
+
+        foreach ($allowlist as $sourceAgentKey => $targets) {
+            if (!is_string($sourceAgentKey) || $sourceAgentKey === '') {
+                throw new RuntimeException("Configuration key [{$key}] must contain non-empty string keys.");
+            }
+
+            if (!is_array($targets)) {
+                throw new RuntimeException(
+                    "Configuration key [{$key}] must contain arrays of non-empty string target agent keys.",
+                );
+            }
+
+            $normalizedTargets = [];
+
+            foreach ($targets as $target) {
+                if (!is_string($target) || $target === '') {
+                    throw new RuntimeException(
+                        "Configuration key [{$key}] must contain arrays of non-empty string target agent keys.",
+                    );
+                }
+
+                $normalizedTargets[] = $target;
+            }
+
+            $normalized[$sourceAgentKey] = $normalizedTargets;
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<int|string, mixed> $default
+     * @return array<int|string, mixed>
+     */
+    private function arrayConfig(ConfigRepository $config, string $key, array $default = []): array
+    {
+        $value = $config->get($key, $default);
+
+        return is_array($value)
+          ? $value
+          : throw new RuntimeException("Configuration key [{$key}] must be an array.");
+    }
+
+    /**
+     * @return array<string, array<string, string>>
+     */
+    private function delegationPolicyRewritesConfig(ConfigRepository $config, string $key): array
+    {
+        $rewrites = $this->arrayConfig($config, $key);
+        $normalized = [];
+
+        foreach ($rewrites as $sourceAgentKey => $mapping) {
+            if (!is_string($sourceAgentKey) || $sourceAgentKey === '') {
+                throw new RuntimeException("Configuration key [{$key}] must contain non-empty string keys.");
+            }
+
+            if (!is_array($mapping)) {
+                throw new RuntimeException(
+                    "Configuration key [{$key}] must contain rewrite maps with non-empty string source and target agent keys.",
+                );
+            }
+
+            $normalizedMapping = [];
+
+            foreach ($mapping as $fromTarget => $toTarget) {
+                if (!is_string($fromTarget) || $fromTarget === '' || !is_string($toTarget) || $toTarget === '') {
+                    throw new RuntimeException(
+                        "Configuration key [{$key}] must contain rewrite maps with non-empty string source and target agent keys.",
+                    );
+                }
+
+                $normalizedMapping[$fromTarget] = $toTarget;
+            }
+
+            $normalized[$sourceAgentKey] = $normalizedMapping;
+        }
+
+        return $normalized;
+    }
+
+    private function positiveIntConfig(ConfigRepository $config, string $key, int $default): int
+    {
+        $value = $config->get($key, $default);
+
+        return is_int($value) && $value >= 1
+          ? $value
+          : throw new RuntimeException("Configuration key [{$key}] must be an integer >= 1.");
     }
 
     private function nullableStringConfig(ConfigRepository $config, string $key): ?string
