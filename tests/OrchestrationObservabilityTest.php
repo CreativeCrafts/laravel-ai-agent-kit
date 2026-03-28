@@ -22,6 +22,7 @@ use CreativeCrafts\LaravelAiAgentKit\Observability\Events\OrchestrationStarted;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorFailingAgent;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorGreetingAgent;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorInvalidDelegationAgent;
+use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorListOutputAgent;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorRefundAgent;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorSupportAgent;
 use Illuminate\Contracts\Events\Dispatcher;
@@ -75,6 +76,7 @@ beforeEach(function (): void {
       OrchestratorRefundAgent::class,
       OrchestratorSupportAgent::class,
       OrchestratorInvalidDelegationAgent::class,
+      OrchestratorListOutputAgent::class,
     ]);
 });
 
@@ -304,6 +306,52 @@ it('does not emit a false failure event when the completed event listener throws
       ->and($dispatched)->toBeEmpty();
 });
 
+it('completes orchestrations with list-shaped request data without crashing observability', function () {
+    Event::fake([
+      OrchestrationStarted::class,
+      OrchestrationCompleted::class,
+    ]);
+
+    $result = app(AgentOrchestrator::class)->run(
+        new OrchestrationRequest(
+            entryAgent: 'greeting.agent',
+            task: 'Say hello with list payload',
+            input: ['Ada'],
+            metadata: ['trace-a'],
+        ),
+    );
+
+    expect($result->completed())->toBeTrue();
+
+    Event::assertDispatched(OrchestrationStarted::class, function (OrchestrationStarted $event): bool {
+        return $event->inputKeys === []
+          && $event->metadataKeys === [];
+    });
+});
+
+it('completes orchestrations with list-shaped final output without crashing observability', function () {
+    Event::fake([
+      OrchestrationCompleted::class,
+    ]);
+
+    $result = app(AgentOrchestrator::class)->run(
+        new OrchestrationRequest(
+            entryAgent: 'list-output.agent',
+            task: 'Return list output',
+            input: ['Ada'],
+        ),
+    );
+
+    expect($result->completed())
+      ->toBeTrue()
+      ->and($result->finalOutput)
+      ->toBe(['item:Ada', 'item:beta']);
+
+    Event::assertDispatched(OrchestrationCompleted::class, function (OrchestrationCompleted $event): bool {
+        return $event->finalOutputKeys === [];
+    });
+});
+
 it('constructs OrchestrationStarted from request correctly', function () {
     $request = new OrchestrationRequest(
         entryAgent: 'test.agent',
@@ -341,6 +389,23 @@ it('constructs OrchestrationStarted with redactor applied', function () {
       ->and($event->metadataKeys)
       ->toContain('[redacted-key]')
       ->and($event->metadataKeys)->toContain('safe_key');
+});
+
+it('constructs OrchestrationStarted with list-shaped input and metadata gracefully', function () {
+    $event = OrchestrationStarted::fromRequest(
+        'orch-id-3',
+        new OrchestrationRequest(
+            entryAgent: 'test.agent',
+            task: 'Test task',
+            input: ['first', 'second'],
+            metadata: ['meta'],
+        ),
+        app(Redactor::class),
+    );
+
+    expect($event->inputKeys)
+      ->toBe([])
+      ->and($event->metadataKeys)->toBe([]);
 });
 
 it('constructs OrchestrationCompleted from result correctly', function () {
@@ -397,6 +462,23 @@ it('constructs OrchestrationCompleted with redaction applied', function () {
     $event = OrchestrationCompleted::fromResult($result, $redactor);
 
     expect($event->summary)->toBe($redactor->redactText('Summary with secret token'));
+});
+
+it('constructs OrchestrationCompleted with list-shaped final output gracefully', function () {
+    $event = OrchestrationCompleted::fromResult(
+        new OrchestrationResult(
+            orchestrationId: 'orch-3',
+            status: 'completed',
+            finalAgent: 'agent.one',
+            finalExecutionId: 'exec-3',
+            finalOutput: ['first', 'second'],
+            summary: 'Done',
+            trace: [],
+        ),
+        app(Redactor::class),
+    );
+
+    expect($event->finalOutputKeys)->toBe([]);
 });
 
 it('constructs OrchestrationDelegated from trace correctly', function () {
