@@ -593,3 +593,109 @@ it('rejects tool authorizer class values that do not implement the contract', fu
       ],
     ]);
 })->throws(InvalidConfigurationException::class, 'tools.authorizer');
+
+it('accepts provider capability declarations in provider configuration', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'openai-fast' => [
+          'driver' => 'openai',
+          'enabled' => true,
+          'capabilities' => ['text_generation', 'structured_output'],
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'openai-fast',
+      'failover_order' => ['openai-fast'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 1,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+    ]);
+
+    expect(true)->toBeTrue();
+});
+
+it('rejects non-array provider capability declarations', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'openai-fast' => [
+          'driver' => 'openai',
+          'enabled' => true,
+          'capabilities' => 'not_an_array',
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'openai-fast',
+      'failover_order' => ['openai-fast'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 1,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+    ]);
+})->throws(InvalidConfigurationException::class, 'providers.openai-fast.capabilities');
+
+it('rejects empty string capability declarations in provider configuration', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'openai-fast' => [
+          'driver' => 'openai',
+          'enabled' => true,
+          'capabilities' => ['text_generation', ''],
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'openai-fast',
+      'failover_order' => ['openai-fast'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 1,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+    ]);
+})->throws(InvalidConfigurationException::class, 'providers.openai-fast.capabilities.1');
+
+it('rejects duplicate provider capability declarations', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'openai-fast' => [
+          'driver' => 'openai',
+          'enabled' => true,
+          'capabilities' => ['text_generation', 'text_generation'],
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'openai-fast',
+      'failover_order' => ['openai-fast'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 1,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+    ]);
+})->throws(InvalidConfigurationException::class, 'providers.openai-fast.capabilities');

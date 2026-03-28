@@ -5,6 +5,8 @@ declare(strict_types=1);
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\AgentRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\DelegationPolicyEngine;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\AgentProviderProfileSelector;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\ConfigurableDelegationPolicyEngine;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\DelegationPolicyMode;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\Exceptions\InvalidDelegationTargetException;
@@ -13,6 +15,9 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\Exceptions\Orchestration
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationResult;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\SynchronousAgentOrchestrator;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredAgentProviderProfileSelector;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\NoCompatibleAgentProviderProfileException;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorContinueAgent;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorContinueWithoutSummaryAgent;
@@ -29,6 +34,12 @@ use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorSupportAg
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorTransferAgent;
 
 beforeEach(function (): void {
+    config()->set('ai-agent-kit.providers', configuredAgentProviders());
+    config()->set('ai-agent-kit.default_provider', 'openai-greeting');
+    config()->set('ai-agent-kit.failover_order', array_keys(configuredAgentProviders()));
+
+    refreshOrchestratorBindings();
+
     $registry = app(AgentRegistry::class);
     $registry->registerMany([
       OrchestratorGreetingAgent::class,
@@ -47,8 +58,99 @@ beforeEach(function (): void {
     ]);
 });
 
+/**
+ * @return array<string, array<string, mixed>>
+ */
+function configuredAgentProviders(): array
+{
+    return [
+      'openai-greeting' => [
+        'driver' => 'openai',
+        'enabled' => true,
+        'capabilities' => ['text_generation'],
+        'options' => [],
+      ],
+      'openai-refund' => [
+        'driver' => 'openai',
+        'enabled' => true,
+        'capabilities' => ['structured_output'],
+        'options' => [],
+      ],
+      'anthropic-support' => [
+        'driver' => 'anthropic',
+        'enabled' => true,
+        'capabilities' => ['text_generation'],
+        'options' => [],
+      ],
+      'openai-support' => [
+        'driver' => 'openai',
+        'enabled' => true,
+        'capabilities' => ['text_generation'],
+        'options' => [],
+      ],
+      'anthropic-transfer' => [
+        'driver' => 'anthropic',
+        'enabled' => true,
+        'capabilities' => ['text_generation'],
+        'options' => [],
+      ],
+      'openai-continue' => [
+        'driver' => 'openai',
+        'enabled' => true,
+        'capabilities' => ['text_generation'],
+        'options' => [],
+      ],
+      'openai-invalid-delegation' => [
+        'driver' => 'openai',
+        'enabled' => true,
+        'capabilities' => ['text_generation'],
+        'options' => [],
+      ],
+      'openai-loop-a' => [
+        'driver' => 'openai',
+        'enabled' => true,
+        'capabilities' => ['text_generation'],
+        'options' => [],
+      ],
+      'openai-loop-b' => [
+        'driver' => 'openai',
+        'enabled' => true,
+        'capabilities' => ['text_generation'],
+        'options' => [],
+      ],
+      'anthropic-payload-only-delegator' => [
+        'driver' => 'anthropic',
+        'enabled' => true,
+        'capabilities' => ['text_generation'],
+        'options' => [],
+      ],
+      'anthropic-null-note-delegator' => [
+        'driver' => 'anthropic',
+        'enabled' => true,
+        'capabilities' => ['text_generation'],
+        'options' => [],
+      ],
+      'openai-history-probe' => [
+        'driver' => 'openai',
+        'enabled' => true,
+        'capabilities' => ['structured_output'],
+        'options' => [],
+      ],
+      'openai-rewrite-delegation' => [
+        'driver' => 'openai',
+        'enabled' => true,
+        'capabilities' => ['text_generation'],
+        'options' => [],
+      ],
+    ];
+}
+
 function refreshOrchestratorBindings(): void
 {
+    app()->forgetInstance(ConfiguredProviderRegistry::class);
+    app()->forgetInstance(ProviderRegistry::class);
+    app()->forgetInstance(ConfiguredAgentProviderProfileSelector::class);
+    app()->forgetInstance(AgentProviderProfileSelector::class);
     app()->forgetInstance(ConfigurableDelegationPolicyEngine::class);
     app()->forgetInstance(DelegationPolicyEngine::class);
     app()->forgetInstance(SynchronousAgentOrchestrator::class);
@@ -190,12 +292,12 @@ it('respects payload-only handoff history mode and does not leak parent metadata
             entryAgent: 'payload-only-delegator.agent',
             task: 'Validate payload-only metadata scope',
             input: ['probe' => 'payload_only'],
-            conversationId: new ConversationId('conv-payload-only-001'),
             metadata: [
           'sensitive_key' => 'do-not-leak',
           '_orchestrator.internal_marker' => 'internal-only',
           '_orchestrator.history_summary' => 'Parent summary that should not be forwarded in payload-only mode.',
         ],
+            conversationId: new ConversationId('conv-payload-only-001'),
         ),
     );
 
@@ -234,6 +336,7 @@ it('keeps existing orchestrator history summary when delegation note is omitted'
 it('allows dynamically-approved delegation targets from an explicit allowlist', function () {
     $result = (new SynchronousAgentOrchestrator(
         agentRegistry: app(AgentRegistry::class),
+        agentProviderProfileSelector: app(AgentProviderProfileSelector::class),
         delegationPolicyEngine: new ConfigurableDelegationPolicyEngine(
             agentRegistry: app(AgentRegistry::class),
             mode: DelegationPolicyMode::DYNAMIC_WITH_ALLOWLIST,
@@ -278,6 +381,7 @@ it('resolves delegation policy mode and allowlist from package configuration', f
 it('allows delegation to any registered target in dynamic full registry mode', function () {
     $result = (new SynchronousAgentOrchestrator(
         agentRegistry: app(AgentRegistry::class),
+        agentProviderProfileSelector: app(AgentProviderProfileSelector::class),
         delegationPolicyEngine: new ConfigurableDelegationPolicyEngine(
             agentRegistry: app(AgentRegistry::class),
             mode: DelegationPolicyMode::DYNAMIC_FULL_REGISTRY,
@@ -298,6 +402,7 @@ it('allows delegation to any registered target in dynamic full registry mode', f
 it('rewrites delegation targets through the policy engine before executing the delegated agent', function () {
     $result = (new SynchronousAgentOrchestrator(
         agentRegistry: app(AgentRegistry::class),
+        agentProviderProfileSelector: app(AgentProviderProfileSelector::class),
         delegationPolicyEngine: new ConfigurableDelegationPolicyEngine(
             agentRegistry: app(AgentRegistry::class),
             mode: DelegationPolicyMode::STATIC_ONLY,
@@ -323,9 +428,64 @@ it('rewrites delegation targets through the policy engine before executing the d
       ->and($result->trace[0]->metadata['proposed_target_agent'])->toBe('legacy-refund.agent');
 });
 
+it('falls back to the next declared provider profile when the primary profile is disabled', function () {
+    $providers = configuredAgentProviders();
+    $providers['anthropic-support']['enabled'] = false;
+
+    config()->set('ai-agent-kit.providers', $providers);
+    refreshOrchestratorBindings();
+
+    $result = app(AgentOrchestrator::class)->run(
+        new OrchestrationRequest(
+            entryAgent: 'support.agent',
+            task: 'Handle the support workflow with fallback selection',
+            input: ['subscription_id' => 'sub-fallback-001'],
+        ),
+    );
+
+    expect($result->completed())
+      ->toBeTrue()
+      ->and($result->trace[0]->providerProfile)->toBe('openai-support')
+      ->and($result->finalAgent)->toBe('support.agent');
+});
+
+it('throws when no declared provider profile satisfies the agent capability requirements', function () {
+    $providers = configuredAgentProviders();
+    $providers['openai-refund']['capabilities'] = ['text_generation'];
+
+    config()->set('ai-agent-kit.providers', $providers);
+    refreshOrchestratorBindings();
+
+    app(AgentOrchestrator::class)->run(
+        new OrchestrationRequest(
+            entryAgent: 'refund.agent',
+            task: 'Attempt an incompatible provider profile resolution',
+            input: ['subscription_id' => 'sub-incompatible-001'],
+        ),
+    );
+})->throws(NoCompatibleAgentProviderProfileException::class, 'does not have a compatible configured provider profile');
+
+it('supports direct orchestrator construction without an agent provider profile selector', function () {
+    $result = (new SynchronousAgentOrchestrator(
+        agentRegistry: app(AgentRegistry::class),
+    ))->run(
+        new OrchestrationRequest(
+            entryAgent: 'support.agent',
+            task: 'Handle support workflow using legacy constructor behavior',
+            input: ['subscription_id' => 'sub-legacy-constructor-001'],
+        ),
+    );
+
+    expect($result->completed())
+      ->toBeTrue()
+      ->and($result->trace[0]->providerProfile)->toBe('anthropic-support')
+      ->and($result->finalAgent)->toBe('support.agent');
+});
+
 it('throws when an agent delegates to a target that is not allowed by the configured policy engine', function () {
     (new SynchronousAgentOrchestrator(
         agentRegistry: app(AgentRegistry::class),
+        agentProviderProfileSelector: app(AgentProviderProfileSelector::class),
     ))->run(
         new OrchestrationRequest(
             entryAgent: 'invalid-delegation.agent',
@@ -337,6 +497,7 @@ it('throws when an agent delegates to a target that is not allowed by the config
 it('throws when recursive delegation exceeds the configured execution depth', function () {
     (new SynchronousAgentOrchestrator(
         agentRegistry: app(AgentRegistry::class),
+        agentProviderProfileSelector: app(AgentProviderProfileSelector::class),
         maxExecutionDepth: 4,
     ))->run(
         new OrchestrationRequest(
@@ -362,6 +523,7 @@ it('resolves orchestration depth limit from package configuration', function () 
 it('throws when orchestration exceeds the configured execution step limit', function () {
     (new SynchronousAgentOrchestrator(
         agentRegistry: app(AgentRegistry::class),
+        agentProviderProfileSelector: app(AgentProviderProfileSelector::class),
         maxExecutionSteps: 2,
     ))->run(
         new OrchestrationRequest(

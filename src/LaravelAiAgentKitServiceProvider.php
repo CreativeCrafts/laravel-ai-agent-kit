@@ -22,6 +22,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationSummarizer;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\DelegationPolicyEngine;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Prompts\PromptRepository;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\AgentProviderProfileSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
@@ -39,6 +40,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\DelegationPolicyMode;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\SynchronousAgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\LaravelQueuedPipelineDispatcher;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\SynchronousPipelineRunner;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredAgentProviderProfileSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredFailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
@@ -129,6 +131,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 
             return new SynchronousAgentOrchestrator(
                 agentRegistry: $app->make(AgentRegistry::class),
+                agentProviderProfileSelector: $app->make(AgentProviderProfileSelector::class),
                 delegationPolicyEngine: $app->make(DelegationPolicyEngine::class),
                 maxExecutionDepth: $this->positiveIntConfig($config, 'ai-agent-kit.budgets.max_orchestration_depth', 25),
                 maxExecutionSteps: $this->positiveIntConfig($config, 'ai-agent-kit.budgets.max_steps', 50),
@@ -169,6 +172,16 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 
         $this->app->singleton(ProviderSelector::class, function (Application $app): ProviderSelector {
             return $app->make(DefaultProviderSelector::class);
+        });
+
+        $this->app->singleton(ConfiguredAgentProviderProfileSelector::class, function (Application $app): ConfiguredAgentProviderProfileSelector {
+            return new ConfiguredAgentProviderProfileSelector(
+                providerRegistry: $app->make(ProviderRegistry::class),
+            );
+        });
+
+        $this->app->singleton(AgentProviderProfileSelector::class, function (Application $app): AgentProviderProfileSelector {
+            return $app->make(ConfiguredAgentProviderProfileSelector::class);
         });
 
         $this->app->singleton(ConfiguredFailoverProviderSelector::class, function (Application $app): ConfiguredFailoverProviderSelector {
