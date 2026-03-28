@@ -6,9 +6,12 @@ namespace CreativeCrafts\LaravelAiAgentKit\Observability\Events;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\Redactor;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\RunContext;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\Concerns\ExtractsRedactedKeys;
 
 final readonly class PipelineStepStarted
 {
+    use ExtractsRedactedKeys;
+
     /**
      * @param list<string> $stateKeys
      * @param list<string> $metadataKeys
@@ -35,21 +38,4 @@ final readonly class PipelineStepStarted
         );
     }
 
-    /**
-     * @param array<string, mixed> $values
-     * @return list<string>
-     */
-    private static function keys(array $values, ?Redactor $redactor = null): array
-    {
-        if ($redactor instanceof Redactor) {
-            return $redactor->redactKeys($values);
-        }
-
-        return array_values(
-            array_filter(
-                array_keys($values),
-                static fn (string $key): bool => $key !== '',
-            ),
-        );
-    }
 }

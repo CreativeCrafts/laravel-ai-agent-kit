@@ -59,4 +59,9 @@ final readonly class OrchestrationResult
     {
         return $this->status === self::STATUS_COMPLETED;
     }
+
+    public function failed(): bool
+    {
+        return $this->status === self::STATUS_FAILED;
+    }
 }

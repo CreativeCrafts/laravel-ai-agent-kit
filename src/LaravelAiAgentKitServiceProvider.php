@@ -131,10 +131,12 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 
             return new SynchronousAgentOrchestrator(
                 agentRegistry: $app->make(AgentRegistry::class),
-                agentProviderProfileSelector: $app->make(AgentProviderProfileSelector::class),
                 delegationPolicyEngine: $app->make(DelegationPolicyEngine::class),
                 maxExecutionDepth: $this->positiveIntConfig($config, 'ai-agent-kit.budgets.max_orchestration_depth', 25),
                 maxExecutionSteps: $this->positiveIntConfig($config, 'ai-agent-kit.budgets.max_steps', 50),
+                agentProviderProfileSelector: $app->make(AgentProviderProfileSelector::class),
+                events: $app->make(Dispatcher::class),
+                redactor: $app->make(Redactor::class),
             );
         });
 
