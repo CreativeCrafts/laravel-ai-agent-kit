@@ -10,6 +10,7 @@ use CreativeCrafts\LaravelAiAgentKit\Tools\Exceptions\ToolUnauthorizedException;
 use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolAdapter;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
+use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Tools\Request as SdkToolRequest;
 
@@ -94,6 +95,30 @@ it('materializes explicitly configured provider-native tools', function () {
       ->and($tools[0]->city)->toBe('Stockholm')
       ->and($tools[0]->region)->toBe('Stockholm County')
       ->and($tools[0]->country)->toBe('SE');
+});
+
+it('materializes explicitly configured web fetch provider-native tools', function () {
+    config()->set('ai-agent-kit.tools.provider_tools', [
+      'web.fetch' => [
+        'type' => 'web_fetch',
+        'enabled' => true,
+        'max_searches' => 2,
+        'allowed_domains' => ['example.com'],
+      ],
+    ]);
+
+    app()->forgetInstance(SdkToolMaterializer::class);
+
+    /** @var SdkToolMaterializer $materializer */
+    $materializer = app(SdkToolMaterializer::class);
+
+    $tools = $materializer->materialize(['web.fetch']);
+
+    expect($tools)
+      ->toHaveCount(1)
+      ->and($tools[0])->toBeInstanceOf(WebFetch::class)
+      ->and($tools[0]->maxSearches)->toBe(2)
+      ->and($tools[0]->allowedDomains)->toBe(['example.com']);
 });
 
 it('fails fast when a requested tool cannot be materialized', function () {

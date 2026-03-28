@@ -467,6 +467,43 @@ it('validates configured provider-native tool mappings', function () {
     expect(true)->toBeTrue();
 });
 
+it('accepts web fetch provider-native tool mappings', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'null' => [
+          'driver' => 'null',
+          'enabled' => true,
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'null',
+      'failover_order' => ['null'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 1,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+      'tools' => [
+        'provider_tools' => [
+          'web.fetch' => [
+            'type' => 'web_fetch',
+            'enabled' => true,
+            'max_searches' => 2,
+            'allowed_domains' => ['example.com'],
+          ],
+        ],
+      ],
+    ]);
+
+    expect(true)->toBeTrue();
+});
+
 it('rejects provider-native tool mappings with unsupported types', function () {
     /** @var ConfigValidator $validator */
     $validator = app(ConfigValidator::class);
@@ -499,6 +536,40 @@ it('rejects provider-native tool mappings with unsupported types', function () {
       ],
     ]);
 })->throws(InvalidConfigurationException::class, 'tools.provider_tools.web.search.type');
+
+it('rejects invalid web search location configuration without allowed domains', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'null' => [
+          'driver' => 'null',
+          'enabled' => true,
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'null',
+      'failover_order' => ['null'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 1,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+      'tools' => [
+        'provider_tools' => [
+          'web.search' => [
+            'type' => 'web_search',
+            'enabled' => true,
+            'location' => 'Stockholm',
+          ],
+        ],
+      ],
+    ]);
+})->throws(InvalidConfigurationException::class, 'tools.provider_tools.web.search.location');
 
 it('rejects file search provider-native tools without stores', function () {
     /** @var ConfigValidator $validator */

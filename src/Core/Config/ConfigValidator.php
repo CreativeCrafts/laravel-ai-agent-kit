@@ -678,10 +678,10 @@ final readonly class ConfigValidator
                 throw InvalidConfigurationException::invalidValue("tools.provider_tools.{$name}.type", 'Must be a non-empty string.');
             }
 
-            if (!in_array($type, ['web_search', 'file_search'], true)) {
+            if (!in_array($type, ['web_search', 'web_fetch', 'file_search'], true)) {
                 throw InvalidConfigurationException::invalidValue(
                     "tools.provider_tools.{$name}.type",
-                    'Must be one of: web_search, file_search.',
+                    'Must be one of: web_search, web_fetch, file_search.',
                 );
             }
 
@@ -695,6 +695,12 @@ final readonly class ConfigValidator
                 continue;
             }
 
+            if ($type === 'web_fetch') {
+                $this->validateWebFetchTool($name, $tool);
+
+                continue;
+            }
+
             $this->validateFileSearchTool($name, $tool);
         }
     }
@@ -703,6 +709,40 @@ final readonly class ConfigValidator
      * @param array<string, mixed> $tool
      */
     private function validateWebSearchTool(string $name, array $tool): void
+    {
+        $this->validateWebProviderTool($name, $tool);
+
+        if (!array_key_exists('location', $tool)) {
+            return;
+        }
+
+        if (!is_array($tool['location'])) {
+            throw InvalidConfigurationException::invalidType(
+                "tools.provider_tools.{$name}.location",
+                'array',
+            );
+        }
+
+        foreach (['city', 'region', 'country'] as $key) {
+            if (!array_key_exists($key, $tool['location'])) {
+                continue;
+            }
+
+            $value = $tool['location'][$key];
+
+            if (!is_string($value) || $value === '') {
+                throw InvalidConfigurationException::invalidValue(
+                    "tools.provider_tools.{$name}.location.{$key}",
+                    'Must be a non-empty string.',
+                );
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $tool
+     */
+    private function validateWebProviderTool(string $name, array $tool): void
     {
         if (array_key_exists('max_searches', $tool)) {
             $maxSearches = $tool['max_searches'];
@@ -736,32 +776,14 @@ final readonly class ConfigValidator
                 );
             }
         }
+    }
 
-        if (!array_key_exists('location', $tool)) {
-            return;
-        }
-
-        if (!is_array($tool['location'])) {
-            throw InvalidConfigurationException::invalidType(
-                "tools.provider_tools.{$name}.location",
-                'array',
-            );
-        }
-
-        foreach (['city', 'region', 'country'] as $key) {
-            if (!array_key_exists($key, $tool['location'])) {
-                continue;
-            }
-
-            $value = $tool['location'][$key];
-
-            if (!is_string($value) || $value === '') {
-                throw InvalidConfigurationException::invalidValue(
-                    "tools.provider_tools.{$name}.location.{$key}",
-                    'Must be a non-empty string.',
-                );
-            }
-        }
+    /**
+     * @param array<string, mixed> $tool
+     */
+    private function validateWebFetchTool(string $name, array $tool): void
+    {
+        $this->validateWebProviderTool($name, $tool);
     }
 
     /**
