@@ -8,6 +8,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\AgentRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\DelegationPolicyEngine;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\AgentProviderProfileSelector;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\Redactor;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionContext;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionResult;
@@ -15,8 +16,14 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\Exceptions\Orchestration
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\Exceptions\OrchestrationStepLimitExceededException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\Exceptions\UnsupportedAgentExecutionResultException;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\OrchestrationCompleted;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\OrchestrationDelegated;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\OrchestrationFailed;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\OrchestrationStarted;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Throwable;
 
 final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
 {
@@ -46,6 +53,8 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
         private int $maxExecutionDepth = 25,
         private int $maxExecutionSteps = 50,
         private ?AgentProviderProfileSelector $agentProviderProfileSelector = null,
+        private ?Dispatcher $events = null,
+        private ?Redactor $redactor = null,
     ) {
         if ($this->maxExecutionDepth < 1) {
             throw new InvalidArgumentException('SynchronousAgentOrchestrator maxExecutionDepth must be greater than zero.');
@@ -66,19 +75,51 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
             $metadata[self::META_CONVERSATION_ID] = $request->conversationId->toString();
         }
 
-        $outcome = $this->executeAgent(
-            orchestrationId: $orchestrationId,
-            agentKey: $request->entryAgent,
+        $normalizedRequest = new OrchestrationRequest(
+            entryAgent: $request->entryAgent,
             task: $request->task,
-            payload: $request->input,
+            input: $request->input,
             metadata: $metadata,
-            parentExecutionId: null,
-            depth: 1,
-            step: 1,
-            trace: $trace,
+            conversationId: $request->conversationId,
         );
 
-        return new OrchestrationResult(
+        $this->safeDispatch(
+            OrchestrationStarted::fromRequest(
+                orchestrationId: $orchestrationId,
+                request: $normalizedRequest,
+                redactor: $this->redactor,
+            ),
+        );
+
+        try {
+            $outcome = $this->executeAgent(
+                orchestrationId: $orchestrationId,
+                agentKey: $normalizedRequest->entryAgent,
+                task: $normalizedRequest->task,
+                payload: $normalizedRequest->input,
+                metadata: $normalizedRequest->metadata,
+                parentExecutionId: null,
+                depth: 1,
+                step: 1,
+                trace: $trace,
+            );
+        } catch (Throwable $throwable) {
+            $this->safeDispatch(
+                new OrchestrationFailed(
+                    orchestrationId: $orchestrationId,
+                    entryAgent: $normalizedRequest->entryAgent,
+                    task: $normalizedRequest->task,
+                    exceptionClass: $throwable::class,
+                    exceptionMessage: $throwable->getMessage(),
+                    conversationId: $normalizedRequest->conversationId?->toString(),
+                    redactor: $this->redactor,
+                ),
+            );
+
+            throw $throwable;
+        }
+
+        $result = new OrchestrationResult(
             orchestrationId: $orchestrationId,
             status: $outcome['status'],
             finalAgent: $outcome['final_agent'],
@@ -87,6 +128,51 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
             summary: $outcome['summary'],
             trace: $trace,
         );
+
+        if ($result->failed()) {
+            $this->safeDispatch(
+                new OrchestrationFailed(
+                    orchestrationId: $result->orchestrationId,
+                    entryAgent: $normalizedRequest->entryAgent,
+                    task: $normalizedRequest->task,
+                    exceptionClass: null,
+                    exceptionMessage: null,
+                    conversationId: $normalizedRequest->conversationId?->toString(),
+                    failureReason: $result->summary,
+                    status: $result->status,
+                    redactor: $this->redactor,
+                ),
+            );
+        }
+
+        $this->safeDispatch(
+            OrchestrationCompleted::fromResult(
+                result: $result,
+                redactor: $this->redactor,
+            ),
+        );
+
+        return $result;
+    }
+
+    /**
+     * Dispatch an event, silently swallowing any listener exceptions
+     * so the original exception is never masked.
+     */
+    private function safeDispatch(object $event): void
+    {
+        try {
+            $this->dispatch($event);
+        } catch (Throwable) {
+            // Intentionally suppressed – preserving the original exception is paramount.
+        }
+    }
+
+    private function dispatch(object $event): void
+    {
+        if ($this->events instanceof Dispatcher) {
+            $this->events->dispatch($event);
+        }
     }
 
     /**
@@ -378,7 +464,7 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
         $policyDecision = $this->delegationPolicyEngine()->evaluate($definition, $proposal);
         $approvedProposal = $policyDecision->proposal;
 
-        $trace[] = new ExecutionTraceRecord(
+        $delegationTrace = new ExecutionTraceRecord(
             orchestrationId: $orchestrationId,
             executionId: $executionId,
             parentExecutionId: $parentExecutionId,
@@ -396,6 +482,15 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
             'policy_rewritten' => $policyDecision->rewritten,
             'proposed_target_agent' => $policyDecision->originalTargetAgent,
           ],
+        );
+
+        $trace[] = $delegationTrace;
+
+        $this->safeDispatch(
+            OrchestrationDelegated::fromTrace(
+                trace: $delegationTrace,
+                redactor: $this->redactor,
+            ),
         );
 
         $delegatedOutcome = $this->executeAgent(
@@ -460,12 +555,9 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
           ? $metadata
           : [];
 
-        if (!$proposal->handoff->sharesFullHistory()) {
-            $conversationId = $metadata[self::META_CONVERSATION_ID] ?? null;
-
-            if (is_string($conversationId) && $conversationId !== '') {
-                $childMetadata[self::META_CONVERSATION_ID] = $conversationId;
-            }
+        $conversationId = $metadata[self::META_CONVERSATION_ID] ?? null;
+        if (is_string($conversationId) && $conversationId !== '') {
+            $childMetadata[self::META_CONVERSATION_ID] = $conversationId;
         }
 
         if ($proposal->handoff->historyMode === HandoffPayload::HISTORY_PAYLOAD_PLUS_SUMMARY) {
