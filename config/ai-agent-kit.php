@@ -32,14 +32,16 @@ return [
     'null' => [
       'driver' => 'null',
       'enabled' => true,
+      'capabilities' => [],
       'options' => [],
     ],
 
-      // 'openai' => [
+      // 'openai-fast' => [
       //     'driver' => 'openai',
       //     'enabled' => true,
+      //     'capabilities' => ['text_generation', 'structured_output'],
       //     'options' => [
-      //         // e.g. 'api_key' => env('OPENAI_API_KEY'),
+      //         // e.g. 'model' => 'gpt-4o-mini',
       //     ],
       // ],
   ],

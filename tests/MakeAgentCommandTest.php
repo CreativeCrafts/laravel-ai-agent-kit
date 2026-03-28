@@ -7,6 +7,8 @@ use CreativeCrafts\LaravelAiAgentKit\Scaffolding\ProjectInspector;
 use Illuminate\Console\Command as ConsoleCommand;
 
 it('generates an agent scaffold with the expected normalized path namespace and prompt blueprint stub', function () {
+    config()->set('ai-agent-kit.default_provider', 'null');
+
     $context = makeAgentCommandTestContext();
     $generatedPath = makeAgentCommandTestPath('Support\\ReviewAgent');
 
@@ -30,10 +32,32 @@ it('generates an agent scaffold with the expected normalized path namespace and 
       ->and($contents)->toContain('function definition(): AgentDefinition')
       ->and($contents)->toContain('function handle(AgentExecutionContext $context): AgentExecutionResult')
       ->and($contents)->toContain("key: 'support.review'")
+      ->and($contents)->toContain('requiredCapabilities: []')
+      ->and($contents)->toContain("primaryProviderProfile: 'null'")
       ->and($contents)->toContain('public function blueprint(array $variables = []): PromptBlueprint')
       ->and($contents)->toContain("return LaravelAiAgentKit::prompt('support.review')");
 
     makeAgentCommandTestAssertCompiles($generatedPath);
+
+    makeAgentCommandTestCleanup($generatedPath);
+});
+
+it('uses the configured default provider profile in generated agent definitions', function () {
+    config()->set('ai-agent-kit.default_provider', 'openai-support');
+
+    $generatedPath = makeAgentCommandTestPath('ConfiguredProviderAgent');
+
+    makeAgentCommandTestCleanup($generatedPath);
+
+    $this->artisan('ai:make:agent', [
+      'name' => 'ConfiguredProviderAgent',
+    ])->assertSuccessful();
+
+    $contents = file_get_contents($generatedPath);
+
+    expect($contents)->not
+      ->toBeFalse()
+      ->and($contents)->toContain("primaryProviderProfile: 'openai-support'");
 
     makeAgentCommandTestCleanup($generatedPath);
 });

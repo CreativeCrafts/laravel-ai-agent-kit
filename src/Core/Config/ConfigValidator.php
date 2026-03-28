@@ -63,6 +63,7 @@ final readonly class ConfigValidator
             }
 
             $driver = $provider['driver'] ?? null;
+
             if (!is_string($driver) || $driver === '') {
                 throw InvalidConfigurationException::invalidValue("providers.{$name}.driver", 'Must be a non-empty string.');
             }
@@ -74,9 +75,36 @@ final readonly class ConfigValidator
             if (array_key_exists('options', $provider) && !is_array($provider['options'])) {
                 throw InvalidConfigurationException::invalidType("providers.{$name}.options", 'array');
             }
+
+            if (array_key_exists('capabilities', $provider)) {
+                if (!is_array($provider['capabilities'])) {
+                    throw InvalidConfigurationException::invalidType("providers.{$name}.capabilities", 'array');
+                }
+
+                $seenCapabilities = [];
+
+                foreach ($provider['capabilities'] as $index => $capability) {
+                    if (!is_string($capability) || $capability === '') {
+                        throw InvalidConfigurationException::invalidValue(
+                            "providers.{$name}.capabilities.{$index}",
+                            'Must be a non-empty string capability name.',
+                        );
+                    }
+
+                    if (isset($seenCapabilities[$capability])) {
+                        throw InvalidConfigurationException::invalidValue(
+                            "providers.{$name}.capabilities",
+                            "Duplicate capability '{$capability}' is not allowed.",
+                        );
+                    }
+
+                    $seenCapabilities[$capability] = true;
+                }
+            }
         }
 
         $defaultProvider = $config['default_provider'] ?? null;
+
         if (!is_string($defaultProvider) || $defaultProvider === '') {
             throw InvalidConfigurationException::invalidValue('default_provider', 'Must be a non-empty string.');
         }
@@ -96,23 +124,36 @@ final readonly class ConfigValidator
         }
 
         $seen = [];
+
         foreach ($failover as $idx => $providerName) {
             if (!is_string($providerName) || $providerName === '') {
-                throw InvalidConfigurationException::invalidValue("failover_order.{$idx}", 'Must be a non-empty string provider name.');
+                throw InvalidConfigurationException::invalidValue(
+                    "failover_order.{$idx}",
+                    'Must be a non-empty string provider name.',
+                );
             }
 
             if (isset($seen[$providerName])) {
-                throw InvalidConfigurationException::invalidValue('failover_order', "Duplicate provider '{$providerName}' is not allowed.");
+                throw InvalidConfigurationException::invalidValue(
+                    'failover_order',
+                    "Duplicate provider '{$providerName}' is not allowed.",
+                );
             }
 
             $seen[$providerName] = true;
 
             if (!array_key_exists($providerName, $providers)) {
-                throw InvalidConfigurationException::invalidValue('failover_order', "Provider '{$providerName}' is not defined in providers.");
+                throw InvalidConfigurationException::invalidValue(
+                    'failover_order',
+                    "Provider '{$providerName}' is not defined in providers.",
+                );
             }
 
             if (!$this->isProviderEnabled($providers, $providerName)) {
-                throw InvalidConfigurationException::invalidValue('failover_order', "Provider '{$providerName}' is disabled but included in failover_order.");
+                throw InvalidConfigurationException::invalidValue(
+                    'failover_order',
+                    "Provider '{$providerName}' is disabled but included in failover_order.",
+                );
             }
         }
 
@@ -211,6 +252,7 @@ final readonly class ConfigValidator
             }
 
             $value = $config['budgets'][$key];
+
             if (!is_int($value) || $value < 1) {
                 throw InvalidConfigurationException::invalidValue("budgets.{$key}", 'Must be an integer >= 1.');
             }
@@ -279,7 +321,10 @@ final readonly class ConfigValidator
             if (!in_array($mode, array_map(static fn (DelegationPolicyMode $candidate): string => $candidate->value, DelegationPolicyMode::cases()), true)) {
                 throw InvalidConfigurationException::invalidValue(
                     'orchestration.delegation_policy.mode',
-                    sprintf('Must be one of [%s].', implode(', ', array_map(static fn (DelegationPolicyMode $candidate): string => $candidate->value, DelegationPolicyMode::cases()))),
+                    sprintf(
+                        'Must be one of [%s].',
+                        implode(', ', array_map(static fn (DelegationPolicyMode $candidate): string => $candidate->value, DelegationPolicyMode::cases())),
+                    ),
                 );
             }
         }
@@ -361,6 +406,7 @@ final readonly class ConfigValidator
                     }
 
                     $baseDelay = $backoff['base_delay_ms'] ?? 0;
+
                     if (is_int($baseDelay) && $maxDelay < $baseDelay) {
                         throw InvalidConfigurationException::invalidValue(
                             'resilience.retry.backoff.max_delay_ms',
@@ -564,7 +610,6 @@ final readonly class ConfigValidator
         }
     }
 
-
     /**
      * @param array<string, mixed> $config
      */
@@ -584,16 +629,21 @@ final readonly class ConfigValidator
             $authorizer = $tools['authorizer'];
 
             if (!is_string($authorizer) || $authorizer === '') {
-                throw InvalidConfigurationException::invalidValue(
-                    'tools.authorizer',
-                    'Must be a non-empty class-string implementing the ToolAuthorizer contract.',
-                );
+                throw InvalidConfigurationException::invalidValue('tools.authorizer', 'Must be a non-empty class-string.');
             }
 
-            if (!class_exists($authorizer) || !is_a($authorizer, ToolAuthorizer::class, true)) {
+            if (!class_exists($authorizer)) {
+                throw InvalidConfigurationException::invalidValue('tools.authorizer', 'Configured tool authorizer class does not exist.');
+            }
+
+            if (!is_a($authorizer, ToolAuthorizer::class, true)) {
                 throw InvalidConfigurationException::invalidValue(
                     'tools.authorizer',
-                    'Must reference a class implementing the ToolAuthorizer contract.',
+                    sprintf(
+                        'Configured tool authorizer [%s] must implement [%s].',
+                        $authorizer,
+                        ToolAuthorizer::class,
+                    ),
                 );
             }
         }
@@ -606,100 +656,153 @@ final readonly class ConfigValidator
             throw InvalidConfigurationException::invalidType('tools.provider_tools', 'array');
         }
 
-        foreach ($tools['provider_tools'] as $alias => $definition) {
-            if (!is_string($alias) || $alias === '') {
-                throw InvalidConfigurationException::invalidValue('tools.provider_tools', 'Provider tool aliases must be non-empty strings.');
+        foreach ($tools['provider_tools'] as $name => $tool) {
+            if (!is_string($name) || $name === '') {
+                throw InvalidConfigurationException::invalidValue('tools.provider_tools', 'Tool aliases must be non-empty strings.');
             }
 
-            if (!is_array($definition)) {
-                throw InvalidConfigurationException::invalidType("tools.provider_tools.{$alias}", 'array');
+            if (!is_array($tool)) {
+                throw InvalidConfigurationException::invalidType("tools.provider_tools.{$name}", 'array');
             }
 
-            $type = $definition['type'] ?? null;
+            /** @var array<string, mixed> $tool */
+            $tool = array_filter(
+                $tool,
+                static fn (int|string $key): bool => is_string($key),
+                ARRAY_FILTER_USE_KEY,
+            );
 
-            if (!is_string($type) || !in_array($type, ['web_search', 'web_fetch', 'file_search'], true)) {
+            $type = $tool['type'] ?? null;
+
+            if (!is_string($type) || $type === '') {
+                throw InvalidConfigurationException::invalidValue("tools.provider_tools.{$name}.type", 'Must be a non-empty string.');
+            }
+
+            if (!in_array($type, ['web_search', 'file_search'], true)) {
                 throw InvalidConfigurationException::invalidValue(
-                    "tools.provider_tools.{$alias}.type",
-                    'Must be one of: web_search, web_fetch, file_search.',
+                    "tools.provider_tools.{$name}.type",
+                    'Must be one of: web_search, file_search.',
                 );
             }
 
-            if (array_key_exists('enabled', $definition) && !is_bool($definition['enabled'])) {
-                throw InvalidConfigurationException::invalidType("tools.provider_tools.{$alias}.enabled", 'bool');
+            if (array_key_exists('enabled', $tool) && !is_bool($tool['enabled'])) {
+                throw InvalidConfigurationException::invalidType("tools.provider_tools.{$name}.enabled", 'bool');
             }
 
-            if (array_key_exists('max_searches', $definition)) {
-                $maxSearches = $definition['max_searches'];
+            if ($type === 'web_search') {
+                $this->validateWebSearchTool($name, $tool);
 
-                if (!is_int($maxSearches) || $maxSearches < 1) {
-                    throw InvalidConfigurationException::invalidValue(
-                        "tools.provider_tools.{$alias}.max_searches",
-                        'Must be an integer >= 1.',
-                    );
-                }
+                continue;
             }
 
-            if (array_key_exists('allowed_domains', $definition)) {
-                $allowedDomains = $definition['allowed_domains'];
+            $this->validateFileSearchTool($name, $tool);
+        }
+    }
 
-                if (!is_array($allowedDomains)) {
-                    throw InvalidConfigurationException::invalidType("tools.provider_tools.{$alias}.allowed_domains", 'array');
-                }
+    /**
+     * @param array<string, mixed> $tool
+     */
+    private function validateWebSearchTool(string $name, array $tool): void
+    {
+        if (array_key_exists('max_searches', $tool)) {
+            $maxSearches = $tool['max_searches'];
 
-                foreach ($allowedDomains as $index => $domain) {
-                    if (!is_string($domain) || $domain === '') {
-                        throw InvalidConfigurationException::invalidValue(
-                            "tools.provider_tools.{$alias}.allowed_domains.{$index}",
-                            'Must be a non-empty string.',
-                        );
-                    }
-                }
+            if (!is_int($maxSearches) || $maxSearches < 1) {
+                throw InvalidConfigurationException::invalidValue(
+                    "tools.provider_tools.{$name}.max_searches",
+                    'Must be an integer >= 1.',
+                );
+            }
+        }
+
+        if (!array_key_exists('allowed_domains', $tool)) {
+            return;
+        }
+
+        $domains = $tool['allowed_domains'];
+
+        if (!is_array($domains)) {
+            throw InvalidConfigurationException::invalidType(
+                "tools.provider_tools.{$name}.allowed_domains",
+                'array',
+            );
+        }
+
+        foreach ($domains as $idx => $domain) {
+            if (!is_string($domain) || $domain === '') {
+                throw InvalidConfigurationException::invalidValue(
+                    "tools.provider_tools.{$name}.allowed_domains.{$idx}",
+                    'Must be a non-empty string domain.',
+                );
+            }
+        }
+
+        if (!array_key_exists('location', $tool)) {
+            return;
+        }
+
+        if (!is_array($tool['location'])) {
+            throw InvalidConfigurationException::invalidType(
+                "tools.provider_tools.{$name}.location",
+                'array',
+            );
+        }
+
+        foreach (['city', 'region', 'country'] as $key) {
+            if (!array_key_exists($key, $tool['location'])) {
+                continue;
             }
 
-            if ($type === 'file_search') {
-                $stores = $definition['stores'] ?? null;
+            $value = $tool['location'][$key];
 
-                if (!is_array($stores) || $stores === []) {
-                    throw InvalidConfigurationException::invalidValue(
-                        "tools.provider_tools.{$alias}.stores",
-                        'Must contain at least one store identifier for file_search tools.',
-                    );
-                }
-
-                foreach ($stores as $index => $store) {
-                    if (!is_string($store) || $store === '') {
-                        throw InvalidConfigurationException::invalidValue(
-                            "tools.provider_tools.{$alias}.stores.{$index}",
-                            'Must be a non-empty string.',
-                        );
-                    }
-                }
+            if (!is_string($value) || $value === '') {
+                throw InvalidConfigurationException::invalidValue(
+                    "tools.provider_tools.{$name}.location.{$key}",
+                    'Must be a non-empty string.',
+                );
             }
+        }
+    }
 
-            if (array_key_exists('filters', $definition) && !is_array($definition['filters'])) {
-                throw InvalidConfigurationException::invalidType("tools.provider_tools.{$alias}.filters", 'array');
+    /**
+     * @param array<string, mixed> $tool
+     */
+    private function validateFileSearchTool(string $name, array $tool): void
+    {
+        if (!array_key_exists('stores', $tool)) {
+            throw InvalidConfigurationException::missingKey("tools.provider_tools.{$name}.stores");
+        }
+
+        $stores = $tool['stores'];
+
+        if (!is_array($stores)) {
+            throw InvalidConfigurationException::invalidType(
+                "tools.provider_tools.{$name}.stores",
+                'array',
+            );
+        }
+
+        if ($stores === []) {
+            throw InvalidConfigurationException::invalidValue(
+                "tools.provider_tools.{$name}.stores",
+                'Must contain at least one store identifier.',
+            );
+        }
+
+        foreach ($stores as $idx => $store) {
+            if (!is_string($store) || $store === '') {
+                throw InvalidConfigurationException::invalidValue(
+                    "tools.provider_tools.{$name}.stores.{$idx}",
+                    'Must be a non-empty string store identifier.',
+                );
             }
+        }
 
-            if (array_key_exists('location', $definition)) {
-                if (!is_array($definition['location'])) {
-                    throw InvalidConfigurationException::invalidType("tools.provider_tools.{$alias}.location", 'array');
-                }
-
-                foreach (['city', 'region', 'country'] as $key) {
-                    if (!array_key_exists($key, $definition['location'])) {
-                        continue;
-                    }
-
-                    $value = $definition['location'][$key];
-
-                    if ($value !== null && (!is_string($value) || $value === '')) {
-                        throw InvalidConfigurationException::invalidType(
-                            "tools.provider_tools.{$alias}.location.{$key}",
-                            'string|null',
-                        );
-                    }
-                }
-            }
+        if (array_key_exists('filters', $tool) && !is_array($tool['filters'])) {
+            throw InvalidConfigurationException::invalidType(
+                "tools.provider_tools.{$name}.filters",
+                'array',
+            );
         }
     }
 
@@ -716,12 +819,14 @@ final readonly class ConfigValidator
             throw InvalidConfigurationException::invalidType('summarization', 'array');
         }
 
-        if (array_key_exists('enabled', $config['summarization']) && !is_bool($config['summarization']['enabled'])) {
+        $summarization = $config['summarization'];
+
+        if (array_key_exists('enabled', $summarization) && !is_bool($summarization['enabled'])) {
             throw InvalidConfigurationException::invalidType('summarization.enabled', 'bool');
         }
 
-        if (array_key_exists('trigger_message_count', $config['summarization'])) {
-            $triggerMessageCount = $config['summarization']['trigger_message_count'];
+        if (array_key_exists('trigger_message_count', $summarization)) {
+            $triggerMessageCount = $summarization['trigger_message_count'];
 
             if (!is_int($triggerMessageCount) || $triggerMessageCount < 1) {
                 throw InvalidConfigurationException::invalidValue('summarization.trigger_message_count', 'Must be an integer >= 1.');

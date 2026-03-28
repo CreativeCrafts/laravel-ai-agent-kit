@@ -8,12 +8,17 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderNotDefinedException;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 
-final readonly class ConfiguredProviderRegistry implements ProviderRegistry
+final class ConfiguredProviderRegistry implements ProviderRegistry
 {
     public function __construct(
-        private ConfigRepository $config,
-        private string $configKey = 'ai-agent-kit.providers',
+        private readonly ConfigRepository $config,
+        private readonly string $configKey = 'ai-agent-kit.providers',
     ) {
+    }
+
+    public function has(string $providerName): bool
+    {
+        return array_key_exists($providerName, $this->all());
     }
 
     /**
@@ -23,29 +28,34 @@ final readonly class ConfiguredProviderRegistry implements ProviderRegistry
     {
         $providers = $this->config->get($this->configKey, []);
 
-        if (! is_array($providers)) {
+        if (!is_array($providers)) {
             return [];
         }
 
         $definitions = [];
 
         foreach ($providers as $name => $provider) {
-            if (! is_string($name)) {
+            if (!is_string($name)) {
                 continue;
             }
-            if (! is_array($provider)) {
+
+            if (!is_array($provider)) {
                 continue;
             }
+
             $driver = $provider['driver'] ?? null;
-            if (! is_string($driver)) {
+
+            if (!is_string($driver)) {
                 continue;
             }
+
             if ($driver === '') {
                 continue;
             }
 
             $enabled = $provider['enabled'] ?? true;
             $options = $provider['options'] ?? [];
+            $capabilities = $provider['capabilities'] ?? [];
 
             $normalizedOptions = [];
 
@@ -57,20 +67,26 @@ final readonly class ConfiguredProviderRegistry implements ProviderRegistry
                 }
             }
 
+            $normalizedCapabilities = [];
+
+            if (is_array($capabilities)) {
+                foreach ($capabilities as $capability) {
+                    if (is_string($capability) && $capability !== '' && !in_array($capability, $normalizedCapabilities, true)) {
+                        $normalizedCapabilities[] = $capability;
+                    }
+                }
+            }
+
             $definitions[$name] = new ProviderDefinition(
                 name: $name,
                 driver: $driver,
                 enabled: is_bool($enabled) && $enabled,
                 options: $normalizedOptions,
+                capabilities: $normalizedCapabilities,
             );
         }
 
         return $definitions;
-    }
-
-    public function has(string $providerName): bool
-    {
-        return array_key_exists($providerName, $this->all());
     }
 
     public function get(string $providerName): ProviderDefinition

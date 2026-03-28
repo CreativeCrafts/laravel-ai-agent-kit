@@ -7,6 +7,7 @@ namespace CreativeCrafts\LaravelAiAgentKit\Core\Orchestration;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\AgentRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\DelegationPolicyEngine;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\AgentProviderProfileSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionContext;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionResult;
@@ -44,6 +45,7 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
         private ?DelegationPolicyEngine $delegationPolicyEngine = null,
         private int $maxExecutionDepth = 25,
         private int $maxExecutionSteps = 50,
+        private ?AgentProviderProfileSelector $agentProviderProfileSelector = null,
     ) {
         if ($this->maxExecutionDepth < 1) {
             throw new InvalidArgumentException('SynchronousAgentOrchestrator maxExecutionDepth must be greater than zero.');
@@ -115,6 +117,7 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
 
         $agent = $this->agentRegistry->get($agentKey);
         $definition = $agent->definition();
+        $providerProfile = $this->resolveProviderProfile($definition);
         $executionId = (string)Str::uuid();
 
         $result = $agent->handle(
@@ -123,7 +126,7 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
                 executionId: $executionId,
                 parentExecutionId: $parentExecutionId,
                 agent: $definition,
-                providerProfile: $definition->primaryProviderProfile,
+                providerProfile: $providerProfile,
                 task: $task,
                 payload: $payload,
                 metadata: $metadata,
@@ -138,7 +141,7 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
                 parentExecutionId: $parentExecutionId,
                 task: $task,
                 definitionKey: $definition->key,
-                providerProfile: $definition->primaryProviderProfile,
+                providerProfile: $providerProfile,
                 executionId: $executionId,
                 step: $step,
                 result: $result,
@@ -153,7 +156,7 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
                 depth: $depth,
                 step: $step,
                 definitionKey: $definition->key,
-                providerProfile: $definition->primaryProviderProfile,
+                providerProfile: $providerProfile,
                 executionId: $executionId,
                 result: $result,
                 trace: $trace,
@@ -167,7 +170,7 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
                 depth: $depth,
                 step: $step,
                 definition: $definition,
-                providerProfile: $definition->primaryProviderProfile,
+                providerProfile: $providerProfile,
                 executionId: $executionId,
                 result: $result,
                 trace: $trace,
@@ -197,6 +200,17 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
                 maxSteps: $this->maxExecutionSteps,
             );
         }
+    }
+
+    private function resolveProviderProfile(AgentDefinition $definition): string
+    {
+        if (!$this->agentProviderProfileSelector instanceof AgentProviderProfileSelector) {
+            return $definition->primaryProviderProfile;
+        }
+
+        return $this->agentProviderProfileSelector
+          ->selectForAgent($definition)
+          ->name;
     }
 
     /**
@@ -446,6 +460,14 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
           ? $metadata
           : [];
 
+        if (!$proposal->handoff->sharesFullHistory()) {
+            $conversationId = $metadata[self::META_CONVERSATION_ID] ?? null;
+
+            if (is_string($conversationId) && $conversationId !== '') {
+                $childMetadata[self::META_CONVERSATION_ID] = $conversationId;
+            }
+        }
+
         if ($proposal->handoff->historyMode === HandoffPayload::HISTORY_PAYLOAD_PLUS_SUMMARY) {
             $existingSummary = $this->historySummary($metadata);
 
@@ -456,12 +478,6 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
 
         if ($proposal->handoff->note !== null) {
             $childMetadata[self::META_HISTORY_SUMMARY] = $proposal->handoff->note;
-        }
-
-        $conversationId = $metadata[self::META_CONVERSATION_ID] ?? null;
-
-        if (is_string($conversationId) && $conversationId !== '') {
-            $childMetadata[self::META_CONVERSATION_ID] = $conversationId;
         }
 
         $childMetadata[self::META_DELEGATED_BY_AGENT] = $parentAgentKey;

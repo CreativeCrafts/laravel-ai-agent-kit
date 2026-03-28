@@ -154,6 +154,11 @@ final class MakeAgentCommand extends Command
         $promptName = $this->promptNameFromRelativeClass($relativeClass, $className);
         $agentKey = $promptName === '' ? Str::of($className)->snake('.')->toString() : $promptName;
         $displayName = Str::headline(Str::of($className)->replace('Agent', '')->toString());
+        $defaultProviderProfile = config('ai-agent-kit.default_provider', 'null');
+
+        if (!is_string($defaultProviderProfile) || $defaultProviderProfile === '') {
+            $defaultProviderProfile = 'null';
+        }
 
         $stub = <<<'PHP'
             <?php
@@ -179,8 +184,8 @@ final class MakeAgentCommand extends Command
                     return new AgentDefinition(
                         key: '{{ agentKey }}',
                         displayName: '{{ displayName }}',
-                        requiredCapabilities: ['text_generation'],
-                        primaryProviderProfile: 'default',
+                        requiredCapabilities: [],
+                        primaryProviderProfile: '{{ primaryProviderProfile }}',
                     );
                 }
             
@@ -211,8 +216,8 @@ final class MakeAgentCommand extends Command
             PHP;
 
         return str_replace(
-            ['{{ namespace }}', '{{ class }}', '{{ prompt }}', '{{ agentKey }}', '{{ displayName }}'],
-            [$namespace, $className, $promptName, $agentKey, $displayName],
+            ['{{ namespace }}', '{{ class }}', '{{ prompt }}', '{{ agentKey }}', '{{ displayName }}', '{{ primaryProviderProfile }}'],
+            [$namespace, $className, $promptName, $agentKey, $displayName, $defaultProviderProfile],
             $stub,
         );
     }
