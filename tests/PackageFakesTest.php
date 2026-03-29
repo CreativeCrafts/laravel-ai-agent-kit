@@ -3,11 +3,14 @@
 declare(strict_types=1);
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreInterface;
+use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationResult;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ProviderDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
@@ -16,6 +19,7 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessage;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessageRole;
 use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
+use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeProviderPolicy;
@@ -171,4 +175,61 @@ it('provides a fake vector store with deterministic search delete and failure ho
 
     expect(fn () => $fake->search('support', new VectorSearchQuery(embedding: [1.0], limit: 1)))
       ->toThrow(VectorOperationException::class, 'search');
+});
+
+it('provides a fake agent orchestrator that can model delegation and ownership transfer deterministically', function () {
+    $fake = (new FakeAgentOrchestrator())
+      ->queueDelegationFlowResult(
+          sourceAgent: 'support.agent',
+          targetAgent: 'refund.agent',
+          handoffSummary: 'Collect refund context and return the resolution summary.',
+          finalOutput: [
+          'workflow' => 'support_refund',
+          'delegated_agent' => 'refund.agent',
+        ],
+      )
+      ->queueTransferredResult(
+          sourceAgent: 'triage.agent',
+          targetAgent: 'specialist.agent',
+          handoffSummary: 'Transfer final ownership to the specialist.',
+          finalOutput: [
+          'owner' => 'specialist.agent',
+        ],
+      );
+
+    app()->instance(AgentOrchestrator::class, $fake);
+
+    $delegated = app(AgentOrchestrator::class)->run(
+        new OrchestrationRequest(
+            entryAgent: 'support.agent',
+            task: 'Handle a refund request',
+            input: ['subscription_id' => 'sub-001'],
+        ),
+    );
+
+    $transferred = app(AgentOrchestrator::class)->run(
+        new OrchestrationRequest(
+            entryAgent: 'triage.agent',
+            task: 'Escalate to the specialist',
+            input: ['case_id' => 'case-001'],
+        ),
+    );
+
+    expect($delegated)
+      ->toBeInstanceOf(OrchestrationResult::class)
+      ->and($delegated->finalAgent)->toBe('support.agent')
+      ->and($delegated->trace)->toHaveCount(3)
+      ->and($delegated->trace[0]->summary)->toBe('Collect refund context and return the resolution summary.')
+      ->and($delegated->trace[1]->parentExecutionId)->toBe($delegated->trace[0]->executionId)
+      ->and($delegated->trace[2]->parentExecutionId)->toBe($delegated->trace[1]->executionId)
+      ->and($transferred)
+      ->toBeInstanceOf(OrchestrationResult::class)
+      ->and($transferred->finalAgent)->toBe('specialist.agent')
+      ->and($transferred->trace)->toHaveCount(2)
+      ->and($transferred->trace[0]->targetAgent)->toBe('specialist.agent')
+      ->and($transferred->trace[1]->parentExecutionId)->toBe($transferred->trace[0]->executionId)
+      ->and($fake)
+      ->toHaveOrchestrationExecutions(2)
+      ->and($fake->lastRequest()?->task)
+      ->toBe('Escalate to the specialist');
 });

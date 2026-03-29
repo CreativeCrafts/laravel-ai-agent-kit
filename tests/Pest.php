@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
+use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationResult;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Assertions\PackageAssertions;
+use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeProviderPolicy;
@@ -89,6 +91,66 @@ expect()->extend('toHaveRecordedVectorDeletion', function (string $namespace, ar
     }
 
     PackageAssertions::assertVectorDeletionRecorded($this->value, $namespace, $documentIds);
+
+    return $this;
+});
+
+expect()->extend('toHaveOrchestrationExecutions', function (int $expectedCount) {
+    if (!$this->value instanceof FakeAgentOrchestrator) {
+        Assert::fail('toHaveOrchestrationExecutions() expects a FakeAgentOrchestrator instance.');
+    }
+
+    PackageAssertions::assertOrchestrationExecutedTimes($this->value, $expectedCount);
+
+    return $this;
+});
+
+expect()->extend('toBeCompletedOrchestration', function (?string $finalAgent = null) {
+    if (!$this->value instanceof OrchestrationResult) {
+        Assert::fail('toBeCompletedOrchestration() expects an OrchestrationResult instance.');
+    }
+
+    PackageAssertions::assertOrchestrationCompleted($this->value, $finalAgent);
+
+    return $this;
+});
+
+expect()->extend('toHaveExecutionTree', function (array $expectedTree) {
+    if (!$this->value instanceof OrchestrationResult) {
+        Assert::fail('toHaveExecutionTree() expects an OrchestrationResult instance.');
+    }
+
+    PackageAssertions::assertExecutionTree($this->value, $expectedTree);
+
+    return $this;
+});
+
+expect()->extend('toHaveDelegatedTo', function (string $sourceAgent, string $targetAgent) {
+    if (!$this->value instanceof OrchestrationResult) {
+        Assert::fail('toHaveDelegatedTo() expects an OrchestrationResult instance.');
+    }
+
+    PackageAssertions::assertDelegationOccurred($this->value, $sourceAgent, $targetAgent);
+
+    return $this;
+});
+
+expect()->extend('toHaveTransferredControlTo', function (string $targetAgent) {
+    if (!$this->value instanceof OrchestrationResult) {
+        Assert::fail('toHaveTransferredControlTo() expects an OrchestrationResult instance.');
+    }
+
+    PackageAssertions::assertOwnershipTransferred($this->value, $targetAgent);
+
+    return $this;
+});
+
+expect()->extend('toHaveHandoffSummary', function (string $sourceAgent, string $expectedSummary) {
+    if (!$this->value instanceof OrchestrationResult) {
+        Assert::fail('toHaveHandoffSummary() expects an OrchestrationResult instance.');
+    }
+
+    PackageAssertions::assertHandoffSummary($this->value, $sourceAgent, $expectedSummary);
 
     return $this;
 });

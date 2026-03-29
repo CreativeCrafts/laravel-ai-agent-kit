@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ProviderDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
@@ -11,6 +12,7 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessage;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessageRole;
 use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Assertions\PackageAssertions;
+use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeProviderPolicy;
@@ -144,4 +146,109 @@ it('provides vector assertion helpers for stored documents search recording and 
 
     expect($fake)
       ->toHaveRecordedVectorDeletion('support', ['doc-assertion-001']);
+});
+
+it('provides orchestration assertion helpers for deterministic delegation and ownership transfer expectations', function () {
+    $fake = (new FakeAgentOrchestrator())
+      ->queueDelegationFlowResult(
+          sourceAgent: 'support.agent',
+          targetAgent: 'refund.agent',
+          handoffSummary: 'Collect refund context and return the resolution summary.',
+          finalOutput: [
+          'workflow' => 'support_refund',
+          'delegated_agent' => 'refund.agent',
+        ],
+      )
+      ->queueTransferredResult(
+          sourceAgent: 'triage.agent',
+          targetAgent: 'specialist.agent',
+          handoffSummary: 'Transfer final ownership to the specialist.',
+          finalOutput: [
+          'owner' => 'specialist.agent',
+        ],
+      );
+
+    $delegated = $fake->run(
+        new OrchestrationRequest(
+            entryAgent: 'support.agent',
+            task: 'Handle the support refund workflow',
+            input: ['subscription_id' => 'sub-123'],
+        ),
+    );
+
+    $transferred = $fake->run(
+        new OrchestrationRequest(
+            entryAgent: 'triage.agent',
+            task: 'Escalate ownership to the specialist',
+            input: ['case_id' => 'case-123'],
+        ),
+    );
+
+    PackageAssertions::assertOrchestrationExecutedTimes($fake, 2);
+    PackageAssertions::assertLastOrchestrationRequest($fake, function (OrchestrationRequest $request): void {
+        expect($request->entryAgent)
+          ->toBe('triage.agent')
+          ->and($request->task)->toBe('Escalate ownership to the specialist');
+    });
+
+    PackageAssertions::assertOrchestrationCompleted($delegated, 'support.agent');
+    PackageAssertions::assertDelegationOccurred($delegated, 'support.agent', 'refund.agent');
+    PackageAssertions::assertHandoffSummary($delegated, 'support.agent', 'Collect refund context and return the resolution summary.');
+    PackageAssertions::assertExecutionTree($delegated, [
+      [
+        'agent' => 'support.agent',
+        'result_kind' => 'delegate',
+        'parent_index' => null,
+        'target' => 'refund.agent',
+        'summary' => 'Collect refund context and return the resolution summary.',
+      ],
+      [
+        'agent' => 'refund.agent',
+        'result_kind' => 'complete',
+        'parent_index' => 0,
+        'summary' => 'Delegated agent [refund.agent] completed the handoff task.',
+      ],
+      [
+        'agent' => 'support.agent',
+        'result_kind' => 'complete',
+        'parent_index' => 1,
+        'summary' => 'Source agent [support.agent] resumed after delegation.',
+      ],
+    ]);
+
+    PackageAssertions::assertOrchestrationCompleted($transferred, 'specialist.agent');
+    PackageAssertions::assertDelegationOccurred($transferred, 'triage.agent', 'specialist.agent');
+    PackageAssertions::assertOwnershipTransferred($transferred, 'specialist.agent');
+
+    expect($fake)
+      ->toHaveOrchestrationExecutions(2)
+      ->and($delegated)
+      ->toBeCompletedOrchestration('support.agent')
+      ->toHaveDelegatedTo('support.agent', 'refund.agent')
+      ->toHaveHandoffSummary('support.agent', 'Collect refund context and return the resolution summary.')
+      ->toHaveExecutionTree([
+        [
+          'agent' => 'support.agent',
+          'result_kind' => 'delegate',
+          'parent_index' => null,
+          'target' => 'refund.agent',
+          'summary' => 'Collect refund context and return the resolution summary.',
+        ],
+        [
+          'agent' => 'refund.agent',
+          'result_kind' => 'complete',
+          'parent_index' => 0,
+          'summary' => 'Delegated agent [refund.agent] completed the handoff task.',
+        ],
+        [
+          'agent' => 'support.agent',
+          'result_kind' => 'complete',
+          'parent_index' => 1,
+          'summary' => 'Source agent [support.agent] resumed after delegation.',
+        ],
+      ])
+      ->and($transferred)
+      ->toBeCompletedOrchestration('specialist.agent')
+      ->toHaveDelegatedTo('triage.agent', 'specialist.agent')
+      ->toHaveTransferredControlTo('specialist.agent');
 });

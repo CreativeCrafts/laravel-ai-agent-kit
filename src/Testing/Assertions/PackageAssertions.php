@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Testing\Assertions;
 
+use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\ExecutionTraceRecord;
+use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationResult;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Memory\Conversation;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
+use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeProviderPolicy;
@@ -159,6 +163,160 @@ final class PackageAssertions
           ],
             $lastDeletion,
             sprintf('Expected fake vector store to record a deletion for namespace [%s].', $namespace),
+        );
+    }
+
+    public static function assertOrchestrationExecutedTimes(FakeAgentOrchestrator $fake, int $expectedCount): void
+    {
+        Assert::assertCount(
+            $expectedCount,
+            $fake->requests(),
+            sprintf('Expected fake orchestrator to execute %d time(s).', $expectedCount),
+        );
+    }
+
+    /**
+     * @param callable(OrchestrationRequest): void $assertion
+     */
+    public static function assertLastOrchestrationRequest(FakeAgentOrchestrator $fake, callable $assertion): void
+    {
+        $request = $fake->lastRequest();
+
+        Assert::assertNotNull($request, 'Expected fake orchestrator to have a last orchestration request.');
+
+        $assertion($request);
+    }
+
+    public static function assertOrchestrationCompleted(OrchestrationResult $result, ?string $finalAgent = null): void
+    {
+        Assert::assertTrue($result->completed(), 'Expected orchestration result to be completed.');
+
+        if ($finalAgent !== null) {
+            Assert::assertSame(
+                $finalAgent,
+                $result->finalAgent,
+                sprintf('Expected orchestration result final agent to be [%s].', $finalAgent),
+            );
+        }
+    }
+
+    public static function assertDelegationOccurred(OrchestrationResult $result, string $sourceAgent, string $targetAgent): ExecutionTraceRecord
+    {
+        foreach ($result->trace as $record) {
+            if (
+              $record->agentKey === $sourceAgent
+              && $record->resultKind === 'delegate'
+              && $record->targetAgent === $targetAgent
+            ) {
+                return $record;
+            }
+        }
+
+        Assert::fail(
+            sprintf(
+                'Expected orchestration trace to contain a delegation from [%s] to [%s].',
+                $sourceAgent,
+                $targetAgent,
+            ),
+        );
+    }
+
+    public static function assertOwnershipTransferred(OrchestrationResult $result, string $targetAgent): void
+    {
+        Assert::assertSame(
+            $targetAgent,
+            $result->finalAgent,
+            sprintf('Expected orchestration result final owner to be [%s].', $targetAgent),
+        );
+
+        $lastTrace = $result->trace[array_key_last($result->trace)] ?? null;
+
+        Assert::assertNotNull($lastTrace, 'Expected orchestration trace to contain at least one record.');
+        Assert::assertSame(
+            $targetAgent,
+            $lastTrace->agentKey,
+            sprintf('Expected the last orchestration trace record to belong to [%s].', $targetAgent),
+        );
+    }
+
+    /**
+     * @param list<array{
+     *   agent:string,
+     *   result_kind:string,
+     *   parent_index:int|null,
+     *   target?:string|null,
+     *   summary?:string|null
+     * }> $expectedTree
+     */
+    public static function assertExecutionTree(OrchestrationResult $result, array $expectedTree): void
+    {
+        Assert::assertCount(
+            count($expectedTree),
+            $result->trace,
+            sprintf('Expected orchestration trace to contain %d record(s).', count($expectedTree)),
+        );
+
+        foreach ($expectedTree as $index => $expectedNode) {
+            $record = $result->trace[$index] ?? null;
+
+            Assert::assertNotNull($record, sprintf('Expected orchestration trace record at index [%d].', $index));
+            Assert::assertSame($expectedNode['agent'], $record->agentKey, sprintf('Unexpected agent at trace index [%d].', $index));
+            Assert::assertSame($expectedNode['result_kind'], $record->resultKind, sprintf('Unexpected result kind at trace index [%d].', $index));
+
+            $expectedParentIndex = $expectedNode['parent_index'];
+
+            if ($expectedParentIndex === null) {
+                Assert::assertNull($record->parentExecutionId, sprintf('Expected trace index [%d] to have no parent execution.', $index));
+            } else {
+                $parentRecord = $result->trace[$expectedParentIndex] ?? null;
+
+                Assert::assertNotNull(
+                    $parentRecord,
+                    sprintf('Expected parent trace record at index [%d] for child trace index [%d].', $expectedParentIndex, $index),
+                );
+                Assert::assertSame(
+                    $parentRecord->executionId,
+                    $record->parentExecutionId,
+                    sprintf('Unexpected parent execution id at trace index [%d].', $index),
+                );
+            }
+
+            if (array_key_exists('target', $expectedNode)) {
+                Assert::assertSame(
+                    $expectedNode['target'],
+                    $record->targetAgent,
+                    sprintf('Unexpected delegation target at trace index [%d].', $index),
+                );
+            }
+
+            if (array_key_exists('summary', $expectedNode)) {
+                Assert::assertSame(
+                    $expectedNode['summary'],
+                    $record->summary,
+                    sprintf('Unexpected trace summary at index [%d].', $index),
+                );
+            }
+        }
+    }
+
+    public static function assertHandoffSummary(OrchestrationResult $result, string $sourceAgent, string $expectedSummary): ExecutionTraceRecord
+    {
+        foreach ($result->trace as $record) {
+            if (
+              $record->agentKey === $sourceAgent
+              && $record->resultKind === 'delegate'
+              && $record->summary === $expectedSummary
+            ) {
+                return $record;
+            }
+        }
+
+        Assert::fail(
+            sprintf(
+                'Expected orchestration trace to contain handoff summary [%s] for agent [%s].',
+                $expectedSummary,
+                $sourceAgent,
+            ),
         );
     }
 }
