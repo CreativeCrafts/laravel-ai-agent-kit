@@ -14,6 +14,7 @@ Use package fakes when the behavior under test is owned by the package and shoul
 The package ships first-class fakes under `CreativeCrafts\LaravelAiAgentKit\Testing\Fakes`:
 
 - `FakeAiRuntime`
+- `FakeAgentOrchestrator`
 - `FakeProviderPolicy`
 - `FakeToolRunner`
 - `FakeConversationStore`
@@ -33,6 +34,23 @@ $fakeRuntime = new FakeAiRuntime([
 app()->instance(AiRuntime::class, $fakeRuntime);
 ~~~
 
+For orchestration-specific flows, prefer the orchestration fake when you need deterministic delegation, resume, or ownership-transfer traces without running the real orchestrator:
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
+use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAgentOrchestrator;
+
+$fakeOrchestrator = (new FakeAgentOrchestrator())
+    ->queueDelegationFlowResult(
+        sourceAgent: 'support.agent',
+        targetAgent: 'refund.agent',
+        handoffSummary: 'Collect refund context and return the resolution summary.',
+        finalOutput: ['workflow' => 'support_refund'],
+    );
+
+app()->instance(AgentOrchestrator::class, $fakeOrchestrator);
+~~~
+
 ## Assertion Helpers
 
 The package also ships assertion helpers under `CreativeCrafts\LaravelAiAgentKit\Testing\Assertions\PackageAssertions`.
@@ -44,6 +62,8 @@ These helpers are intended for common fake-driven expectations such as:
 - tool execution assertions
 - conversation existence/missing state assertions
 - vector storage and deletion assertions
+- orchestration execution counts and request inspection
+- execution-tree, delegation, handoff-summary, and ownership-transfer assertions
 
 ~~~php
 use CreativeCrafts\LaravelAiAgentKit\Testing\Assertions\PackageAssertions;
@@ -52,6 +72,13 @@ PackageAssertions::assertRuntimeExecutedTimes($fakeRuntime, 1);
 PackageAssertions::assertLastRuntimeRequest($fakeRuntime, function ($request): void {
     expect($request->runId)->toBe('run-001');
 });
+
+PackageAssertions::assertDelegationOccurred($result, 'support.agent', 'refund.agent');
+PackageAssertions::assertHandoffSummary(
+    $result,
+    'support.agent',
+    'Collect refund context and return the resolution summary.',
+);
 ~~~
 
 The internal Pest test suite also wires convenience expectations for the same helpers, but the package-owned helper class remains the stable assertion surface.
@@ -61,7 +88,7 @@ The internal Pest test suite also wires convenience expectations for the same he
 Prefer package fakes when you need to test:
 
 - pipeline orchestration and step behavior
-- package-owned provider policy and failover rules
+- package-owned multi-agent orchestration flows, including delegation approval and ownership transfer
 - tool registration/execution flows owned by the package
 - memory persistence or purge semantics without real infrastructure
 - vector contract behavior without a real backend
@@ -88,3 +115,4 @@ The agent and pipeline commands use `ProjectInspector` to derive the active PSR-
 - Use explicit timestamps when retention or time-based behavior matters.
 - Keep fake behavior readable and close to package contracts rather than provider-specific internals.
 - Keep assertion helpers focused on common package expectations rather than framework internals.
+- Keep orchestration execution trees small and explicit in tests so parent-child ownership remains obvious.
