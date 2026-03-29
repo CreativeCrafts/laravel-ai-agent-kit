@@ -233,3 +233,105 @@ it('provides a fake agent orchestrator that can model delegation and ownership t
       ->and($fake->lastRequest()?->task)
       ->toBe('Escalate to the specialist');
 });
+
+it('derives queued orchestration ids from run order across drained queues and reset cycles', function () {
+    $fake = new FakeAgentOrchestrator();
+
+    $first = $fake
+      ->queueCompletedResult(
+          finalAgent: 'support.agent',
+          summary: 'Completed support task.',
+      )
+      ->run(
+          new OrchestrationRequest(
+              entryAgent: 'support.agent',
+              task: 'Handle support request 001',
+              input: [],
+          ),
+      );
+
+    $second = $fake
+      ->queueCompletedResult(
+          finalAgent: 'billing.agent',
+          summary: 'Completed billing task.',
+      )
+      ->run(
+          new OrchestrationRequest(
+              entryAgent: 'billing.agent',
+              task: 'Handle billing request 002',
+              input: [],
+          ),
+      );
+
+    $delegated = $fake
+      ->queueDelegationFlowResult(
+          sourceAgent: 'support.agent',
+          targetAgent: 'refund.agent',
+          handoffSummary: 'Delegate refund handling.',
+          finalOutput: ['workflow' => 'support_refund'],
+      )
+      ->run(
+          new OrchestrationRequest(
+              entryAgent: 'support.agent',
+              task: 'Handle support request 003',
+              input: [],
+          ),
+      );
+
+    $transferred = $fake
+      ->queueTransferredResult(
+          sourceAgent: 'triage.agent',
+          targetAgent: 'specialist.agent',
+          handoffSummary: 'Transfer ownership to specialist.',
+          finalOutput: ['owner' => 'specialist.agent'],
+      )
+      ->run(
+          new OrchestrationRequest(
+              entryAgent: 'triage.agent',
+              task: 'Handle support request 004',
+              input: [],
+          ),
+      );
+
+    expect([
+      $first->orchestrationId,
+      $second->orchestrationId,
+      $delegated->orchestrationId,
+      $transferred->orchestrationId,
+    ])
+      ->toBe([
+        'fake-orchestration-001',
+        'fake-orchestration-002',
+        'fake-orchestration-003',
+        'fake-orchestration-004',
+      ])
+      ->and($first->finalExecutionId)->toBe('fake-execution-001')
+      ->and($second->finalExecutionId)->toBe('fake-execution-002')
+      ->and($delegated->trace[0]->executionId)->toBe('fake-execution-003-a')
+      ->and($delegated->trace[1]->executionId)->toBe('fake-execution-003-b')
+      ->and($delegated->trace[2]->executionId)->toBe('fake-execution-003-c')
+      ->and($delegated->finalExecutionId)->toBe('fake-execution-003-c')
+      ->and($transferred->trace[0]->executionId)->toBe('fake-execution-004-a')
+      ->and($transferred->trace[1]->executionId)->toBe('fake-execution-004-b')
+      ->and($transferred->finalExecutionId)->toBe('fake-execution-004-b');
+
+    $fake->reset();
+
+    $afterReset = $fake
+      ->queueCompletedResult(
+          finalAgent: 'support.agent',
+          summary: 'Completed support task after reset.',
+      )
+      ->run(
+          new OrchestrationRequest(
+              entryAgent: 'support.agent',
+              task: 'Handle support request 005',
+              input: [],
+          ),
+      );
+
+    expect($afterReset->orchestrationId)
+      ->toBe('fake-orchestration-001')
+      ->and($afterReset->finalExecutionId)->toBe('fake-execution-001')
+      ->and($fake)->toHaveOrchestrationExecutions(1);
+});

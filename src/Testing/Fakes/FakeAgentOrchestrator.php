@@ -87,16 +87,6 @@ final class FakeAgentOrchestrator implements AgentOrchestrator
     }
 
     /**
-     * @param Closure(OrchestrationRequest): OrchestrationResult $callback
-     */
-    public function queueCallback(Closure $callback): self
-    {
-        $this->queuedResponses[] = $callback;
-
-        return $this;
-    }
-
-    /**
      * @param array<string, mixed> $finalOutput
      */
     public function queueCompletedResult(
@@ -105,11 +95,12 @@ final class FakeAgentOrchestrator implements AgentOrchestrator
         array $finalOutput = [],
         ?string $providerProfile = null,
     ): self {
-        $orchestrationId = sprintf('fake-orchestration-%03d', count($this->queuedResponses) + 1);
-        $executionId = sprintf('fake-execution-%03d', count($this->queuedResponses) + 1);
+        return $this->queueCallback(function (OrchestrationRequest $request) use ($finalAgent, $summary, $finalOutput, $providerProfile): OrchestrationResult {
+            $sequence = count($this->requests);
+            $orchestrationId = sprintf('fake-orchestration-%03d', $sequence);
+            $executionId = sprintf('fake-execution-%03d', $sequence);
 
-        return $this->queueResult(
-            new OrchestrationResult(
+            return new OrchestrationResult(
                 orchestrationId: $orchestrationId,
                 status: OrchestrationResult::STATUS_COMPLETED,
                 finalAgent: $finalAgent,
@@ -117,18 +108,28 @@ final class FakeAgentOrchestrator implements AgentOrchestrator
                 finalOutput: $finalOutput,
                 summary: $summary,
                 trace: [
-              new ExecutionTraceRecord(
-                  orchestrationId: $orchestrationId,
-                  executionId: $executionId,
-                  parentExecutionId: null,
-                  agentKey: $finalAgent,
-                  providerProfile: $providerProfile ?? 'fake-profile',
-                  resultKind: 'complete',
-                  summary: $summary,
-              ),
-            ],
-            ),
-        );
+                new ExecutionTraceRecord(
+                    orchestrationId: $orchestrationId,
+                    executionId: $executionId,
+                    parentExecutionId: null,
+                    agentKey: $finalAgent,
+                    providerProfile: $providerProfile ?? 'fake-profile',
+                    resultKind: 'complete',
+                    summary: $summary,
+                ),
+              ],
+            );
+        });
+    }
+
+    /**
+     * @param Closure(OrchestrationRequest): OrchestrationResult $callback
+     */
+    public function queueCallback(Closure $callback): self
+    {
+        $this->queuedResponses[] = $callback;
+
+        return $this;
     }
 
     public function queueResult(OrchestrationResult $result): self
@@ -147,14 +148,14 @@ final class FakeAgentOrchestrator implements AgentOrchestrator
         string $handoffSummary,
         array $finalOutput = [],
     ): self {
-        $sequence = count($this->queuedResponses) + 1;
-        $orchestrationId = sprintf('fake-orchestration-%03d', $sequence);
-        $delegateExecutionId = sprintf('fake-execution-%03d-a', $sequence);
-        $delegatedExecutionId = sprintf('fake-execution-%03d-b', $sequence);
-        $resumeExecutionId = sprintf('fake-execution-%03d-c', $sequence);
+        return $this->queueCallback(function (OrchestrationRequest $request) use ($sourceAgent, $targetAgent, $handoffSummary, $finalOutput): OrchestrationResult {
+            $sequence = count($this->requests);
+            $orchestrationId = sprintf('fake-orchestration-%03d', $sequence);
+            $delegateExecutionId = sprintf('fake-execution-%03d-a', $sequence);
+            $delegatedExecutionId = sprintf('fake-execution-%03d-b', $sequence);
+            $resumeExecutionId = sprintf('fake-execution-%03d-c', $sequence);
 
-        return $this->queueResult(
-            new OrchestrationResult(
+            return new OrchestrationResult(
                 orchestrationId: $orchestrationId,
                 status: OrchestrationResult::STATUS_COMPLETED,
                 finalAgent: $sourceAgent,
@@ -162,41 +163,41 @@ final class FakeAgentOrchestrator implements AgentOrchestrator
                 finalOutput: $finalOutput,
                 summary: sprintf('Delegation flow completed for [%s] via [%s].', $sourceAgent, $targetAgent),
                 trace: [
-              new ExecutionTraceRecord(
-                  orchestrationId: $orchestrationId,
-                  executionId: $delegateExecutionId,
-                  parentExecutionId: null,
-                  agentKey: $sourceAgent,
-                  providerProfile: 'fake-source-profile',
-                  resultKind: 'delegate',
-                  targetAgent: $targetAgent,
-                  summary: $handoffSummary,
-                  metadata: [
-                  'policy_mode' => 'static_only',
-                  'policy_rewritten' => false,
-                ],
-              ),
-              new ExecutionTraceRecord(
-                  orchestrationId: $orchestrationId,
-                  executionId: $delegatedExecutionId,
-                  parentExecutionId: $delegateExecutionId,
-                  agentKey: $targetAgent,
-                  providerProfile: 'fake-target-profile',
-                  resultKind: 'complete',
-                  summary: sprintf('Delegated agent [%s] completed the handoff task.', $targetAgent),
-              ),
-              new ExecutionTraceRecord(
-                  orchestrationId: $orchestrationId,
-                  executionId: $resumeExecutionId,
-                  parentExecutionId: $delegatedExecutionId,
-                  agentKey: $sourceAgent,
-                  providerProfile: 'fake-source-profile',
-                  resultKind: 'complete',
-                  summary: sprintf('Source agent [%s] resumed after delegation.', $sourceAgent),
-              ),
-            ],
-            ),
-        );
+                new ExecutionTraceRecord(
+                    orchestrationId: $orchestrationId,
+                    executionId: $delegateExecutionId,
+                    parentExecutionId: null,
+                    agentKey: $sourceAgent,
+                    providerProfile: 'fake-source-profile',
+                    resultKind: 'delegate',
+                    targetAgent: $targetAgent,
+                    summary: $handoffSummary,
+                    metadata: [
+                    'policy_mode' => 'static_only',
+                    'policy_rewritten' => false,
+                  ],
+                ),
+                new ExecutionTraceRecord(
+                    orchestrationId: $orchestrationId,
+                    executionId: $delegatedExecutionId,
+                    parentExecutionId: $delegateExecutionId,
+                    agentKey: $targetAgent,
+                    providerProfile: 'fake-target-profile',
+                    resultKind: 'complete',
+                    summary: sprintf('Delegated agent [%s] completed the handoff task.', $targetAgent),
+                ),
+                new ExecutionTraceRecord(
+                    orchestrationId: $orchestrationId,
+                    executionId: $resumeExecutionId,
+                    parentExecutionId: $delegatedExecutionId,
+                    agentKey: $sourceAgent,
+                    providerProfile: 'fake-source-profile',
+                    resultKind: 'complete',
+                    summary: sprintf('Source agent [%s] resumed after delegation.', $sourceAgent),
+                ),
+              ],
+            );
+        });
     }
 
     /**
@@ -208,13 +209,13 @@ final class FakeAgentOrchestrator implements AgentOrchestrator
         string $handoffSummary,
         array $finalOutput = [],
     ): self {
-        $sequence = count($this->queuedResponses) + 1;
-        $orchestrationId = sprintf('fake-orchestration-%03d', $sequence);
-        $delegateExecutionId = sprintf('fake-execution-%03d-a', $sequence);
-        $transferredExecutionId = sprintf('fake-execution-%03d-b', $sequence);
+        return $this->queueCallback(function (OrchestrationRequest $request) use ($sourceAgent, $targetAgent, $handoffSummary, $finalOutput): OrchestrationResult {
+            $sequence = count($this->requests);
+            $orchestrationId = sprintf('fake-orchestration-%03d', $sequence);
+            $delegateExecutionId = sprintf('fake-execution-%03d-a', $sequence);
+            $transferredExecutionId = sprintf('fake-execution-%03d-b', $sequence);
 
-        return $this->queueResult(
-            new OrchestrationResult(
+            return new OrchestrationResult(
                 orchestrationId: $orchestrationId,
                 status: OrchestrationResult::STATUS_COMPLETED,
                 finalAgent: $targetAgent,
@@ -222,33 +223,33 @@ final class FakeAgentOrchestrator implements AgentOrchestrator
                 finalOutput: $finalOutput,
                 summary: sprintf('Control transferred from [%s] to [%s].', $sourceAgent, $targetAgent),
                 trace: [
-              new ExecutionTraceRecord(
-                  orchestrationId: $orchestrationId,
-                  executionId: $delegateExecutionId,
-                  parentExecutionId: null,
-                  agentKey: $sourceAgent,
-                  providerProfile: 'fake-source-profile',
-                  resultKind: 'delegate',
-                  targetAgent: $targetAgent,
-                  summary: $handoffSummary,
-                  metadata: [
-                  'policy_mode' => 'static_only',
-                  'policy_rewritten' => false,
-                  'transfer_control' => true,
-                ],
-              ),
-              new ExecutionTraceRecord(
-                  orchestrationId: $orchestrationId,
-                  executionId: $transferredExecutionId,
-                  parentExecutionId: $delegateExecutionId,
-                  agentKey: $targetAgent,
-                  providerProfile: 'fake-target-profile',
-                  resultKind: 'complete',
-                  summary: sprintf('Transferred agent [%s] became final owner.', $targetAgent),
-              ),
-            ],
-            ),
-        );
+                new ExecutionTraceRecord(
+                    orchestrationId: $orchestrationId,
+                    executionId: $delegateExecutionId,
+                    parentExecutionId: null,
+                    agentKey: $sourceAgent,
+                    providerProfile: 'fake-source-profile',
+                    resultKind: 'delegate',
+                    targetAgent: $targetAgent,
+                    summary: $handoffSummary,
+                    metadata: [
+                    'policy_mode' => 'static_only',
+                    'policy_rewritten' => false,
+                    'transfer_control' => true,
+                  ],
+                ),
+                new ExecutionTraceRecord(
+                    orchestrationId: $orchestrationId,
+                    executionId: $transferredExecutionId,
+                    parentExecutionId: $delegateExecutionId,
+                    agentKey: $targetAgent,
+                    providerProfile: 'fake-target-profile',
+                    resultKind: 'complete',
+                    summary: sprintf('Transferred agent [%s] became final owner.', $targetAgent),
+                ),
+              ],
+            );
+        });
     }
 
     /**
