@@ -170,6 +170,41 @@ final class AppServiceProvider extends ServiceProvider
 
 Registered agents are resolved through the Laravel container and looked up by the stable agent key returned from their package-owned `AgentDefinition`.
 
+Run the package-owned `TextToStructuredEvaluation` blueprint when you want one structured evaluation result from one orchestration call while keeping the internal coordinator-to-specialist flow hidden
+behind the public API:
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluation;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationRequest;
+
+$result = app(TextToStructuredEvaluation::class)->evaluate(
+    new TextToStructuredEvaluationRequest(
+        subject: 'support reply',
+        text: 'We can refund the unused portion of your subscription within five business days.',
+        enabledDimensions: ['clarity', 'accuracy', 'completeness'],
+        promptVersion: '1.0.0',
+    ),
+);
+
+$summary = $result->summary;
+$recommendedAction = $result->recommendedAction;
+$clarityScore = $result->dimension('clarity')?->score;
+~~~
+
+The blueprint returns a fixed package-owned result schema with:
+
+- `summary`
+- `recommendedAction`
+- `confidence`
+- `enabledDimensions`
+- `dimensions` keyed by dimension name, each with `score`, `summary`, and `evidence`
+- `orchestrationSummary`, `finalAgent`, `promptName`, and `promptVersion`
+
+The enabled dimensions are caller-configurable, but the top-level result contract remains package-owned and stable.
+
+Before running the blueprint, register the prompt template referenced by `promptName` and `promptVersion`. The specialist stage expects the model output to be valid JSON matching the fixed package
+schema.
+
 Build and run a synchronous pipeline with typed steps:
 
 ~~~php
@@ -232,43 +267,40 @@ final class NormalizeTranscriptPipeline implements QueuedPipelineDefinition
     }
 }
 
-final class StorePipelineResult implements PipelineResultHandler
+final class PersistPipelineResult implements PipelineResultHandler
 {
     public function handleSuccess(RunContext $context): void
     {
-        // Persist or publish the result explicitly.
+        // Persist or publish the final pipeline state.
     }
 
     public function handleFailure(RunContext $context, Throwable $throwable): void
     {
-        // Persist or publish the failure explicitly.
+        report($throwable);
     }
 }
 
 $dispatcher = app(QueuedPipelineDispatcher::class);
 
 $dispatcher->dispatch(
-    pipelineDefinition: NormalizeTranscriptPipeline::class,
+    definition: new NormalizeTranscriptPipeline(),
     context: new RunContext(
-        runId: 'run-queued-001',
-        input: ['text' => 'Hello world'],
+        runId: 'queued-run-001',
+        input: ['text' => 'Queued pipeline input'],
     ),
+    handler: new PersistPipelineResult(),
     options: new QueueDispatchOptions(
-        connection: 'redis',
         queue: 'ai-pipelines',
-        delaySeconds: 5,
-        timeoutSeconds: 90,
+        connection: 'sync',
     ),
-    resultHandler: StorePipelineResult::class,
 );
 ~~~
 
-Use the memory contracts through their default non-persistent driver:
+Use conversation memory through the package-owned context manager and store contracts:
 
 ~~~php
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationRetentionPurger;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
-use CreativeCrafts\LaravelAiAgentKit\Memory\Conversation;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessage;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessageRole;
@@ -276,214 +308,96 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
 
 $store = app(ConversationStore::class);
 
-$conversation = new Conversation(
-    id: new ConversationId('conv-001'),
-    messages: [
-        new ConversationMessage(
-            id: new MessageId('msg-001'),
-            role: ConversationMessageRole::User,
-            content: 'Hello world',
-        ),
-    ],
-);
-
-$store->save($conversation);
-
-$loaded = $store->get(new ConversationId('conv-001'));
-
-$purger = app(ConversationRetentionPurger::class);
-$purger->purgeExpired();
-~~~
-
-Run retention purge operationally through the package command:
-
-~~~bash
-php artisan ai:purge:conversations
-php artisan ai:purge:conversations --queued --connection=redis --queue=ai-maintenance
-~~~
-
-Schedule the purge command from your application scheduler:
-
-~~~php
-use Illuminate\Support\Facades\Schedule;
-
-Schedule::command('ai:purge:conversations')->daily();
-~~~
-
-Use the default summarizer through the summarization contract:
-
-~~~php
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationSummarizer;
-use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
-use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessage;
-use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessageRole;
-use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
-use CreativeCrafts\LaravelAiAgentKit\Memory\SummarizationInput;
-
-$summarizer = app(ConversationSummarizer::class);
-
-$input = new SummarizationInput(
-    conversationId: new ConversationId('conv-summary'),
-    messages: [
-        new ConversationMessage(
-            id: new MessageId('msg-001'),
-            role: ConversationMessageRole::User,
-            content: 'Summarize this exchange.',
-        ),
-        new ConversationMessage(
-            id: new MessageId('msg-002'),
-            role: ConversationMessageRole::Assistant,
-            content: 'Here is the reply.',
-        ),
-    ],
-    existingSummary: null,
-);
-
-$result = $summarizer->summarize($input);
-~~~
-
-Render a versioned prompt template through the in-memory prompt repository:
-
-~~~php
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Prompts\PromptRepository;
-use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptTemplate;
-
-$repository = app(PromptRepository::class);
-
-$repository->store(
-    new PromptTemplate(
-        name: 'support.reply',
-        version: 'v1',
-        content: 'Reply to {{customer_name}} about {{topic}}.',
-        variables: ['customer_name', 'topic'],
+$conversation = $store->appendMessage(
+    new ConversationId('conv-001'),
+    new ConversationMessage(
+        id: new MessageId('msg-001'),
+        role: ConversationMessageRole::User,
+        content: 'Please summarize my refund options.',
+        metadata: ['channel' => 'support'],
     ),
 );
 
-$rendered = $repository->render('support.reply', 'v1', [
-    'customer_name' => 'Taylor',
-    'topic' => 'account verification',
-]);
+$manager = app(ConversationContextManager::class);
+$context = $manager->buildContext($conversation->id);
 ~~~
 
-Register a tool explicitly and provide an authorization hook before execution:
+Run orchestrated multi-agent flows through the package agent orchestrator:
 
 ~~~php
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\Tool;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
+use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationRequest;
 
-$registry = app(ToolRegistry::class);
-
-$registry->register(new class () implements Tool
-{
-    public function name(): string
-    {
-        return 'math.add';
-    }
-
-    public function inputSchema(): array
-    {
-        return [
-            'type' => 'object',
-            'properties' => [
-                'left' => ['type' => 'integer'],
-                'right' => ['type' => 'integer'],
-            ],
-            'required' => ['left', 'right'],
-            'additionalProperties' => false,
-        ];
-    }
-
-    public function execute(array $input): array
-    {
-        return ['sum' => $input['left'] + $input['right']];
-    }
-});
+$result = app(AgentOrchestrator::class)->run(
+    new OrchestrationRequest(
+        entryAgent: 'support.agent',
+        task: 'Handle a support refund workflow',
+        input: ['subscription_id' => 'sub-123'],
+    ),
+);
 ~~~
 
-Configure a package-level tool authorizer (defaults to deny-all) through `config/ai-agent-kit.php`:
-
-~~~php
-'tools' => [
-    'authorizer' => \CreativeCrafts\LaravelAiAgentKit\Tools\DenyAllToolAuthorizer::class,
-    'provider_tools' => [
-        // ...
-    ],
-],
-~~~
-
-Tool input schema `type: array` accepts both list and associative PHP arrays; use `type: object` when map-only semantics are required.
-
-Generate a tool or prompt scaffold:
-
-~~~bash
-php artisan ai:make:tool Support/LookupCustomer
-php artisan ai:make:prompt Support.Reply --prompt-version=2.1.0
-~~~
-
-Use the vector store contract through a backend-agnostic interface:
+Use vector storage through the package contract to keep embeddings and semantic search behind a stable boundary:
 
 ~~~php
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreInterface;
 use CreativeCrafts\LaravelAiAgentKit\Vector\VectorDocument;
 use CreativeCrafts\LaravelAiAgentKit\Vector\VectorSearchQuery;
 
-/** @var VectorStoreInterface $vectorStore */
 $vectorStore = app(VectorStoreInterface::class);
 
 $vectorStore->upsert('support', [
     new VectorDocument(
-        id: 'doc-1',
-        embedding: [0.12, 0.98, 0.44],
-        metadata: ['topic' => 'billing'],
+        id: 'doc-001',
+        embedding: [0.8, 0.2, 0.1],
+        metadata: ['topic' => 'refunds'],
     ),
 ]);
 
-$results = $vectorStore->search('support', new VectorSearchQuery(
-    embedding: [0.10, 0.95, 0.40],
-    limit: 5,
-));
-
-$vectorStore->delete('support', ['doc-1']);
+$results = $vectorStore->search(
+    'support',
+    new VectorSearchQuery(
+        embedding: [0.9, 0.1, 0.0],
+        limit: 3,
+        filter: ['topic' => 'refunds'],
+    ),
+);
 ~~~
-
-The package-owned vector port remains authoritative. `VectorStoreInterface`, `VectorDocument`, `VectorSearchQuery`, `VectorSearchResult`, and the typed vector exceptions are the stable package
-boundary for retrieval flows.
-
-SDK-backed retrieval remains an implementation strategy rather than a public contract replacement. Internal adapters may delegate embedding generation, provider-native retrieval execution, or
-retrieval orchestration to Laravel AI SDK, but they must continue to accept package-owned vector inputs and return package-owned `VectorSearchResult` collections. SDK types must not leak through
-public vector contracts, DTOs, or typed exceptions.
 
 ## Testing
 
-Run the test suite:
+The package includes package-owned fakes for runtime, provider policy, tool execution, conversation storage, vector storage, and orchestration. These can be bound directly into the Laravel
+container for deterministic tests.
 
-~~~bash
-composer test
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
+use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAgentOrchestrator;
+use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAiRuntime;
+
+$fakeRuntime = new FakeAiRuntime([
+    new ExecutionResult(
+        runId: 'run-test-001',
+        output: 'Fake runtime output',
+        provider: 'openai',
+        model: 'gpt-test',
+    ),
+]);
+
+app()->instance(AiRuntime::class, $fakeRuntime);
+app()->instance(AgentOrchestrator::class, new FakeAgentOrchestrator());
 ~~~
 
-Run static analysis:
+The package also exposes assertion helpers and Pest expectations for common fake-driven flows. See `CONTRIBUTING.md` and the package test suite for usage patterns.
 
-~~~bash
-composer analyse
-~~~
+## Security and Privacy Defaults
 
-## Changelog
-
-Please see [CHANGELOG](CHANGELOG.md) for more information on what has changed recently.
-
-## Contributing
-
-Please see [CONTRIBUTING](CONTRIBUTING.md) for details.
-
-## Security Vulnerabilities
-
-Please review [our security policy](../../security/policy) on how to report security vulnerabilities.
-
-## Credits
-
-- [Godspower Oduose](https://github.com/rockblings)
-- [All Contributors](../../contributors)
+- Tool execution is default-deny unless tools are explicitly registered and authorized.
+- Conversation persistence is package-owned and can be kept in memory, Redis, or encrypted database storage.
+- Retention-based purging is explicit and available through a command and queue job.
+- Telemetry is redacted by default and emits metadata-only package events.
 
 ## License
 
-The MIT License (MIT). Please see [License File](LICENSE.md) for more information.
+The MIT License (MIT). Please see [LICENSE.md](LICENSE.md) for more information.
