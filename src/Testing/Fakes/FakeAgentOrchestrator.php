@@ -262,7 +262,9 @@ final class FakeAgentOrchestrator implements AgentOrchestrator
 
     public function lastRequest(): ?OrchestrationRequest
     {
-        return $this->requests[array_key_last($this->requests)] ?? null;
+        $lastRequestIndex = array_key_last($this->requests);
+
+        return $lastRequestIndex !== null ? $this->requests[$lastRequestIndex] : null;
     }
 
     public function reset(): void

@@ -205,6 +205,48 @@ The enabled dimensions are caller-configurable, but the top-level result contrac
 Before running the blueprint, register the prompt template referenced by `promptName` and `promptVersion`. The specialist stage expects the model output to be valid JSON matching the fixed package
 schema.
 
+Run the package-owned `AudioToTextToEvaluation` blueprint when you want one orchestration call to transcribe audio first and then evaluate the resulting transcript through the same structured
+evaluation pipeline:
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluation;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluationRequest;
+
+$result = app(AudioToTextToEvaluation::class)->evaluate(
+    new AudioToTextToEvaluationRequest(
+        subject: 'support call',
+        audioReference: 's3://bucket/audio/support-call.wav',
+        audioMimeType: 'audio/wav',
+        enabledDimensions: ['clarity', 'accuracy'],
+        transcriptionPromptVersion: '1.0.0',
+        evaluationPromptVersion: '1.0.0',
+    ),
+);
+
+$transcript = $result->transcript;
+$summary = $result->summary;
+~~~
+
+The audio blueprint returns a fixed package-owned result schema that extends the text evaluation shape with audio-specific fields:
+
+- `audioReference`
+- `transcript`
+- `summary`
+- `recommendedAction`
+- `confidence`
+- `enabledDimensions`
+- `dimensions` keyed by dimension name, each with `score`, `summary`, and `evidence`
+- `transcriptionPromptName`, `transcriptionPromptVersion`, `evaluationPromptName`, and `evaluationPromptVersion`
+- `orchestrationSummary` and `finalAgent`
+
+Provider profiles for the audio blueprint must be compatible with both stages:
+
+- the transcription stage requires a provider profile that supports `audio_transcription`
+- the evaluation stage requires a provider profile that supports `structured_output`
+
+Register both prompt templates before execution. The transcription stage returns one transcript string, and the evaluation stage returns valid JSON matching the package-owned structured
+evaluation schema.
+
 Build and run a synchronous pipeline with typed steps:
 
 ~~~php

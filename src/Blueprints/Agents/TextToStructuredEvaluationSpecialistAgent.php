@@ -9,7 +9,6 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\Agent;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Prompts\PromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionContext;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionResult;
@@ -22,7 +21,6 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
     public const string KEY = 'text-to-structured-evaluation.specialist';
 
     public function __construct(
-        private ProviderSelector $providerSelector,
         private ProviderRegistry $providerRegistry,
         private PromptRepository $promptRepository,
         private PromptExecutionMapper $promptExecutionMapper,
@@ -32,13 +30,14 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
 
     public function definition(): AgentDefinition
     {
-        $primaryProfile = $this->providerSelector->selectDefault()->name;
-        $fallbackProfiles = $this->fallbackProfiles($primaryProfile);
+        $requiredCapabilities = ['structured_output'];
+        $primaryProfile = $this->selectPrimaryProfile($requiredCapabilities);
+        $fallbackProfiles = $this->fallbackProfiles($primaryProfile, $requiredCapabilities);
 
         return new AgentDefinition(
             key: self::KEY,
             displayName: 'Text To Structured Evaluation Specialist',
-            requiredCapabilities: ['structured_output'],
+            requiredCapabilities: $requiredCapabilities,
             primaryProviderProfile: $primaryProfile,
             fallbackProviderProfiles: $fallbackProfiles,
         );
@@ -93,9 +92,42 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
     }
 
     /**
+     * @param list<string> $requiredCapabilities
+     */
+    private function selectPrimaryProfile(array $requiredCapabilities): string
+    {
+        foreach ($this->providerRegistry->all() as $providerName => $definition) {
+            if (!$definition->enabled) {
+                continue;
+            }
+
+            if ($this->supportsCapabilities($definition->capabilities, $requiredCapabilities)) {
+                return $providerName;
+            }
+        }
+
+        throw TextToStructuredEvaluationException::invalidSpecialistPayload(
+            sprintf(
+                'No enabled provider supports required capabilities [%s].',
+                implode(', ', $requiredCapabilities),
+            ),
+        );
+    }
+
+    /**
+     * @param list<string> $providerCapabilities
+     * @param list<string> $requiredCapabilities
+     */
+    private function supportsCapabilities(array $providerCapabilities, array $requiredCapabilities): bool
+    {
+        return array_diff($requiredCapabilities, $providerCapabilities) === [];
+    }
+
+    /**
+     * @param list<string> $requiredCapabilities
      * @return list<string>
      */
-    private function fallbackProfiles(string $primaryProfile): array
+    private function fallbackProfiles(string $primaryProfile, array $requiredCapabilities): array
     {
         $fallbackProfiles = [];
 
@@ -104,6 +136,9 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
                 continue;
             }
             if (!$definition->enabled) {
+                continue;
+            }
+            if (!$this->supportsCapabilities($definition->capabilities, $requiredCapabilities)) {
                 continue;
             }
             $fallbackProfiles[] = $providerName;

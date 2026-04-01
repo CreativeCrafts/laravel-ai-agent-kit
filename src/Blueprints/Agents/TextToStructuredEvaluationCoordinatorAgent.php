@@ -56,6 +56,7 @@ final readonly class TextToStructuredEvaluationCoordinatorAgent implements Agent
                 'enabled_dimensions' => $context->payloadValue('enabled_dimensions', []),
                 'prompt_name' => $this->stringPayloadValue($context, 'prompt_name'),
                 'prompt_version' => $context->payloadValue('prompt_version'),
+                'transcript' => $this->resolvedTranscript($context),
               ],
                 summary: 'TextToStructuredEvaluation coordinator finalized the structured result.',
             );
@@ -72,6 +73,7 @@ final readonly class TextToStructuredEvaluationCoordinatorAgent implements Agent
                     payload: [
                 'subject' => $context->payloadValue('subject'),
                 'text' => $context->payloadValue('text'),
+                'transcript' => $context->payloadValue('transcript'),
                 'enabled_dimensions' => $context->payloadValue('enabled_dimensions', []),
                 'prompt_name' => $context->payloadValue('prompt_name'),
                 'prompt_version' => $context->payloadValue('prompt_version'),
@@ -118,5 +120,22 @@ final readonly class TextToStructuredEvaluationCoordinatorAgent implements Agent
         }
 
         return $value;
+    }
+
+    private function resolvedTranscript(AgentExecutionContext $context): string
+    {
+        $transcript = $context->payloadValue('transcript');
+
+        if (is_string($transcript) && $transcript !== '') {
+            return $transcript;
+        }
+
+        $text = $context->payloadValue('text');
+
+        if (is_string($text) && $text !== '') {
+            return $text;
+        }
+
+        throw new InvalidArgumentException('TextToStructuredEvaluation coordinator requires a non-empty transcript or text payload.');
     }
 }

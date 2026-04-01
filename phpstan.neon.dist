@@ -9,6 +9,7 @@ parameters:
 
     excludePaths:
         analyseAndScan:
+            - tests/**
             - vendor
             - stubs (?)
             - build (?)
