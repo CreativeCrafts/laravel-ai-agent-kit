@@ -144,7 +144,9 @@ final class FakeToolRunner implements ToolRegistry
      */
     public function lastExecution(): ?array
     {
-        return $this->executions[array_key_last($this->executions)] ?? null;
+        $lastExecutionIndex = array_key_last($this->executions);
+
+        return $lastExecutionIndex !== null ? $this->executions[$lastExecutionIndex] : null;
     }
 
     public function reset(): void

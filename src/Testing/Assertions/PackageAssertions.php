@@ -229,7 +229,8 @@ final class PackageAssertions
             sprintf('Expected orchestration result final owner to be [%s].', $targetAgent),
         );
 
-        $lastTrace = $result->trace[array_key_last($result->trace)] ?? null;
+        $lastTraceIndex = array_key_last($result->trace);
+        $lastTrace = $lastTraceIndex !== null ? $result->trace[$lastTraceIndex] : null;
 
         Assert::assertNotNull($lastTrace, 'Expected orchestration trace to contain at least one record.');
         Assert::assertSame(
