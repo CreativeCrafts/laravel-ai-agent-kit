@@ -21,4 +21,14 @@ final class TextToStructuredEvaluationException extends RuntimeException
             previous: $previous,
         );
     }
+
+    public static function refusedStructuredOutput(string $output): self
+    {
+        return new self(
+            sprintf(
+                'TextToStructuredEvaluation specialist refused to return structured output. Received: %s',
+                $output,
+            ),
+        );
+    }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Blueprints\Agents;
 
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\Exceptions\TextToStructuredEvaluationException;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\Support\StructuredEvaluationOutputNormalizer;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\Agent;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Prompts\PromptRepository;
@@ -14,7 +15,6 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionContext;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionResult;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptExecutionMapper;
-use JsonException;
 
 final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
 {
@@ -25,6 +25,7 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
         private PromptRepository $promptRepository,
         private PromptExecutionMapper $promptExecutionMapper,
         private AiRuntime $aiRuntime,
+        private StructuredEvaluationOutputNormalizer $structuredEvaluationOutputNormalizer,
     ) {
     }
 
@@ -77,7 +78,8 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
         );
 
         $runtimeResult = $this->aiRuntime->execute($request);
-        $parsed = $this->decodePayload($runtimeResult->output);
+        $normalizedOutput = $this->structuredEvaluationOutputNormalizer->normalize($runtimeResult->output);
+        $parsed = $normalizedOutput->payload;
 
         return new AgentExecutionResult(
             kind: AgentExecutionResult::KIND_COMPLETE,
@@ -248,108 +250,5 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
         }
 
         return new ConversationId($conversationId);
-    }
-
-    /**
-     * @return array{
-     *   summary:string,
-     *   recommended_action:string,
-     *   confidence:float,
-     *   dimensions:array<string, array{score:int,summary:string,evidence:list<string>}>
-     * }
-     */
-    private function decodePayload(string $output): array
-    {
-        try {
-            $decoded = json_decode($output, true, 512, JSON_THROW_ON_ERROR);
-        } catch (JsonException $exception) {
-            throw TextToStructuredEvaluationException::invalidJson($output, $exception);
-        }
-
-        if (!is_array($decoded)) {
-            throw TextToStructuredEvaluationException::invalidSpecialistPayload('decoded payload must be an object.');
-        }
-
-        $summary = $decoded['summary'] ?? null;
-        $recommendedAction = $decoded['recommended_action'] ?? null;
-        $confidence = $decoded['confidence'] ?? null;
-        $dimensions = $decoded['dimensions'] ?? null;
-
-        if (!is_string($summary) || $summary === '') {
-            throw TextToStructuredEvaluationException::invalidSpecialistPayload('summary must be a non-empty string.');
-        }
-
-        if (!is_string($recommendedAction) || $recommendedAction === '') {
-            throw TextToStructuredEvaluationException::invalidSpecialistPayload('recommended_action must be a non-empty string.');
-        }
-
-        if (!is_float($confidence) && !is_int($confidence)) {
-            throw TextToStructuredEvaluationException::invalidSpecialistPayload('confidence must be a float between 0.0 and 1.0.');
-        }
-
-        if (!is_array($dimensions) || $dimensions === []) {
-            throw TextToStructuredEvaluationException::invalidSpecialistPayload('dimensions must be a non-empty object keyed by dimension name.');
-        }
-
-        $resolvedDimensions = [];
-
-        foreach ($dimensions as $name => $dimension) {
-            if (!is_string($name) || $name === '') {
-                throw TextToStructuredEvaluationException::invalidSpecialistPayload('dimension keys must be non-empty strings.');
-            }
-
-            if (!is_array($dimension)) {
-                throw TextToStructuredEvaluationException::invalidSpecialistPayload(
-                    sprintf('dimension [%s] must be an object.', $name),
-                );
-            }
-
-            $score = $dimension['score'] ?? null;
-            $dimensionSummary = $dimension['summary'] ?? null;
-            $evidence = $dimension['evidence'] ?? [];
-
-            if (!is_int($score) || $score < 0 || $score > 5) {
-                throw TextToStructuredEvaluationException::invalidSpecialistPayload(
-                    sprintf('dimension [%s] score must be an integer between 0 and 5.', $name),
-                );
-            }
-
-            if (!is_string($dimensionSummary) || $dimensionSummary === '') {
-                throw TextToStructuredEvaluationException::invalidSpecialistPayload(
-                    sprintf('dimension [%s] summary must be a non-empty string.', $name),
-                );
-            }
-
-            if (!is_array($evidence)) {
-                throw TextToStructuredEvaluationException::invalidSpecialistPayload(
-                    sprintf('dimension [%s] evidence must be a list of strings.', $name),
-                );
-            }
-
-            $resolvedEvidence = [];
-
-            foreach ($evidence as $item) {
-                if (!is_string($item) || $item === '') {
-                    throw TextToStructuredEvaluationException::invalidSpecialistPayload(
-                        sprintf('dimension [%s] evidence entries must be non-empty strings.', $name),
-                    );
-                }
-
-                $resolvedEvidence[] = $item;
-            }
-
-            $resolvedDimensions[$name] = [
-              'score' => $score,
-              'summary' => $dimensionSummary,
-              'evidence' => $resolvedEvidence,
-            ];
-        }
-
-        return [
-          'summary' => $summary,
-          'recommended_action' => $recommendedAction,
-          'confidence' => (float)$confidence,
-          'dimensions' => $resolvedDimensions,
-        ];
     }
 }
