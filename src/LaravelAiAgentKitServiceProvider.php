@@ -56,10 +56,13 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\RedisConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\RetentionPurgeService;
 use CreativeCrafts\LaravelAiAgentKit\Memory\StoreBackedConversationContextManager;
 use CreativeCrafts\LaravelAiAgentKit\Observability\SdkTelemetryNormalizer;
+use CreativeCrafts\LaravelAiAgentKit\Prompts\FilePromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\InMemoryPromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptExecutionMapper;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\ConfigRetryPolicyResolver;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\InMemoryCircuitBreakerManager;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\PipelineBudgetEnforcer;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\RuntimeBudgetEnforcer;
 use CreativeCrafts\LaravelAiAgentKit\Security\DefaultRedactor;
 use CreativeCrafts\LaravelAiAgentKit\Security\LaravelEncryptionService;
 use CreativeCrafts\LaravelAiAgentKit\Tools\DenyAllToolAuthorizer;
@@ -194,6 +197,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
                 config: $config,
                 providerRegistry: $app->make(ProviderRegistry::class),
                 events: $app->make(Dispatcher::class),
+                circuitBreakerManager: $app->make(CircuitBreakerManager::class),
             );
         });
 
@@ -221,6 +225,13 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 
         $this->app->singleton(CircuitBreakerManager::class, function (Application $app): CircuitBreakerManager {
             return $app->make(InMemoryCircuitBreakerManager::class);
+        });
+
+        $this->app->singleton(PipelineBudgetEnforcer::class, function (Application $app): PipelineBudgetEnforcer {
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
+            return new PipelineBudgetEnforcer($config);
         });
 
         $this->app->singleton(LaravelEncryptionService::class, function (Application $app): LaravelEncryptionService {
@@ -345,8 +356,24 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return new InMemoryPromptRepository();
         });
 
+        $this->app->singleton(FilePromptRepository::class, function (Application $app): FilePromptRepository {
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
+            $configuredRootPath = $this->nullableStringConfig($config, 'ai-agent-kit.prompts.file.root_path');
+
+            return new FilePromptRepository($configuredRootPath ?? $app->basePath('resources/prompts'));
+        });
+
         $this->app->singleton(PromptRepository::class, function (Application $app): PromptRepository {
-            return $app->make(InMemoryPromptRepository::class);
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
+            return match ($this->promptDriver($config)) {
+                'in_memory' => $app->make(InMemoryPromptRepository::class),
+                'file' => $app->make(FilePromptRepository::class),
+                default => throw new RuntimeException('Unsupported prompt repository driver.'),
+            };
         });
 
         $this->app->singleton(DenyAllToolAuthorizer::class, function (): DenyAllToolAuthorizer {
@@ -436,6 +463,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return new SdkAiRuntime(
                 toolMaterializer: $app->make(SdkToolMaterializer::class),
                 runtimeConversationMemoryBridge: $app->make(RuntimeConversationMemoryBridge::class),
+                runtimeBudgetEnforcer: $app->make(RuntimeBudgetEnforcer::class),
             );
         });
 
@@ -459,6 +487,8 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
                 conversationContextManager: $app->make(ConversationContextManager::class),
                 events: $app->make(Dispatcher::class),
                 redactor: $app->make(Redactor::class),
+                budgetEnforcer: $app->make(PipelineBudgetEnforcer::class),
+                retryPolicyResolver: $app->make(RetryPolicyResolver::class),
             );
         });
 
@@ -684,5 +714,10 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
     private function memoryDriver(ConfigRepository $config): string
     {
         return $this->stringConfig($config, 'ai-agent-kit.memory.default_driver');
+    }
+
+    private function promptDriver(ConfigRepository $config): string
+    {
+        return $this->stringConfig($config, 'ai-agent-kit.prompts.default_driver');
     }
 }

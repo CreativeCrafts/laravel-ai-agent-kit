@@ -6,6 +6,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\Tool;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeBudgetExceededException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeExecutionException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
@@ -18,11 +19,16 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessageRole;
 use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolAdapter;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
+use Illuminate\Support\Collection;
 use Laravel\Ai\Ai;
 use Laravel\Ai\AiServiceProvider;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Providers\Tools\WebSearch;
+use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\Usage;
 
 it('binds the ai runtime contract to the sdk ai runtime', function () {
     app()->register(AiServiceProvider::class);
@@ -297,6 +303,115 @@ it('wraps missing tool materialization failures in a typed runtime execution exc
             ),
         ))
       ->toThrow(RuntimeExecutionException::class, 'AI runtime execution failed for run [run-bridge-missing-tool]');
+});
+
+it('enforces max token budget during runtime execution', function () {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai-agent-kit.budgets.max_tokens', 3);
+
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, [
+      static fn () => new AgentResponse(
+          invocationId: 'inv-runtime-budget-tokens',
+          text: 'Budgeted response',
+          usage: new Usage(promptTokens: 2, completionTokens: 2),
+          meta: new Meta(provider: 'openai', model: 'gpt-4o-mini'),
+      ),
+    ])->preventStrayPrompts();
+
+    /** @var AiRuntime $runtime */
+    $runtime = app(AiRuntime::class);
+
+    expect(fn ()
+        => $runtime->execute(
+            new ExecutionRequest(
+                runId: 'run-budget-tokens',
+                prompt: 'Trigger token budget enforcement.',
+                provider: 'openai',
+            ),
+        ))
+      ->toThrow(RuntimeBudgetExceededException::class, 'max_tokens [3]');
+});
+
+it('enforces max tool-call budget during runtime execution', function () {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai-agent-kit.budgets.max_tool_calls', 1);
+
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, [
+      static function (): AgentResponse {
+          $response = new AgentResponse(
+              invocationId: 'inv-runtime-budget-tool-calls',
+              text: 'Tool-heavy response',
+              usage: new Usage(promptTokens: 1, completionTokens: 1),
+              meta: new Meta(provider: 'openai', model: 'gpt-4o-mini'),
+          );
+
+          return $response->withToolCallsAndResults(
+              new Collection([
+              new ToolCall('tool-call-1', 'math.add', ['left' => 1, 'right' => 2]),
+              new ToolCall('tool-call-2', 'math.add', ['left' => 3, 'right' => 4]),
+            ]),
+              new Collection(),
+          );
+      },
+    ])->preventStrayPrompts();
+
+    /** @var AiRuntime $runtime */
+    $runtime = app(AiRuntime::class);
+
+    expect(fn ()
+        => $runtime->execute(
+            new ExecutionRequest(
+                runId: 'run-budget-tool-calls',
+                prompt: 'Trigger tool-call budget enforcement.',
+                provider: 'openai',
+            ),
+        ))
+      ->toThrow(RuntimeBudgetExceededException::class, 'max_tool_calls [1]');
+});
+
+it('fails closed when max_cost_usd is configured but runtime cost metadata is missing', function () {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai-agent-kit.budgets.max_cost_usd', 0.01);
+
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, ['Budgeted response'])->preventStrayPrompts();
+
+    /** @var AiRuntime $runtime */
+    $runtime = app(AiRuntime::class);
+
+    expect(fn ()
+        => $runtime->execute(
+            new ExecutionRequest(
+                runId: 'run-budget-cost-missing',
+                prompt: 'Trigger missing cost metadata budget enforcement.',
+                provider: 'openai',
+            ),
+        ))
+      ->toThrow(RuntimeBudgetExceededException::class, 'metadata.cost_usd');
+});
+
+it('enforces max cost budget when cost metadata is provided', function () {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai-agent-kit.budgets.max_cost_usd', 0.01);
+
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, ['Budgeted response'])->preventStrayPrompts();
+
+    /** @var AiRuntime $runtime */
+    $runtime = app(AiRuntime::class);
+
+    expect(fn ()
+        => $runtime->execute(
+            new ExecutionRequest(
+                runId: 'run-budget-cost-exceeded',
+                prompt: 'Trigger cost budget enforcement.',
+                provider: 'openai',
+                metadata: ['cost_usd' => 0.02],
+            ),
+        ))
+      ->toThrow(RuntimeBudgetExceededException::class, 'max_cost_usd [0.01]');
 });
 
 it('wraps sdk runtime failures in a typed runtime execution exception', function () {

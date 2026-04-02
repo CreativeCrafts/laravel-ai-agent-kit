@@ -173,7 +173,7 @@
       "description": "Keep docs, examples, and architecture guidance aligned with the SDK-backed package design."
     },
     {
-      "title": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "title": "P1X — Multi-Agent Orchestration & Flagship Blueprints",
       "description": "Introduce package-owned multi-agent orchestration, governed delegation and handoff, provider-profile routing, and flagship blueprints built on top of the SDK-backed workflow substrate."
     }
   ],
@@ -2671,8 +2671,8 @@
       "execution_note": "Intentionally deferred until the final stabilization wave so package positioning, install, architecture, and migration notes describe the final package shape rather than a moving target."
     },
     {
-      "title": "P10-I1 Define agent/orchestration contracts + DTOs",
-      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "title": "P1X-I1 Define agent/orchestration contracts + DTOs",
+      "milestone": "P1X — Multi-Agent Orchestration & Flagship Blueprints",
       "labels": [
         "type:feature",
         "area:core",
@@ -2723,8 +2723,8 @@
       ]
     },
     {
-      "title": "P10-I2 Implement agent registry + Laravel container resolution",
-      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "title": "P1X-I2 Implement agent registry + Laravel container resolution",
+      "milestone": "P1X — Multi-Agent Orchestration & Flagship Blueprints",
       "labels": [
         "type:feature",
         "area:core",
@@ -2746,7 +2746,7 @@
         "Provider execution behavior"
       ],
       "dependencies": [
-        "P10-I1"
+        "P1X-I1"
       ],
       "acceptance_criteria": [
         "First-class PHP agents can be registered explicitly by the application.",
@@ -2768,8 +2768,8 @@
       ]
     },
     {
-      "title": "P10-I3 Implement orchestrator core + execution tree + final orchestration result",
-      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "title": "P1X-I3 Implement orchestrator core + execution tree + final orchestration result",
+      "milestone": "P1X — Multi-Agent Orchestration & Flagship Blueprints",
       "labels": [
         "type:feature",
         "area:core",
@@ -2794,8 +2794,8 @@
         "Blueprint-specific business logic"
       ],
       "dependencies": [
-        "P10-I1",
-        "P10-I2"
+        "P1X-I1",
+        "P1X-I2"
       ],
       "acceptance_criteria": [
         "One orchestration ID spans the whole workflow.",
@@ -2818,8 +2818,8 @@
       ]
     },
     {
-      "title": "P10-I4 Implement delegation/handoff policy engine",
-      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "title": "P1X-I4 Implement delegation/handoff policy engine",
+      "milestone": "P1X — Multi-Agent Orchestration & Flagship Blueprints",
       "labels": [
         "type:feature",
         "area:core",
@@ -2844,7 +2844,7 @@
         "A full application RBAC system"
       ],
       "dependencies": [
-        "P10-I3"
+        "P1X-I3"
       ],
       "acceptance_criteria": [
         "Agents can propose delegation and handoff actions.",
@@ -2867,8 +2867,8 @@
       ]
     },
     {
-      "title": "P10-I5 Implement provider profile assignment + capability compatibility for agents",
-      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "title": "P1X-I5 Implement provider profile assignment + capability compatibility for agents",
+      "milestone": "P1X — Multi-Agent Orchestration & Flagship Blueprints",
       "labels": [
         "type:feature",
         "area:core",
@@ -2891,8 +2891,8 @@
         "Adding new provider SDKs beyond the current runtime substrate"
       ],
       "dependencies": [
-        "P10-I1",
-        "P10-I3"
+        "P1X-I1",
+        "P1X-I3"
       ],
       "acceptance_criteria": [
         "Agents declare a primary provider profile and allowed fallback profiles.",
@@ -2916,8 +2916,8 @@
       ]
     },
     {
-      "title": "P10-I6 Implement handoff payload model + history sharing modes",
-      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "title": "P1X-I6 Implement handoff payload model + history sharing modes",
+      "milestone": "P1X — Multi-Agent Orchestration & Flagship Blueprints",
       "labels": [
         "type:feature",
         "area:core",
@@ -2937,7 +2937,7 @@
         "A semantic summarization redesign"
       ],
       "dependencies": [
-        "P10-I4"
+        "P1X-I4"
       ],
       "acceptance_criteria": [
         "Handoff payloads are structured-first and validated.",
@@ -2959,8 +2959,8 @@
       ]
     },
     {
-      "title": "P10-I7 Emit orchestration lifecycle events + redacted trace metadata",
-      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "title": "P1X-I7 Emit orchestration lifecycle events + redacted trace metadata",
+      "milestone": "P1X — Multi-Agent Orchestration & Flagship Blueprints",
       "labels": [
         "type:feature",
         "area:observability",
@@ -2982,9 +2982,9 @@
         "External observability sinks"
       ],
       "dependencies": [
-        "P10-I3",
-        "P10-I4",
-        "P10-I5"
+        "P1X-I3",
+        "P1X-I4",
+        "P1X-I5"
       ],
       "acceptance_criteria": [
         "Events are emitted at the correct orchestration boundaries.",
@@ -3006,8 +3006,8 @@
       ]
     },
     {
-      "title": "P10-I8 Package fakes + assertion helpers for orchestration flows",
-      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "title": "P1X-I8 Package fakes + assertion helpers for orchestration flows",
+      "milestone": "P1X — Multi-Agent Orchestration & Flagship Blueprints",
       "labels": [
         "type:task",
         "area:core",
@@ -3027,9 +3027,9 @@
         "Live provider integration tests"
       ],
       "dependencies": [
-        "P10-I3",
-        "P10-I4",
-        "P10-I7"
+        "P1X-I3",
+        "P1X-I4",
+        "P1X-I7"
       ],
       "acceptance_criteria": [
         "Orchestration flows can be tested deterministically with package fakes.",
@@ -3048,14 +3048,14 @@
       ]
     },
     {
-      "title": "P10-I9 `TextToStructuredEvaluation` blueprint over orchestrator",
-      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "title": "P1X-I9 `TextToStructuredEvaluation` blueprint over orchestrator",
+      "milestone": "P1X — Multi-Agent Orchestration & Flagship Blueprints",
       "labels": [
         "type:feature",
         "area:core",
         "area:prompts",
         "priority:P0",
-        "status:needs-spec"
+        "status:ready"
       ],
       "summary": "Implement the first flagship blueprint, `TextToStructuredEvaluation`, as a package-owned multi-agent workflow that produces one final structured evaluation result from a single orchestration call.",
       "rationale": "This is one of the must-ship capabilities in `plan/SYSTEM-PROMPT.md`. It should be the first real workflow built on top of the orchestration core, proving the package can deliver opinionated AI workflows rather than only low-level primitives.",
@@ -3072,10 +3072,10 @@
         "Audio input support"
       ],
       "dependencies": [
-        "P10-I3",
-        "P10-I4",
-        "P10-I5",
-        "P10-I6"
+        "P1X-I3",
+        "P1X-I4",
+        "P1X-I5",
+        "P1X-I6"
       ],
       "acceptance_criteria": [
         "One blueprint call returns one final structured result.",
@@ -3098,8 +3098,8 @@
       ]
     },
     {
-      "title": "P10-I10 Tests: `TextToStructuredEvaluation` deterministic multi-agent flow",
-      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "title": "P1X-I10 Tests: `TextToStructuredEvaluation` deterministic multi-agent flow",
+      "milestone": "P1X — Multi-Agent Orchestration & Flagship Blueprints",
       "labels": [
         "type:task",
         "area:core",
@@ -3119,7 +3119,7 @@
         "Benchmark or performance testing"
       ],
       "dependencies": [
-        "P10-I9"
+        "P1X-I9"
       ],
       "acceptance_criteria": [
         "The full workflow is covered in deterministic tests.",
@@ -3138,14 +3138,14 @@
       ]
     },
     {
-      "title": "P10-I11 `AudioToTextToEvaluation` blueprint over orchestrator",
-      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "title": "P1X-I11 `AudioToTextToEvaluation` blueprint over orchestrator",
+      "milestone": "P1X — Multi-Agent Orchestration & Flagship Blueprints",
       "labels": [
         "type:feature",
         "area:core",
         "area:prompts",
         "priority:P1",
-        "status:needs-spec"
+        "status:ready"
       ],
       "summary": "Implement `AudioToTextToEvaluation` as the second flagship workflow, composed over the same orchestration core and using transcription plus structured evaluation stages.",
       "rationale": "This is also explicitly must-ship in `plan/SYSTEM-PROMPT.md`. It should be implemented after the text-only blueprint so that transcription becomes a composition problem, not a fresh orchestration design problem.",
@@ -3160,7 +3160,7 @@
         "Open-ended media pipelines"
       ],
       "dependencies": [
-        "P10-I9"
+        "P1X-I9"
       ],
       "acceptance_criteria": [
         "Audio input can be transcribed and evaluated through one orchestration call.",
@@ -3180,8 +3180,8 @@
       ]
     },
     {
-      "title": "P10-I12 Docs: multi-agent orchestration architecture + workflow authoring",
-      "milestone": "P10 — Multi-Agent Orchestration & Flagship Blueprints",
+      "title": "P1X-I12 Docs: multi-agent orchestration architecture + workflow authoring",
+      "milestone": "P1X — Multi-Agent Orchestration & Flagship Blueprints",
       "labels": [
         "type:docs",
         "area:docs",
@@ -3203,9 +3203,9 @@
         "A production demo application"
       ],
       "dependencies": [
-        "P10-I3",
-        "P10-I9",
-        "P10-I11"
+        "P1X-I3",
+        "P1X-I9",
+        "P1X-I11"
       ],
       "acceptance_criteria": [
         "Architecture docs show the orchestration boundary clearly.",
@@ -3288,18 +3288,18 @@
     "P8-I1 ProjectInspector",
     "P8-I2 ai:make:agent and ai:make:pipeline",
     "P8-I3 Tests: detection correctness + generated code compiles",
-    "P10-I1 Define agent/orchestration contracts + DTOs",
-    "P10-I2 Implement agent registry + Laravel container resolution",
-    "P10-I3 Implement orchestrator core + execution tree + final orchestration result",
-    "P10-I4 Implement delegation/handoff policy engine",
-    "P10-I5 Implement provider profile assignment + capability compatibility for agents",
-    "P10-I6 Implement handoff payload model + history sharing modes",
-    "P10-I7 Emit orchestration lifecycle events + redacted trace metadata",
-    "P10-I8 Package fakes + assertion helpers for orchestration flows",
-    "P10-I9 `TextToStructuredEvaluation` blueprint over orchestrator",
-    "P10-I10 Tests: `TextToStructuredEvaluation` deterministic multi-agent flow",
-    "P10-I11 `AudioToTextToEvaluation` blueprint over orchestrator",
-    "P10-I12 Docs: multi-agent orchestration architecture + workflow authoring",
+    "P1X-I1 Define agent/orchestration contracts + DTOs",
+    "P1X-I2 Implement agent registry + Laravel container resolution",
+    "P1X-I3 Implement orchestrator core + execution tree + final orchestration result",
+    "P1X-I4 Implement delegation/handoff policy engine",
+    "P1X-I5 Implement provider profile assignment + capability compatibility for agents",
+    "P1X-I6 Implement handoff payload model + history sharing modes",
+    "P1X-I7 Emit orchestration lifecycle events + redacted trace metadata",
+    "P1X-I8 Package fakes + assertion helpers for orchestration flows",
+    "P1X-I9 `TextToStructuredEvaluation` blueprint over orchestrator",
+    "P1X-I10 Tests: `TextToStructuredEvaluation` deterministic multi-agent flow",
+    "P1X-I11 `AudioToTextToEvaluation` blueprint over orchestrator",
+    "P1X-I12 Docs: multi-agent orchestration architecture + workflow authoring",
     "P9-I1 README: install + quickstart + configuration reference",
     "P9-I2 Architecture docs: module map + contracts + SDK bridge",
     "P9-I3 Example app or examples/ folder + CI validation",

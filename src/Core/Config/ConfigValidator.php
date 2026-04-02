@@ -164,6 +164,7 @@ final readonly class ConfigValidator
         $this->validateBudgets($config);
         $this->validateOrchestration($config);
         $this->validateResilience($config);
+        $this->validatePrompts($config);
         $this->validateMemory($config);
         $this->validateVector($config);
         $this->validateTools($config);
@@ -439,6 +440,10 @@ final readonly class ConfigValidator
             throw InvalidConfigurationException::invalidType('resilience.circuit_breaker.enabled', 'bool');
         }
 
+        if (array_key_exists('apply_to_failover', $circuitBreaker) && !is_bool($circuitBreaker['apply_to_failover'])) {
+            throw InvalidConfigurationException::invalidType('resilience.circuit_breaker.apply_to_failover', 'bool');
+        }
+
         foreach (['failure_threshold', 'reset_timeout_seconds', 'half_open_success_threshold'] as $key) {
             if (!array_key_exists($key, $circuitBreaker)) {
                 continue;
@@ -449,6 +454,51 @@ final readonly class ConfigValidator
             if (!is_int($value) || $value < 1) {
                 throw InvalidConfigurationException::invalidValue("resilience.circuit_breaker.{$key}", 'Must be an integer >= 1.');
             }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function validatePrompts(array $config): void
+    {
+        if (!array_key_exists('prompts', $config)) {
+            return;
+        }
+
+        if (!is_array($config['prompts'])) {
+            throw InvalidConfigurationException::invalidType('prompts', 'array');
+        }
+
+        $prompts = $config['prompts'];
+
+        if (array_key_exists('default_driver', $prompts)) {
+            $defaultDriver = $prompts['default_driver'];
+
+            if (!is_string($defaultDriver) || $defaultDriver === '') {
+                throw InvalidConfigurationException::invalidValue('prompts.default_driver', 'Must be a non-empty string.');
+            }
+
+            if (!in_array($defaultDriver, ['in_memory', 'file'], true)) {
+                throw InvalidConfigurationException::invalidValue(
+                    'prompts.default_driver',
+                    'Must be one of: in_memory, file.',
+                );
+            }
+        }
+
+        if (!array_key_exists('file', $prompts)) {
+            return;
+        }
+
+        if (!is_array($prompts['file'])) {
+            throw InvalidConfigurationException::invalidType('prompts.file', 'array');
+        }
+
+        $file = $prompts['file'];
+
+        if (array_key_exists('root_path', $file) && $file['root_path'] !== null && (!is_string($file['root_path']) || $file['root_path'] === '')) {
+            throw InvalidConfigurationException::invalidValue('prompts.file.root_path', 'Must be null or a non-empty string.');
         }
     }
 

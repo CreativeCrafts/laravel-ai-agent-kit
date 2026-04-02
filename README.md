@@ -53,8 +53,22 @@ At least one enabled provider must exist, `default_provider` must reference an e
 The default memory driver is `in_memory`. That default is explicit, non-persistent, and safe for tests, local development, and ephemeral runs. Switch `memory.default_driver` to `database` when you
 want encrypted persistent storage and retention-based purging, or to `redis` when you need shared ephemeral memory across workers.
 
-Retry and circuit breaker resilience settings are configured explicitly under `resilience`. Retry policy evaluation remains bounded by `budgets.max_retries_per_step`, and the circuit breaker exposes
-clear `closed`, `open`, and `half_open` semantics with configurable thresholds and reset timing.
+Retry and circuit breaker resilience settings are configured explicitly under `resilience`. Retry policy evaluation is bounded by `budgets.max_retries_per_step` and is now enforced by the synchronous
+pipeline runner at execution time.
+
+Pipeline execution now enforces both `budgets.max_steps` and `budgets.max_total_timeout_seconds` with typed budget exceptions.
+
+Runtime execution now enforces `budgets.max_tokens` and `budgets.max_tool_calls` using SDK usage/tool-call telemetry.
+
+`budgets.max_cost_usd` is enforced in fail-closed mode: when configured, each runtime request must provide numeric `metadata.cost_usd` (or `metadata.estimated_cost_usd`) so cost ceilings can be
+validated deterministically.
+
+Circuit breaker state can be applied to failover selection by enabling `resilience.circuit_breaker.apply_to_failover` (opt-in to preserve previous defaults).
+
+Prompt repositories support two drivers via `prompts.default_driver`:
+
+- `in_memory` (default)
+- `file` (loads prompt metadata and templates from `resources/prompts` or `prompts.file.root_path`)
 
 Pipeline lifecycle and failover telemetry are emitted through Laravel events with redacted defaults. Event payloads expose safe metadata such as run identifiers, provider names, step classes, counts,
 and key lists rather than raw prompt, input, metadata, or provider option values by default.
@@ -101,9 +115,18 @@ return [
         ],
         'circuit_breaker' => [
             'enabled' => true,
+            'apply_to_failover' => false,
             'failure_threshold' => 3,
             'reset_timeout_seconds' => 60,
             'half_open_success_threshold' => 1,
+        ],
+    ],
+
+    'prompts' => [
+        'default_driver' => 'in_memory',
+
+        'file' => [
+            'root_path' => null,
         ],
     ],
 
@@ -132,6 +155,18 @@ return [
     ],
 ];
 ~~~
+
+### Tool input schema support (in-memory registry)
+
+`InMemoryToolRegistry` intentionally validates a constrained, deterministic schema subset for runtime tool input validation:
+
+- Root schema must be `type: object`.
+- `properties` must be a top-level object map.
+- Each property must declare one supported `type`: `string`, `integer`, `number`, `boolean`, `array`, or `object`.
+- `required` must be a list of declared property names.
+- `additionalProperties` may be set to `true` or `false`.
+
+Nested JSON Schema features (for example nested `properties`, `items`, `oneOf`, or format/pattern constraints) are currently out of scope for the in-memory validator.
 
 ## Usage
 

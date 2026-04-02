@@ -127,9 +127,27 @@ return [
     ],
     'circuit_breaker' => [
       'enabled' => (bool)env('AI_AGENT_KIT_CIRCUIT_BREAKER_ENABLED', true),
+      'apply_to_failover' => (bool)env('AI_AGENT_KIT_CIRCUIT_BREAKER_APPLY_TO_FAILOVER', false),
       'failure_threshold' => (int)env('AI_AGENT_KIT_CIRCUIT_BREAKER_FAILURE_THRESHOLD', 3),
       'reset_timeout_seconds' => (int)env('AI_AGENT_KIT_CIRCUIT_BREAKER_RESET_TIMEOUT_SECONDS', 60),
       'half_open_success_threshold' => (int)env('AI_AGENT_KIT_CIRCUIT_BREAKER_HALF_OPEN_SUCCESS_THRESHOLD', 1),
+    ],
+  ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Prompt Repository
+    |--------------------------------------------------------------------------
+    |
+    | Prompts can be resolved from in-memory registrations or loaded from the
+    | filesystem (compatible with ai:make:prompt scaffolds).
+    |
+    */
+  'prompts' => [
+    'default_driver' => (string)env('AI_AGENT_KIT_PROMPTS_DRIVER', 'in_memory'),
+
+    'file' => [
+      'root_path' => env('AI_AGENT_KIT_PROMPTS_FILE_ROOT_PATH'),
     ],
   ],
 
