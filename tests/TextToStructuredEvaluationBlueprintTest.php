@@ -190,6 +190,74 @@ it('keeps the result schema fixed while allowing callers to enable a subset of d
       ->and($fakeRuntime->lastRequest()?->prompt)->toContain('Enabled dimensions: completeness');
 });
 
+it('repairs wrapped structured output returned by the specialist runtime response', function () {
+    $fakeRuntime = new FakeAiRuntime([
+      new ExecutionResult(
+          runId: 'runtime-run-002b',
+          output: <<<OUTPUT
+            Here is the structured evaluation you requested:
+            
+            ```json
+            {
+              "summary": "The response is specific and easy to action.",
+              "recommended_action": "Send the response as drafted.",
+              "confidence": 0.88,
+              "dimensions": {
+                "clarity": {
+                  "score": 5,
+                  "summary": "The wording is direct and unambiguous.",
+                  "evidence": ["The next step is stated clearly in the first sentence."]
+                }
+              }
+            }
+            ```
+            OUTPUT,
+          provider: 'openai-structured',
+          model: 'gpt-test-structured',
+      ),
+    ]);
+
+    app()->instance(AiRuntime::class, $fakeRuntime);
+
+    $result = app(TextToStructuredEvaluation::class)->evaluate(
+        new TextToStructuredEvaluationRequest(
+            subject: 'repairable response',
+            text: 'Please confirm whether the refund can be processed today.',
+            enabledDimensions: ['clarity'],
+            promptVersion: '1.0.0',
+        ),
+    );
+
+    expect($result->summary)
+      ->toBe('The response is specific and easy to action.')
+      ->and($result->recommendedAction)->toBe('Send the response as drafted.')
+      ->and($result->confidence)->toBe(0.88)
+      ->and($result->dimension('clarity')?->score)->toBe(5);
+});
+
+it('throws a typed exception when the specialist refuses to return structured output', function () {
+    $fakeRuntime = new FakeAiRuntime([
+      new ExecutionResult(
+          runId: 'runtime-run-002c',
+          output: 'I cannot provide the requested JSON response for this evaluation.',
+          provider: 'openai-structured',
+          model: 'gpt-test-structured',
+      ),
+    ]);
+
+    app()->instance(AiRuntime::class, $fakeRuntime);
+
+    expect(fn ()
+        => app(TextToStructuredEvaluation::class)->evaluate(
+            new TextToStructuredEvaluationRequest(
+                subject: 'refusal case',
+                text: 'Summarize the policy exception.',
+                enabledDimensions: ['clarity'],
+                promptVersion: '1.0.0',
+            ),
+        ))->toThrow(TextToStructuredEvaluationException::class, 'refused to return structured output');
+});
+
 it('throws a typed exception when the specialist returns invalid json', function () {
     $fakeRuntime = new FakeAiRuntime([
       new ExecutionResult(

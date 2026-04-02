@@ -178,6 +178,60 @@ it('transcribes and evaluates audio through one orchestration call', function ()
       ->and($requests[1]->prompt)->toContain('Please refund the unused portion of my subscription.');
 });
 
+it('repairs wrapped structured evaluation output during the audio workflow', function (): void {
+    $fakeRuntime = new FakeAiRuntime([
+      new ExecutionResult(
+          runId: 'audio-run-001b',
+          output: 'The caller would like a refund before renewal.',
+          provider: 'openai-transcription',
+          model: 'gpt-audio-test',
+      ),
+      new ExecutionResult(
+          runId: 'audio-run-002b',
+          output: <<<OUTPUT
+            The transcript has been evaluated successfully.
+            
+            {
+              "response": {
+                "summary": "The transcript contains a clear refund request.",
+                "recommended_action": "Escalate to billing review.",
+                "confidence": 0.89,
+                "dimensions": {
+                  "clarity": {
+                    "score": 5,
+                    "summary": "The speaker clearly states the desired outcome.",
+                    "evidence": ["The request for a refund is explicit."]
+                  }
+                }
+              }
+            }
+            OUTPUT,
+          provider: 'openai-structured',
+          model: 'gpt-structured-test',
+      ),
+    ]);
+
+    app()->instance(AiRuntime::class, $fakeRuntime);
+
+    $result = app(AudioToTextToEvaluation::class)->evaluate(
+        new AudioToTextToEvaluationRequest(
+            subject: 'repairable audio flow',
+            audioReference: 's3://bucket/audio/repairable.wav',
+            audioMimeType: 'audio/wav',
+            enabledDimensions: ['clarity'],
+            transcriptionPromptVersion: '1.0.0',
+            evaluationPromptVersion: '1.0.0',
+        ),
+    );
+
+    expect($result->transcript)
+      ->toBe('The caller would like a refund before renewal.')
+      ->and($result->summary)->toBe('The transcript contains a clear refund request.')
+      ->and($result->recommendedAction)->toBe('Escalate to billing review.')
+      ->and($result->confidence)->toBe(0.89)
+      ->and($result->dimension('clarity')?->score)->toBe(5);
+});
+
 it('keeps the audio blueprint result schema fixed while preserving the transcript', function (): void {
     $fakeRuntime = new FakeAiRuntime([
       new ExecutionResult(
