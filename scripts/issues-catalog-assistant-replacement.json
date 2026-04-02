@@ -1,0 +1,597 @@
+{
+  "labels": [
+    {
+      "name": "type:feature",
+      "color": "1d76db",
+      "description": "Issue type: feature"
+    },
+    {
+      "name": "type:task",
+      "color": "0e8a16",
+      "description": "Issue type: task"
+    },
+    {
+      "name": "type:docs",
+      "color": "006b75",
+      "description": "Issue type: docs"
+    },
+    {
+      "name": "area:core",
+      "color": "0052cc",
+      "description": "Module area: core"
+    },
+    {
+      "name": "area:runtime",
+      "color": "1d76db",
+      "description": "Module area: runtime"
+    },
+    {
+      "name": "area:resilience",
+      "color": "b60205",
+      "description": "Module area: resilience"
+    },
+    {
+      "name": "area:observability",
+      "color": "e99695",
+      "description": "Module area: observability"
+    },
+    {
+      "name": "area:docs",
+      "color": "e4e669",
+      "description": "Module area: docs"
+    },
+    {
+      "name": "priority:P0",
+      "color": "b60205",
+      "description": "Priority P0: critical"
+    },
+    {
+      "name": "priority:P1",
+      "color": "d93f0b",
+      "description": "Priority P1: high"
+    },
+    {
+      "name": "risk:breaking-change",
+      "color": "c5def5",
+      "description": "Risk: breaking change"
+    },
+    {
+      "name": "status:ready",
+      "color": "0e8a16",
+      "description": "Status: ready"
+    }
+  ],
+  "milestones": [
+    {
+      "title": "P1Y — Assistant Replacement & Provider Parity",
+      "description": "Make Laravel AI Agent Kit a credible replacement for Laravel AI Assistant by adding assistant-compatibility entry points, cross-provider parity hardening, structured-output normalization, staged mixed-provider validation, and migration documentation."
+    }
+  ],
+  "issues": [
+    {
+      "title": "P1Y-I1 Define assistant replacement surface + compatibility contract",
+      "milestone": "P1Y — Assistant Replacement & Provider Parity",
+      "labels": [
+        "type:feature",
+        "area:core",
+        "area:docs",
+        "priority:P0",
+        "risk:breaking-change",
+        "status:ready"
+      ],
+      "summary": "Define the package-owned compatibility target for replacing `laravel-ai-assistant`, including the assistant-style request/response surface, supported conversation semantics, tool execution expectations, structured-output guarantees, and intentional non-goals.\n\nThis issue establishes what “replacement” means in package terms before additional migration or parity work lands.",
+      "rationale": "The package already has a strong orchestration roadmap, but there is no explicit contract for what existing `laravel-ai-assistant` users should expect when migrating. Without a documented compatibility target, migration work will drift toward ambiguous feature parity and ad hoc adapter behavior.\n\nA package-owned compatibility contract prevents that drift and provides a release-quality definition of replacement readiness.",
+      "scope": [
+        "Define the supported assistant-style entry points that agent-kit should expose or emulate",
+        "Define expected conversation continuity behavior and state ownership in package terms",
+        "Define the supported structured-output, tool-execution, and staged-audio behavior expected from replacement flows",
+        "Document intentional non-goals and any assistant-era behavior that will not be preserved",
+        "Define public DTO or facade expectations if new package-owned compatibility surfaces are introduced"
+      ],
+      "out_of_scope": [
+        "Implementing the adapter or compatibility facade",
+        "Cross-provider parity tests",
+        "Provider-specific runtime normalization",
+        "Marketing copy or release announcements"
+      ],
+      "dependencies": [
+        "P1X-I3 Implement orchestrator core + execution tree + final orchestration result",
+        "P1X-I9 `TextToStructuredEvaluation` blueprint over orchestrator",
+        "P1X-I11 `AudioToTextToEvaluation` blueprint over orchestrator"
+      ],
+      "acceptance_criteria": [
+        "A package-owned replacement target is documented for common assistant-style usage.",
+        "The contract explicitly covers text generation, structured output, conversation continuity, tool usage, and staged audio evaluation behavior.",
+        "Any newly introduced public compatibility DTOs or facades remain package-owned and free of provider SDK types.",
+        "Intentional incompatibilities and non-goals are documented clearly enough to support migration planning.",
+        "The compatibility target can be used as the release gate reference for later parity and migration issues."
+      ],
+      "tests": [
+        "Spec/documentation issue; add contract tests only if new public compatibility DTOs or interfaces are introduced",
+        "Architecture/static checks if new public compatibility contracts are added"
+      ],
+      "risks": [
+        "Risk of defining replacement too broadly and creating an unbounded backlog",
+        "Risk of preserving assistant-era behavior that conflicts with the package’s orchestrated design",
+        "Risk of migration confusion if non-goals are under-specified"
+      ],
+      "docs": [
+        "Add or update compatibility notes in architecture and migration docs",
+        "Reference this contract from the later migration guide and release-readiness checklist"
+      ]
+    },
+    {
+      "title": "P1Y-I2 Implement assistant-style facade / adapter over orchestrator",
+      "milestone": "P1Y — Assistant Replacement & Provider Parity",
+      "labels": [
+        "type:feature",
+        "area:core",
+        "area:runtime",
+        "priority:P0",
+        "risk:breaking-change",
+        "status:ready"
+      ],
+      "summary": "Implement a package-owned assistant-style facade or adapter that maps simple `laravel-ai-assistant`-like usage into the orchestrator and flagship blueprints without exposing internal orchestration mechanics to migrating consumers.\n\nThe goal is low-friction migration: straightforward assistant-style calls should execute through package-owned orchestration under the hood.",
+      "rationale": "Current package direction is multi-agent and blueprint-driven, which is architecturally sound, but it is a migration step up from assistant-style usage. Existing users need a compatibility-oriented entry point so they can adopt the package incrementally instead of rewriting directly against coordinator/specialist flows.\n\nA package-owned adapter also keeps migration ergonomics under package control rather than forcing consumers to build their own glue layer.",
+      "scope": [
+        "Implement one package-owned assistant-style facade or adapter over the orchestrator",
+        "Map simple request/response flows into package-owned orchestrated execution",
+        "Support conversation continuation through package memory contracts where enabled",
+        "Preserve package-owned output DTOs and typed failure behavior",
+        "Keep orchestration internals hidden from the compatibility-facing surface"
+      ],
+      "out_of_scope": [
+        "Recreating every historical assistant API variant exactly",
+        "Exposing raw orchestrator internals or provider SDK objects",
+        "Provider-specific optimization logic",
+        "UI or dashboard work"
+      ],
+      "dependencies": [
+        "P1Y-I1 Define assistant replacement surface + compatibility contract",
+        "P1X-I3 Implement orchestrator core + execution tree + final orchestration result",
+        "P1X-I9 `TextToStructuredEvaluation` blueprint over orchestrator",
+        "P2-I2 Integrate memory into workflow context"
+      ],
+      "acceptance_criteria": [
+        "A package-owned assistant-style entry point exists for migration-oriented usage.",
+        "Simple assistant-style requests execute through orchestrator-backed package workflows internally.",
+        "Conversation continuation works through package-owned memory abstractions when enabled.",
+        "Public adapter results remain package-owned and do not expose provider SDK or raw orchestration internals.",
+        "Compatibility failures are surfaced through typed package exceptions or typed package result states."
+      ],
+      "tests": [
+        "Integration: deterministic assistant-style request/response tests over package fakes",
+        "Integration: conversation continue/start tests using package memory contracts",
+        "Negative-path tests for unsupported or intentionally dropped legacy assumptions",
+        "Architecture/static checks for no vendor leakage if new public compatibility contracts are added"
+      ],
+      "risks": [
+        "Risk of adapter scope growing into a second public API to maintain indefinitely",
+        "Risk of accidentally bypassing orchestrator policy and governance",
+        "Risk of migration confusion if adapter behavior differs from the compatibility contract"
+      ],
+      "docs": [
+        "Document the migration-facing assistant-style entry point",
+        "Clarify when consumers should use the adapter versus direct blueprint/orchestrator APIs"
+      ]
+    },
+    {
+      "title": "P1Y-I3 Structured output normalization + repair pipeline",
+      "milestone": "P1Y — Assistant Replacement & Provider Parity",
+      "labels": [
+        "type:feature",
+        "area:runtime",
+        "area:resilience",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Implement a package-owned structured-output normalization and repair pipeline that sits between SDK-backed execution and package-owned structured result DTOs.\n\nThe pipeline should distinguish valid structured output, repairable malformed output, provider refusals, and unrecoverable invalid output without leaking provider-specific behavior into public package contracts.",
+      "rationale": "Provider parity will break first at structured output, not at raw transport. The flagship evaluation flows already depend on prompt-managed structured responses, but OpenAI, Gemini, and xAI-compatible providers may differ in JSON fidelity, refusal shape, and malformed-but-recoverable output.\n\nWithout a package-owned normalization layer, the package cannot credibly claim provider-neutral structured-output behavior or replacement-readiness for assistant-like workloads.",
+      "scope": [
+        "Implement a package-owned normalization layer for structured-output execution paths",
+        "Detect valid JSON, malformed but repairable JSON, and unrecoverable structured-output failures",
+        "Normalize provider refusal or invalid-output behavior into typed package failure categories",
+        "Preserve package-owned result DTOs and keep provider-specific payload quirks internal",
+        "Define deterministic repair/retry boundaries for structured-output workflows"
+      ],
+      "out_of_scope": [
+        "Open-ended free-text generation behavior",
+        "Provider-specific transport clients",
+        "Benchmarking model quality",
+        "Arbitrary caller-defined schemas outside current package result surfaces"
+      ],
+      "dependencies": [
+        "P0-I2 Define package-owned runtime contracts + internal SDK runtime bridge",
+        "P1X-I5 Implement provider profile assignment + capability compatibility for agents",
+        "P1X-I9 `TextToStructuredEvaluation` blueprint over orchestrator"
+      ],
+      "acceptance_criteria": [
+        "Structured-output execution passes through a package-owned normalization layer before public DTO construction.",
+        "Repairable malformed output is handled deterministically within explicit package-owned limits.",
+        "Unrecoverable malformed output and provider refusals fail with typed package exceptions or typed result states.",
+        "The normalization layer remains provider-agnostic at the public API boundary.",
+        "Flagship blueprint public result DTOs remain stable and package-owned."
+      ],
+      "tests": [
+        "Unit: valid structured output, malformed-but-repairable output, and unrecoverable invalid output",
+        "Integration: blueprint execution paths that pass through normalization before final DTO assembly",
+        "Negative-path tests for refusal, empty structured output, and non-JSON payloads",
+        "Determinism controls: use package/runtime fakes, not live provider calls"
+      ],
+      "risks": [
+        "Risk of overfitting normalization to one provider’s failure shape",
+        "Risk of hidden retry behavior making failures harder to reason about",
+        "Risk of silently masking true invalid output instead of surfacing typed package failures"
+      ],
+      "docs": [
+        "Document structured-output normalization semantics and failure categories",
+        "Update flagship blueprint docs to describe package-owned structured-output guarantees"
+      ]
+    },
+    {
+      "title": "P1Y-I4 Provider capability matrix + conformance suite",
+      "milestone": "P1Y — Assistant Replacement & Provider Parity",
+      "labels": [
+        "type:feature",
+        "area:runtime",
+        "area:docs",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Define and ship a package-owned provider capability matrix together with a deterministic conformance suite covering the capabilities that matter for assistant replacement and flagship blueprint execution.\n\nAt minimum, the matrix must cover text generation, structured output, and audio transcription expectations for supported provider profiles.",
+      "rationale": "The package already uses provider profiles and capability-based routing, but there is no explicit parity artifact proving what combinations are expected to work. Without a matrix and conformance suite, provider-neutral design remains an architectural claim rather than an operational guarantee.\n\nA package-owned matrix also prevents provider semantics from leaking into workflow code and docs by centralizing capability expectations in one authoritative surface.",
+      "scope": [
+        "Define a package-owned provider capability matrix for replacement-critical capabilities",
+        "Cover at minimum text generation, structured output, and audio transcription expectations",
+        "Map supported provider profiles into deterministic conformance fixtures",
+        "Use the matrix to drive explicit compatibility checks and docs",
+        "Keep the matrix package-owned rather than vendor-SDK-owned"
+      ],
+      "out_of_scope": [
+        "Supporting every optional provider feature in the first pass",
+        "Dynamic provider health scoring",
+        "Live provider integration tests",
+        "Provider marketing or feature-comparison copy"
+      ],
+      "dependencies": [
+        "P1-I2 Provider profiles + selection policy over Laravel AI SDK",
+        "P1-I3 Failover policy + typed exceptions",
+        "P1X-I5 Implement provider profile assignment + capability compatibility for agents"
+      ],
+      "acceptance_criteria": [
+        "A package-owned capability matrix exists for the provider profiles relevant to assistant replacement.",
+        "The matrix explicitly covers the package capabilities required by flagship blueprints and compatibility flows.",
+        "A deterministic conformance suite validates capability expectations without live provider calls.",
+        "Unsupported capability/profile combinations fail explicitly and predictably.",
+        "Docs and examples can reference the matrix as the authoritative compatibility source."
+      ],
+      "tests": [
+        "Unit: provider-profile capability compatibility tests",
+        "Integration: deterministic conformance tests driven by package/runtime fakes",
+        "Negative-path tests for missing capability coverage and incompatible profile selections"
+      ],
+      "risks": [
+        "Risk of under-specifying capabilities and creating false confidence",
+        "Risk of matrix drift if examples and tests are not tied back to it",
+        "Risk of provider-specific semantics creeping into public package docs"
+      ],
+      "docs": [
+        "Document the provider capability matrix and how it should be interpreted",
+        "Reference the matrix from migration and flagship blueprint docs"
+      ]
+    },
+    {
+      "title": "P1Y-I5 Tests: cross-provider `TextToStructuredEvaluation` parity",
+      "milestone": "P1Y — Assistant Replacement & Provider Parity",
+      "labels": [
+        "type:task",
+        "area:core",
+        "area:runtime",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Add deterministic cross-provider parity coverage for `TextToStructuredEvaluation`, proving that package-owned result DTOs, traces, and failure semantics remain stable across supported provider profiles.",
+      "rationale": "`TextToStructuredEvaluation` is the most important proof point for provider-neutral structured-output behavior. The package can only claim assistant replacement readiness if this blueprint yields the same public package semantics across supported provider profiles.\n\nToday the architectural intent is provider-neutral, but parity must be proven in tests rather than inferred from abstractions.",
+      "scope": [
+        "Add deterministic blueprint tests for at least one OpenAI profile and one Gemini profile",
+        "Add deterministic coverage for one xAI-compatible text profile where the package capability matrix says support is expected",
+        "Assert stable public result DTOs, summaries, and traces across providers",
+        "Assert provider-profile routing and fallback behavior through package semantics",
+        "Use package fakes or runtime fixtures instead of live provider calls"
+      ],
+      "out_of_scope": [
+        "Live provider integration tests",
+        "Open-ended quality benchmarking between models",
+        "Audio-stage coverage",
+        "Provider-specific performance tuning"
+      ],
+      "dependencies": [
+        "P1Y-I3 Structured output normalization + repair pipeline",
+        "P1Y-I4 Provider capability matrix + conformance suite",
+        "P1X-I9 `TextToStructuredEvaluation` blueprint over orchestrator",
+        "P1X-I10 Tests: `TextToStructuredEvaluation` deterministic multi-agent flow"
+      ],
+      "acceptance_criteria": [
+        "Deterministic parity tests exist for `TextToStructuredEvaluation` across the supported provider profiles defined by the capability matrix.",
+        "Public result DTO shape and orchestration trace semantics remain stable across providers.",
+        "Provider-profile routing and fallback behavior are asserted through package-owned semantics.",
+        "Capability mismatches or unsupported profiles fail explicitly and predictably.",
+        "No live provider execution is required for the parity suite."
+      ],
+      "tests": [
+        "Integration: provider-by-provider deterministic blueprint tests using fakes/fixtures",
+        "Schema and DTO assertions for final result stability",
+        "Fallback and mismatch negative-path tests"
+      ],
+      "risks": [
+        "Risk of parity tests over-mocking provider differences and missing real package edge cases",
+        "Risk of provider fixture drift if they are not maintained alongside the capability matrix"
+      ],
+      "docs": [
+        "Update testing guidance to describe provider-parity coverage expectations for flagship blueprints"
+      ]
+    },
+    {
+      "title": "P1Y-I6 Tests: mixed-provider `AudioToTextToEvaluation` stage parity",
+      "milestone": "P1Y — Assistant Replacement & Provider Parity",
+      "labels": [
+        "type:task",
+        "area:core",
+        "area:runtime",
+        "priority:P0",
+        "status:ready"
+      ],
+      "summary": "Add deterministic mixed-provider stage parity coverage for `AudioToTextToEvaluation`, proving that transcription and structured-evaluation stages can route across different compatible provider profiles while preserving one stable package-owned final result surface.",
+      "rationale": "The audio blueprint is the most important staged workflow for validating the package’s capability-based provider model. Assistant replacement is not credible if the package only works when every stage is forced through one OpenAI-shaped path.\n\nBecause the package already models transcription and evaluation as staged capability requirements, it should prove that stage-local provider selection and fallback work through package-owned semantics.",
+      "scope": [
+        "Add deterministic tests with transcription on one compatible provider profile and evaluation on another",
+        "Assert stable final public result DTOs and traces across mixed-provider stage combinations",
+        "Assert stage-local capability mismatch and fallback behavior",
+        "Keep stage routing assertions package-owned and provider-profile-based",
+        "Use package/runtime fakes only"
+      ],
+      "out_of_scope": [
+        "Live audio-provider integration tests",
+        "Waveform or media tooling",
+        "Open-ended multimedia workflows beyond the flagship audio blueprint",
+        "Provider quality benchmarking"
+      ],
+      "dependencies": [
+        "P1Y-I4 Provider capability matrix + conformance suite",
+        "P1Y-I5 Tests: cross-provider `TextToStructuredEvaluation` parity",
+        "P1X-I11 `AudioToTextToEvaluation` blueprint over orchestrator"
+      ],
+      "acceptance_criteria": [
+        "Deterministic tests cover mixed-provider stage routing for `AudioToTextToEvaluation` where the capability matrix indicates support.",
+        "The final package-owned result DTO remains stable regardless of compatible provider-profile mix.",
+        "Transcription-stage and evaluation-stage capability mismatches fail explicitly and predictably.",
+        "Stage-local fallback behavior is asserted through package-owned semantics and traces.",
+        "No live provider calls are required for the stage-parity suite."
+      ],
+      "tests": [
+        "Integration: deterministic mixed-provider stage tests using package/runtime fakes",
+        "Negative-path tests for missing transcription or structured-output capability",
+        "Trace assertions for provider-profile changes across stages"
+      ],
+      "risks": [
+        "Risk of stage fixtures hiding package bugs in orchestration handoff or result normalization",
+        "Risk of capability assumptions diverging from the provider matrix"
+      ],
+      "docs": [
+        "Update audio blueprint documentation to reference stage-level provider compatibility expectations"
+      ]
+    },
+    {
+      "title": "P1Y-I7 Normalize provider failures, refusals, and telemetry into package semantics",
+      "milestone": "P1Y — Assistant Replacement & Provider Parity",
+      "labels": [
+        "type:feature",
+        "area:runtime",
+        "area:resilience",
+        "area:observability",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Normalize provider failures, refusals, fallback events, and runtime telemetry into package-owned semantics so migrating consumers experience stable package behavior regardless of the underlying provider profile.",
+      "rationale": "Replacement readiness is not only about successful responses. Assistant-style consumers also depend on predictable failure behavior. Different providers may vary in refusal shape, invalid-output behavior, incomplete telemetry, and retry/fallback semantics.\n\nIf those differences leak through the package boundary, migration will remain brittle even if the happy path works.",
+      "scope": [
+        "Define typed package error categories for provider refusal, malformed output, fallback exhaustion, and runtime failure",
+        "Normalize provider/runtime error details into package-owned exceptions or typed result states",
+        "Normalize provider selection and failover telemetry into package-owned observability semantics",
+        "Keep payloads redacted by default and preserve package-owned event naming",
+        "Ensure compatibility-facing flows receive stable package semantics"
+      ],
+      "out_of_scope": [
+        "External observability sinks",
+        "Provider-specific dashboard work",
+        "Adaptive runtime scoring or auto-tuning",
+        "Live provider monitoring infrastructure"
+      ],
+      "dependencies": [
+        "P0-I10 Normalize/enrich SDK events into package telemetry",
+        "P1-I3 Failover policy + typed exceptions",
+        "P1Y-I3 Structured output normalization + repair pipeline"
+      ],
+      "acceptance_criteria": [
+        "Package-owned typed failure categories exist for the main replacement-critical provider/runtime failure classes.",
+        "Refusals, malformed output, runtime failures, and failover exhaustion are normalized into package semantics.",
+        "Failover and provider-selection telemetry remain redacted by default and package-owned.",
+        "Compatibility-facing adapter or blueprint flows do not expose raw provider/runtime failure payloads.",
+        "Failure and telemetry behavior is deterministic under package/runtime fakes."
+      ],
+      "tests": [
+        "Unit: error normalization and typed failure mapping",
+        "Integration: refusal, malformed-output, and failover exhaustion flows",
+        "Integration: package telemetry emission and redaction assertions using event fakes"
+      ],
+      "risks": [
+        "Risk of collapsing distinct failure classes into overly generic package errors",
+        "Risk of exposing raw provider payloads in telemetry or exception messages",
+        "Risk of duplicate or confusing overlap with existing runtime telemetry"
+      ],
+      "docs": [
+        "Document normalized failure categories and telemetry semantics",
+        "Reference the failure model from migration guidance and compatibility docs"
+      ]
+    },
+    {
+      "title": "P1Y-I8 Ship Gemini/xAI and mixed-provider profile presets + examples",
+      "milestone": "P1Y — Assistant Replacement & Provider Parity",
+      "labels": [
+        "type:docs",
+        "area:docs",
+        "area:runtime",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Ship tested provider-profile presets and example configurations for Gemini, xAI-compatible, and mixed-provider workflows so the package no longer teaches an OpenAI-first mental model by default.",
+      "rationale": "The package documentation already advocates capability-based routing, but examples and tests still lean heavily on OpenAI-shaped profile names and flows. That weakens the package’s provider-neutral story and creates migration friction for teams that want Gemini or xAI-compatible provider profiles.\n\nShipping tested presets and examples turns provider neutrality into something users can actually adopt rather than merely infer.",
+      "scope": [
+        "Add example provider-profile presets for Gemini-compatible structured-output and text-generation flows",
+        "Add example provider-profile presets for xAI-compatible text flows where the capability matrix says support is expected",
+        "Add mixed-provider example configurations for staged flagship workflows",
+        "Keep examples aligned with tested package behavior and the capability matrix",
+        "Avoid introducing raw provider SDK usage into public docs"
+      ],
+      "out_of_scope": [
+        "Guaranteeing parity for every possible provider feature",
+        "Provider marketing comparisons",
+        "Live provider demo apps",
+        "New provider transport implementations"
+      ],
+      "dependencies": [
+        "P1Y-I4 Provider capability matrix + conformance suite",
+        "P1Y-I5 Tests: cross-provider `TextToStructuredEvaluation` parity",
+        "P1Y-I6 Tests: mixed-provider `AudioToTextToEvaluation` stage parity"
+      ],
+      "acceptance_criteria": [
+        "Package docs include tested provider-profile examples for Gemini-compatible and xAI-compatible flows where supported.",
+        "Mixed-provider staged examples are documented for the flagship workflows.",
+        "Examples align with the capability matrix and deterministic parity tests.",
+        "Examples continue to use package-owned workflow abstractions rather than provider-specific SDK APIs."
+      ],
+      "tests": [
+        "Documentation and snippet validation where practical",
+        "Config validation tests for shipped example profile shapes"
+      ],
+      "risks": [
+        "Risk of examples drifting from tested package behavior",
+        "Risk of overstating support for provider combinations that are not covered by the parity suite"
+      ],
+      "docs": [
+        "Update README, orchestration docs, and example config references",
+        "Reference the provider capability matrix from all provider-profile examples"
+      ]
+    },
+    {
+      "title": "P1Y-I9 Migration guide: `laravel-ai-assistant` -> `laravel-ai-agent-kit`",
+      "milestone": "P1Y — Assistant Replacement & Provider Parity",
+      "labels": [
+        "type:docs",
+        "area:docs",
+        "priority:P1",
+        "risk:breaking-change",
+        "status:ready"
+      ],
+      "summary": "Write the migration guide from `laravel-ai-assistant` to `laravel-ai-agent-kit`, covering terminology mapping, API mapping, config/provider-profile mapping, behavioral differences, staged workflow adoption, and any intentional incompatibilities.",
+      "rationale": "A replacement story is incomplete without a precise migration guide. Existing users need a document that tells them what to change, what stays conceptually similar, what becomes blueprint/orchestrator-driven, and where the assistant-style adapter fits into the new package.\n\nWithout this guide, migration will remain oral tradition and parity work will be much harder to evaluate.",
+      "scope": [
+        "Document terminology mapping from assistant concepts to agent-kit concepts",
+        "Document API and DTO mapping for common migration paths",
+        "Document config and provider-profile mapping, including capability-driven routing",
+        "Document behavioral differences, intentional incompatibilities, and staged workflow adoption guidance",
+        "Reference the assistant-style adapter and flagship blueprints where appropriate"
+      ],
+      "out_of_scope": [
+        "Automated codemod tooling",
+        "Interactive migration wizard",
+        "Release announcement copy",
+        "Guaranteeing zero-behavior-change migration for every historical edge case"
+      ],
+      "dependencies": [
+        "P1Y-I1 Define assistant replacement surface + compatibility contract",
+        "P1Y-I2 Implement assistant-style facade / adapter over orchestrator",
+        "P1Y-I8 Ship Gemini/xAI and mixed-provider profile presets + examples"
+      ],
+      "acceptance_criteria": [
+        "A migration guide exists for moving from `laravel-ai-assistant` to `laravel-ai-agent-kit`.",
+        "The guide covers terminology, API, configuration, provider-profile, and behavioral mapping.",
+        "Intentional incompatibilities and non-goals are explicit and discoverable.",
+        "The guide explains when to use the assistant-style adapter versus direct blueprint/orchestrator usage.",
+        "Migration snippets align with the actual package implementation and examples."
+      ],
+      "tests": [
+        "Documentation review",
+        "Snippet verification where practical"
+      ],
+      "risks": [
+        "Risk of migration docs becoming stale if not tied to compatibility and parity work",
+        "Risk of under-documenting breaking assumptions and causing migration surprises"
+      ],
+      "docs": [
+        "This issue directly produces the migration guide",
+        "Link the guide from README, architecture docs, and release-readiness docs"
+      ]
+    },
+    {
+      "title": "P1Y-I10 Release gate: assistant replacement readiness checklist",
+      "milestone": "P1Y — Assistant Replacement & Provider Parity",
+      "labels": [
+        "type:task",
+        "area:core",
+        "area:docs",
+        "priority:P1",
+        "status:ready"
+      ],
+      "summary": "Create the release-readiness checklist that defines when the package can credibly claim `laravel-ai-assistant` replacement readiness.\n\nThe checklist should tie together compatibility, parity, migration, and documentation requirements and become the explicit gate for future package positioning.",
+      "rationale": "The package already has a strong architecture story and a growing issue catalog, but release claims need a hard gate. Without a checklist, the package may be described as a replacement before compatibility surfaces, provider parity, and migration docs are actually complete.\n\nA release gate turns the replacement discussion from opinion into a verifiable package standard.",
+      "scope": [
+        "Define the release gate for assistant replacement readiness",
+        "Require completion or explicit sign-off for compatibility, parity, migration, and docs work",
+        "Reference the provider matrix, flagship parity tests, and migration guide",
+        "Keep the checklist package-owned and version-controlled"
+      ],
+      "out_of_scope": [
+        "Release announcement content",
+        "Semantic-versioning policy changes unrelated to replacement readiness",
+        "Optional marketing or launch materials"
+      ],
+      "dependencies": [
+        "P1Y-I1 Define assistant replacement surface + compatibility contract",
+        "P1Y-I5 Tests: cross-provider `TextToStructuredEvaluation` parity",
+        "P1Y-I6 Tests: mixed-provider `AudioToTextToEvaluation` stage parity",
+        "P1Y-I9 Migration guide: `laravel-ai-assistant` -> `laravel-ai-agent-kit`"
+      ],
+      "acceptance_criteria": [
+        "A version-controlled replacement-readiness checklist exists.",
+        "The checklist references compatibility, parity, migration, and documentation requirements explicitly.",
+        "The checklist can be used as a release gate before package positioning claims are updated.",
+        "Checklist items are concrete enough to audit rather than interpret informally."
+      ],
+      "tests": [
+        "Process/documentation issue; no code tests required unless helper automation is introduced"
+      ],
+      "risks": [
+        "Risk of the checklist being too vague to enforce",
+        "Risk of checklist drift if parity and migration artifacts are not referenced explicitly"
+      ],
+      "docs": [
+        "Store the checklist with package docs or release-process notes",
+        "Reference the checklist from the package positioning and migration documentation"
+      ],
+      "execution_note": "Intentionally schedule this issue after compatibility, parity, and migration work so the checklist audits a near-final package shape rather than a moving target."
+    }
+  ],
+  "execution_order": [
+    "P1Y-I1 Define assistant replacement surface + compatibility contract",
+    "P1Y-I2 Implement assistant-style facade / adapter over orchestrator",
+    "P1Y-I3 Structured output normalization + repair pipeline",
+    "P1Y-I4 Provider capability matrix + conformance suite",
+    "P1Y-I5 Tests: cross-provider `TextToStructuredEvaluation` parity",
+    "P1Y-I6 Tests: mixed-provider `AudioToTextToEvaluation` stage parity",
+    "P1Y-I7 Normalize provider failures, refusals, and telemetry into package semantics",
+    "P1Y-I8 Ship Gemini/xAI and mixed-provider profile presets + examples",
+    "P1Y-I9 Migration guide: `laravel-ai-assistant` -> `laravel-ai-agent-kit`",
+    "P1Y-I10 Release gate: assistant replacement readiness checklist"
+  ]
+}
