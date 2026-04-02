@@ -8,6 +8,7 @@ set -euo pipefail
 #
 # Example:
 #   ./scripts/bootstrap-issues.sh creativecrafts/laravel-ai-agent-kit scripts/issues-catalog.json
+#   ./scripts/bootstrap-issues.sh CreativeCrafts/laravel-ai-agent-kit scripts/issues-catalog-assistant-replacement.json
 #
 # Requirements:
 # - gh CLI authenticated
