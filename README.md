@@ -205,6 +205,19 @@ final class AppServiceProvider extends ServiceProvider
 
 Registered agents are resolved through the Laravel container and looked up by the stable agent key returned from their package-owned `AgentDefinition`.
 
+## Multi-Agent Orchestration
+
+The package orchestration boundary is package-owned and provider-neutral:
+
+- callers submit one `OrchestrationRequest` to `AgentOrchestrator`
+- agents implement package contracts and return package-owned `AgentExecutionResult` values
+- provider selection is resolved from each agent's declared provider profiles and required capabilities
+- delegation policy and handoff semantics are enforced by the orchestrator rather than by individual agents
+- the final `OrchestrationResult` exposes one orchestration ID, one final owner, one final output payload, one summary, and a lineage trace
+
+For the full architecture, authoring model, delegation and handoff rules, provider-profile assignment behavior, and flagship workflow guidance, see
+[`MULTI_AGENT_ORCHESTRATION.md`](MULTI_AGENT_ORCHESTRATION.md).
+
 Run the package-owned `TextToStructuredEvaluation` blueprint when you want one structured evaluation result from one orchestration call while keeping the internal coordinator-to-specialist flow hidden
 behind the public API:
 
@@ -413,6 +426,19 @@ $result = app(AgentOrchestrator::class)->run(
     ),
 );
 ~~~
+
+`OrchestrationResult` stays package-owned. The stable surface is:
+
+- `orchestrationId` for the whole orchestration run
+- `finalAgent` and `finalExecutionId` for the terminal owner and terminal execution node
+- `finalOutput` for the package-owned workflow payload
+- `summary` for the compact orchestration-level summary
+- `trace` for execution lineage, including `executionId`, `parentExecutionId`, `agentKey`, `providerProfile`, `resultKind`, optional `targetAgent`, and safe metadata
+
+Delegation semantics are explicit:
+
+- `delegate_and_resume` sends work to a child agent and then resumes the parent agent after the child finishes
+- `transfer_control` hands ownership to the child agent, making the delegated agent the final owner if it completes the workflow
 
 Use vector storage through the package contract to keep embeddings and semantic search behind a stable boundary:
 
