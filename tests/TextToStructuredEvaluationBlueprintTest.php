@@ -258,6 +258,31 @@ it('throws a typed exception when the specialist refuses to return structured ou
         ))->toThrow(TextToStructuredEvaluationException::class, 'refused to return structured output');
 });
 
+it('throws a typed exception when the specialist returns refusal json in the refusal field', function () {
+    $fakeRuntime = new FakeAiRuntime([
+      new ExecutionResult(
+          runId: 'runtime-run-002d',
+          output: json_encode([
+          'refusal' => 'I cannot provide the requested JSON response for this evaluation.',
+        ], JSON_THROW_ON_ERROR),
+          provider: 'openai-structured',
+          model: 'gpt-test-structured',
+      ),
+    ]);
+
+    app()->instance(AiRuntime::class, $fakeRuntime);
+
+    expect(fn ()
+        => app(TextToStructuredEvaluation::class)->evaluate(
+            new TextToStructuredEvaluationRequest(
+                subject: 'refusal json case',
+                text: 'Summarize the policy exception.',
+                enabledDimensions: ['clarity'],
+                promptVersion: '1.0.0',
+            ),
+        ))->toThrow(TextToStructuredEvaluationException::class, 'refused to return structured output');
+});
+
 it('throws a typed exception when the specialist returns invalid json', function () {
     $fakeRuntime = new FakeAiRuntime([
       new ExecutionResult(
