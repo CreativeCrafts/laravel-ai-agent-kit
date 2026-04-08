@@ -9,6 +9,8 @@ use JsonException;
 
 final class StructuredEvaluationOutputNormalizer
 {
+    private const int REFUSAL_PAYLOAD_SCAN_MAX_DEPTH = 6;
+
     public function normalize(string $output): StructuredEvaluationOutputNormalizationResult
     {
         $trimmedOutput = trim($output);
@@ -70,11 +72,20 @@ final class StructuredEvaluationOutputNormalizer
         string $rawOutput,
         bool $assumeRepaired,
     ): StructuredEvaluationOutputNormalizationResult {
-        if ($this->looksLikeRefusalPayload($decoded)) {
-            throw TextToStructuredEvaluationException::refusedStructuredOutput($rawOutput);
-        }
+        try {
+            [$payload, $wasRepaired] = $this->normalizeDecodedPayload($decoded);
+        } catch (TextToStructuredEvaluationException $exception) {
+            $wrappedPayload = $this->extractWrappedPayload($decoded);
 
-        [$payload, $wasRepaired] = $this->normalizeDecodedPayload($decoded);
+            $looksLikeRefusalPayload = $this->looksLikeRefusalPayload($decoded)
+              || (is_array($wrappedPayload) && $this->looksLikeRefusalPayload($wrappedPayload));
+
+            if (!$this->attemptsStructuredEvaluationPayload($decoded) && $looksLikeRefusalPayload) {
+                throw TextToStructuredEvaluationException::refusedStructuredOutput($rawOutput);
+            }
+
+            throw $exception;
+        }
 
         return new StructuredEvaluationOutputNormalizationResult(
             status: $assumeRepaired || $wasRepaired
@@ -82,65 +93,6 @@ final class StructuredEvaluationOutputNormalizer
             : StructuredEvaluationOutputNormalizationResult::STATUS_VALID,
             payload: $payload,
         );
-    }
-
-    /**
-     * @param array<mixed> $decoded
-     */
-    private function looksLikeRefusalPayload(array $decoded): bool
-    {
-        foreach (['message', 'text', 'error', 'detail', 'reason'] as $key) {
-            $candidate = $decoded[$key] ?? null;
-
-            if (is_string($candidate) && $this->looksLikeRefusalText($candidate)) {
-                return true;
-            }
-        }
-
-        foreach ($decoded as $value) {
-            if (is_string($value) && $this->looksLikeRefusalText($value)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function looksLikeRefusalText(string $text): bool
-    {
-        $collapsedWhitespace = preg_replace('/\s+/u', ' ', $text);
-
-        if (!is_string($collapsedWhitespace)) {
-            $collapsedWhitespace = $text;
-        }
-
-        $normalized = strtolower(trim($collapsedWhitespace));
-
-        if ($normalized === '') {
-            return false;
-        }
-
-        foreach (
-          [
-            "i can't",
-            'i cannot',
-            'unable to comply',
-            'unable to provide',
-            'cannot comply',
-            'cannot provide',
-            'cannot return',
-            'must decline',
-            'i must decline',
-            'refuse to',
-            'refusing to',
-          ] as $needle
-        ) {
-            if (str_contains($normalized, $needle)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**
@@ -290,6 +242,115 @@ final class StructuredEvaluationOutputNormalizer
         }
 
         return null;
+    }
+
+    /**
+     * @param array<mixed> $decoded
+     */
+    private function looksLikeRefusalPayload(array $decoded): bool
+    {
+        foreach (['refusal', 'message', 'text', 'error', 'detail', 'reason'] as $key) {
+            $candidate = $decoded[$key] ?? null;
+
+            if ($this->candidateContainsRefusalText($candidate)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function candidateContainsRefusalText(mixed $candidate): bool
+    {
+        return $this->candidateContainsRefusalTextAtDepth($candidate, 0);
+    }
+
+    private function candidateContainsRefusalTextAtDepth(mixed $candidate, int $depth): bool
+    {
+        if (is_string($candidate)) {
+            return $this->looksLikeRefusalText($candidate);
+        }
+
+        if (!is_array($candidate)) {
+            return false;
+        }
+
+        if ($depth >= self::REFUSAL_PAYLOAD_SCAN_MAX_DEPTH) {
+            return false;
+        }
+
+        foreach ($candidate as $value) {
+            if ($this->candidateContainsRefusalTextAtDepth($value, $depth + 1)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function looksLikeRefusalText(string $text): bool
+    {
+        $collapsedWhitespace = preg_replace('/\s+/u', ' ', $text);
+
+        if (!is_string($collapsedWhitespace)) {
+            $collapsedWhitespace = $text;
+        }
+
+        $normalized = strtolower(trim($collapsedWhitespace));
+
+        if ($normalized === '') {
+            return false;
+        }
+
+        foreach (
+          [
+            "i can't",
+            'i cannot',
+            'unable to comply',
+            'unable to provide',
+            'cannot comply',
+            'cannot provide',
+            'cannot return',
+            'must decline',
+            'i must decline',
+            'refuse to',
+            'refusing to',
+          ] as $needle
+        ) {
+            if (str_contains($normalized, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<mixed> $decoded
+     */
+    private function attemptsStructuredEvaluationPayload(array $decoded): bool
+    {
+        if ($this->containsAnyStructuredPayloadKeys($decoded)) {
+            return true;
+        }
+
+        $wrappedPayload = $this->extractWrappedPayload($decoded);
+
+        return is_array($wrappedPayload) && $this->containsAnyStructuredPayloadKeys($wrappedPayload);
+    }
+
+    /**
+     * @param array<mixed> $payload
+     */
+    private function containsAnyStructuredPayloadKeys(array $payload): bool
+    {
+        foreach (['summary', 'recommended_action', 'confidence', 'dimensions'] as $key) {
+            if (array_key_exists($key, $payload)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function extractFirstJsonObject(string $output): ?string

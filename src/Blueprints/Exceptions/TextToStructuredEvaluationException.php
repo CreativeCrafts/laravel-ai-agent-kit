@@ -17,7 +17,10 @@ final class TextToStructuredEvaluationException extends RuntimeException
     public static function invalidJson(string $output, ?Throwable $previous = null): self
     {
         return new self(
-            sprintf('TextToStructuredEvaluation specialist output must be valid JSON. Received: %s', $output),
+            sprintf(
+                'TextToStructuredEvaluation specialist output must be valid JSON. Received: %s',
+                self::redactedOutputSummary($output),
+            ),
             previous: $previous,
         );
     }
@@ -27,8 +30,13 @@ final class TextToStructuredEvaluationException extends RuntimeException
         return new self(
             sprintf(
                 'TextToStructuredEvaluation specialist refused to return structured output. Received: %s',
-                $output,
+                self::redactedOutputSummary($output),
             ),
         );
+    }
+
+    private static function redactedOutputSummary(string $output): string
+    {
+        return sprintf('[redacted output; length=%d chars]', strlen($output));
     }
 }
