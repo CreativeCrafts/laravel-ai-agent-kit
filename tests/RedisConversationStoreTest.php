@@ -19,6 +19,11 @@ beforeEach(function (): void {
     config()->set('ai-agent-kit.memory.redis.driver_name', 'redis');
     config()->set('ai-agent-kit.memory.redis.retention_days', 30);
 
+    app()->forgetInstance(ConversationStore::class);
+    app()->forgetInstance(ConversationRetentionPurger::class);
+    app()->forgetInstance(RedisConversationStore::class);
+    app()->forgetInstance('redis');
+
     app()->singleton('redis', fn (): FakeRedisManager => new FakeRedisManager());
 });
 
@@ -29,6 +34,9 @@ it('binds the redis conversation store and retention purger contracts', function
 });
 
 it('fails fast when redis memory driver is configured but redis manager binding is missing', function (): void {
+    app()->forgetInstance(ConversationStore::class);
+    app()->forgetInstance(ConversationRetentionPurger::class);
+    app()->forgetInstance(RedisConversationStore::class);
     app()->forgetInstance('redis');
     app()->offsetUnset('redis');
 
@@ -37,8 +45,8 @@ it('fails fast when redis memory driver is configured but redis manager binding 
 
 it('persists and reloads conversations through the redis-backed store', function (): void {
     $store = app(ConversationStore::class);
-    $startedAt = new DateTimeImmutable('2026-03-14T09:00:00+00:00');
-    $updatedAt = new DateTimeImmutable('2026-03-14T09:05:00+00:00');
+    $startedAt = new DateTimeImmutable('2036-05-14T09:00:00+00:00');
+    $updatedAt = new DateTimeImmutable('2036-05-14T09:05:00+00:00');
 
     $conversation = new Conversation(
         id: new ConversationId('conv-redis'),
@@ -78,7 +86,7 @@ it('persists and reloads conversations through the redis-backed store', function
 
 it('preserves delete semantics through the shared redis memory contract', function (): void {
     $store = app(ConversationStore::class);
-    $startedAt = new DateTimeImmutable('2026-03-14T09:00:00+00:00');
+    $startedAt = new DateTimeImmutable('2036-05-14T09:00:00+00:00');
     $conversationId = new ConversationId('conv-redis-delete');
 
     $store->save(
@@ -119,14 +127,14 @@ it('purges expired conversations from the redis driver without real network acce
     $store->save(
         new Conversation(
             id: new ConversationId('conv-redis-active'),
-            createdAt: new DateTimeImmutable('2026-03-14T07:00:00+00:00'),
-            updatedAt: new DateTimeImmutable('2026-03-14T08:00:00+00:00'),
+            createdAt: new DateTimeImmutable('2036-05-14T07:00:00+00:00'),
+            updatedAt: new DateTimeImmutable('2036-05-14T08:00:00+00:00'),
             messages: [
           new ConversationMessage(
               id: new MessageId('msg-redis-active'),
               role: ConversationMessageRole::Assistant,
               content: 'Active redis content',
-              createdAt: new DateTimeImmutable('2026-03-14T08:00:00+00:00'),
+              createdAt: new DateTimeImmutable('2036-05-14T08:00:00+00:00'),
           ),
         ],
         ),
