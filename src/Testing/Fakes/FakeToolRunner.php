@@ -26,6 +26,9 @@ final class FakeToolRunner implements ToolRegistry
     {
         $this->registry = new InMemoryToolRegistry(
             authorizer: new class () implements ToolAuthorizer {
+              /**
+               * @param array<string, mixed> $input
+               */
               public function authorize(Tool $tool, array $input): bool
               {
                   return true;
@@ -37,65 +40,20 @@ final class FakeToolRunner implements ToolRegistry
 
     /**
      * @param array<string, mixed>|Closure(array<string, mixed>): array<string, mixed> $result
-     * @param array<string, mixed>|null $schema
+     * @param array{type:string, properties:array<string, array{type:string}>, required:list<string>, additionalProperties:bool}|null $schema
      */
     public function stub(string $name, array|Closure $result, ?array $schema = null): self
     {
-        $tool = new class ($name, $schema ?? [
+        $tool = new FakeToolRunnerStubTool(
+            $name,
+            $schema ?? [
           'type' => 'object',
           'properties' => [],
           'required' => [],
           'additionalProperties' => true,
-        ], $result) implements Tool {
-            private string $name;
-
-            /**
-             * @var array<string, mixed>
-             */
-            private array $schema;
-
-            /**
-             * @var array<string, mixed>|Closure(array<string, mixed>): array<string, mixed>
-             */
-            private array|Closure $result;
-
-            /**
-             * @param array<string, mixed> $schema
-             * @param array<string, mixed>|Closure(array<string, mixed>): array<string, mixed> $result
-             */
-            public function __construct(string $name, array $schema, array|Closure $result)
-            {
-                $this->name = $name;
-                $this->schema = $schema;
-                $this->result = $result;
-            }
-
-            public function name(): string
-            {
-                return $this->name;
-            }
-
-            /**
-             * @return array<string, mixed>
-             */
-            public function inputSchema(): array
-            {
-                return $this->schema;
-            }
-
-            /**
-             * @param array<string, mixed> $input
-             * @return array<string, mixed>
-             */
-            public function execute(array $input): array
-            {
-                if ($this->result instanceof Closure) {
-                    return ($this->result)($input);
-                }
-
-                return $this->result;
-            }
-        };
+        ],
+            $result,
+        );
 
         $this->register($tool);
 
@@ -154,11 +112,84 @@ final class FakeToolRunner implements ToolRegistry
         $this->executions = [];
         $this->registry = new InMemoryToolRegistry(
             authorizer: new class () implements ToolAuthorizer {
+              /**
+               * @param array<string, mixed> $input
+               */
               public function authorize(Tool $tool, array $input): bool
               {
                   return true;
               }
           },
         );
+    }
+}
+
+/**
+ * @phpstan-type FakeToolRunnerSchema array{
+ *     type:string,
+ *     properties:array<string, array{type:string}>,
+ *     required:list<string>,
+ *     additionalProperties:bool
+ * }
+ * @phpstan-type FakeToolRunnerResult array<string, mixed>
+ */
+final class FakeToolRunnerStubTool implements Tool
+{
+    private string $name;
+
+    /**
+     * @var FakeToolRunnerSchema
+     */
+    private array $schema;
+
+    /**
+     * @var FakeToolRunnerResult|Closure(array<string, mixed>): FakeToolRunnerResult
+     */
+    private array|Closure $result;
+
+    /**
+     * @param FakeToolRunnerSchema $schema
+     * @param FakeToolRunnerResult|Closure(array<string, mixed>): FakeToolRunnerResult $result
+     */
+    public function __construct(string $name, array $schema, array|Closure $result)
+    {
+        $this->name = $name;
+        $this->schema = $schema;
+        $this->result = $result;
+    }
+
+    public function name(): string
+    {
+        return $this->name;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function inputSchema(): array
+    {
+        /** @var array<string, mixed> $schema */
+        $schema = $this->schema;
+
+        return $schema;
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     * @return array<string, mixed>
+     */
+    public function execute(array $input): array
+    {
+        if ($this->result instanceof Closure) {
+            /** @var array<string, mixed> $result */
+            $result = ($this->result)($input);
+
+            return $result;
+        }
+
+        /** @var array<string, mixed> $result */
+        $result = $this->result;
+
+        return $result;
     }
 }
