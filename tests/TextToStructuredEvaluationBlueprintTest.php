@@ -7,6 +7,7 @@ use CreativeCrafts\LaravelAiAgentKit\Blueprints\Agents\TextToStructuredEvaluatio
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\Exceptions\TextToStructuredEvaluationException;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluation;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationResult;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\AgentRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
@@ -16,6 +17,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\ContainerAgentRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\SynchronousAgentOrchestrator;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\AuditedProviderCapabilityMatrix;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredAgentProviderProfileSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
@@ -26,64 +28,12 @@ use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptExecutionMapper;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAiRuntime;
 
 beforeEach(function (): void {
-    config()->set('ai-agent-kit.providers', [
-      'openai-default' => [
-        'driver' => 'openai',
-        'enabled' => true,
-        'capabilities' => ['text_generation'],
-        'options' => [],
-      ],
-      'openai-structured' => [
-        'driver' => 'openai',
-        'enabled' => true,
-        'capabilities' => ['structured_output'],
-        'options' => [],
-      ],
-    ]);
-    config()->set('ai-agent-kit.default_provider', 'openai-default');
-    config()->set('ai-agent-kit.failover_order', ['openai-default', 'openai-structured']);
-
-    refreshTextToStructuredEvaluationBindings();
-
-    $promptRepository = new InMemoryPromptRepository([
-      'text-to-structured-evaluation.specialist' => [
-        '1.0.0' => <<<PROMPT
-                       Evaluate the following text for {{subject}}.
-                       Enabled dimensions: {{enabled_dimensions}}
-                       Text: {{text}}
-                       PROMPT,
-      ],
-    ]);
-
-    app()->instance(InMemoryPromptRepository::class, $promptRepository);
-    app()->instance(PromptRepository::class, $promptRepository);
-
-    app()->forgetInstance(PromptExecutionMapper::class);
-
-    $agentRegistry = app(AgentRegistry::class);
-    $agentRegistry->registerMany([
-      TextToStructuredEvaluationCoordinatorAgent::class,
-      TextToStructuredEvaluationSpecialistAgent::class,
-    ]);
+    bootTextToStructuredEvaluationBlueprintTestbed(
+        providers: textToStructuredEvaluationDefaultProviders(),
+    );
 });
 
-function refreshTextToStructuredEvaluationBindings(): void
-{
-    app()->forgetInstance(ConfiguredProviderRegistry::class);
-    app()->forgetInstance(ProviderRegistry::class);
-    app()->forgetInstance(DefaultProviderSelector::class);
-    app()->forgetInstance(ProviderSelector::class);
-    app()->forgetInstance(ConfiguredAgentProviderProfileSelector::class);
-    app()->forgetInstance(AgentProviderProfileSelector::class);
-    app()->forgetInstance(SynchronousAgentOrchestrator::class);
-    app()->forgetInstance(AgentOrchestrator::class);
-    app()->forgetInstance(PromptExecutionMapper::class);
-    app()->forgetInstance(AiRuntime::class);
-    app()->forgetInstance(ContainerAgentRegistry::class);
-    app()->forgetInstance(AgentRegistry::class);
-}
-
-it('returns one final structured result from a single blueprint call over the orchestrator', function () {
+it('returns one final structured result from a single blueprint call over the orchestrator', function (): void {
     $fakeRuntime = new FakeAiRuntime([
       new ExecutionResult(
           runId: 'runtime-run-001',
@@ -136,6 +86,7 @@ it('returns one final structured result from a single blueprint call over the or
       ->and($result->trace[0]->resultKind)->toBe('delegate')
       ->and($result->trace[0]->targetAgent)->toBe(TextToStructuredEvaluationSpecialistAgent::KEY)
       ->and($result->trace[1]->agentKey)->toBe(TextToStructuredEvaluationSpecialistAgent::KEY)
+      ->and($result->trace[1]->providerProfile)->toBe('openai-structured')
       ->and($result->trace[2]->agentKey)->toBe(TextToStructuredEvaluationCoordinatorAgent::KEY)
       ->and($fakeRuntime)->toHaveRuntimeExecutions(1);
 
@@ -150,7 +101,7 @@ it('returns one final structured result from a single blueprint call over the or
       ->and($runtimeRequest?->metadata['prompt_version'])->toBe('1.0.0');
 });
 
-it('keeps the result schema fixed while allowing callers to enable a subset of dimensions', function () {
+it('keeps the result schema fixed while allowing callers to enable a subset of dimensions', function (): void {
     $fakeRuntime = new FakeAiRuntime([
       new ExecutionResult(
           runId: 'runtime-run-002',
@@ -190,7 +141,71 @@ it('keeps the result schema fixed while allowing callers to enable a subset of d
       ->and($fakeRuntime->lastRequest()?->prompt)->toContain('Enabled dimensions: completeness');
 });
 
-it('repairs wrapped structured output returned by the specialist runtime response', function () {
+it('preserves the same package-owned result semantics across matrix-valid provider profiles', function (): void {
+    $payload = textToStructuredEvaluationParityPayload();
+
+    $scenarios = [
+      'openai-structured' => json_encode($payload, JSON_THROW_ON_ERROR),
+      'anthropic-structured' => json_encode([
+        'data' => $payload,
+      ], JSON_THROW_ON_ERROR),
+      'gemini-structured' => <<<OUTPUT
+                                 Provider response:
+                                 
+                                 ```json
+                                 {
+                                   "summary": "The response is specific and easy to action.",
+                                   "recommended_action": "Send the response as drafted.",
+                                   "confidence": 0.88,
+                                   "dimensions": {
+                                     "clarity": {
+                                       "score": 5,
+                                       "summary": "The wording is direct and unambiguous.",
+                                       "evidence": [
+                                         "The next step is stated clearly in the first sentence."
+                                       ]
+                                     }
+                                   }
+                                 }
+                                 ```
+                                 OUTPUT,
+    ];
+
+    foreach ($scenarios as $providerProfile => $output) {
+        bootTextToStructuredEvaluationBlueprintTestbed(
+            providers: textToStructuredEvaluationProvidersOrderedFor($providerProfile),
+        );
+
+        assertTextToStructuredEvaluationProfileConforms($providerProfile);
+
+        $fakeRuntime = new FakeAiRuntime([
+          new ExecutionResult(
+              runId: sprintf('runtime-run-parity-%s', $providerProfile),
+              output: $output,
+              provider: $providerProfile,
+              model: 'gpt-test-structured',
+          ),
+        ]);
+
+        app()->instance(AiRuntime::class, $fakeRuntime);
+
+        $result = app(TextToStructuredEvaluation::class)->evaluate(
+            new TextToStructuredEvaluationRequest(
+                subject: 'repairable response',
+                text: 'Please confirm whether the refund can be processed today.',
+                enabledDimensions: ['clarity'],
+                promptVersion: '1.0.0',
+            ),
+        );
+
+        expect(textToStructuredEvaluationParitySnapshot($result))
+          ->toBe(textToStructuredEvaluationExpectedParitySnapshot('repairable response'))
+          ->and($result->trace[1]->providerProfile)->toBe($providerProfile)
+          ->and($fakeRuntime->lastRequest()?->provider)->toBe($providerProfile);
+    }
+});
+
+it('repairs wrapped structured output returned by the specialist runtime response', function (): void {
     $fakeRuntime = new FakeAiRuntime([
       new ExecutionResult(
           runId: 'runtime-run-002b',
@@ -235,7 +250,44 @@ it('repairs wrapped structured output returned by the specialist runtime respons
       ->and($result->dimension('clarity')?->score)->toBe(5);
 });
 
-it('throws a typed exception when the specialist refuses to return structured output', function () {
+it('routes to the next compatible provider profile when the first compatible specialist profile is disabled', function (): void {
+    $providers = textToStructuredEvaluationDefaultProviders();
+    $providers['openai-structured']['enabled'] = false;
+
+    bootTextToStructuredEvaluationBlueprintTestbed(
+        providers: $providers,
+    );
+
+    assertTextToStructuredEvaluationProfileConforms('anthropic-structured');
+
+    $fakeRuntime = new FakeAiRuntime([
+      new ExecutionResult(
+          runId: 'runtime-run-fallback-001',
+          output: json_encode(textToStructuredEvaluationParityPayload(), JSON_THROW_ON_ERROR),
+          provider: 'anthropic-structured',
+          model: 'gpt-test-structured',
+      ),
+    ]);
+
+    app()->instance(AiRuntime::class, $fakeRuntime);
+
+    $result = app(TextToStructuredEvaluation::class)->evaluate(
+        new TextToStructuredEvaluationRequest(
+            subject: 'fallback case',
+            text: 'Please confirm the refund policy.',
+            enabledDimensions: ['clarity'],
+            promptVersion: '1.0.0',
+        ),
+    );
+
+    expect($result->trace[1]->providerProfile)
+      ->toBe('anthropic-structured')
+      ->and($fakeRuntime->lastRequest()?->provider)->toBe('anthropic-structured')
+      ->and(textToStructuredEvaluationParitySnapshot($result))
+      ->toBe(textToStructuredEvaluationExpectedParitySnapshot('fallback case'));
+});
+
+it('throws a typed exception when the specialist refuses to return structured output', function (): void {
     $fakeRuntime = new FakeAiRuntime([
       new ExecutionResult(
           runId: 'runtime-run-002c',
@@ -258,7 +310,7 @@ it('throws a typed exception when the specialist refuses to return structured ou
         ))->toThrow(TextToStructuredEvaluationException::class, 'refused to return structured output');
 });
 
-it('throws a typed exception when the specialist returns refusal json in the refusal field', function () {
+it('throws a typed exception when the specialist returns refusal json in the refusal field', function (): void {
     $fakeRuntime = new FakeAiRuntime([
       new ExecutionResult(
           runId: 'runtime-run-002d',
@@ -283,7 +335,7 @@ it('throws a typed exception when the specialist returns refusal json in the ref
         ))->toThrow(TextToStructuredEvaluationException::class, 'refused to return structured output');
 });
 
-it('throws a typed exception when the specialist returns invalid json', function () {
+it('throws a typed exception when the specialist returns invalid json', function (): void {
     $fakeRuntime = new FakeAiRuntime([
       new ExecutionResult(
           runId: 'runtime-run-003',
@@ -304,3 +356,254 @@ it('throws a typed exception when the specialist returns invalid json', function
             ),
         ))->toThrow(TextToStructuredEvaluationException::class, 'must be valid JSON');
 });
+
+it('throws a typed exception when no configured provider profile satisfies the text-to-structured-evaluation capability target', function (): void {
+    bootTextToStructuredEvaluationBlueprintTestbed(
+        providers: [
+        'openai-default' => [
+          'driver' => 'openai',
+          'enabled' => true,
+          'capabilities' => ['text_generation'],
+          'options' => [],
+        ],
+        'structured-only' => [
+          'driver' => 'openai',
+          'enabled' => true,
+          'capabilities' => ['structured_output'],
+          'options' => [],
+        ],
+        'anthropic-text' => [
+          'driver' => 'anthropic',
+          'enabled' => true,
+          'capabilities' => ['text_generation'],
+          'options' => [],
+        ],
+      ],
+    );
+
+    expect(fn ()
+        => app(TextToStructuredEvaluation::class)->evaluate(
+            new TextToStructuredEvaluationRequest(
+                subject: 'mismatch case',
+                text: 'Please evaluate this content.',
+                enabledDimensions: ['clarity'],
+                promptVersion: '1.0.0',
+            ),
+        ))->toThrow(
+            TextToStructuredEvaluationException::class,
+            'No enabled provider supports required capabilities [text_generation, structured_output].',
+        );
+});
+
+function refreshTextToStructuredEvaluationBindings(): void
+{
+    app()->forgetInstance(ConfiguredProviderRegistry::class);
+    app()->forgetInstance(ProviderRegistry::class);
+    app()->forgetInstance(DefaultProviderSelector::class);
+    app()->forgetInstance(ProviderSelector::class);
+    app()->forgetInstance(ConfiguredAgentProviderProfileSelector::class);
+    app()->forgetInstance(AgentProviderProfileSelector::class);
+    app()->forgetInstance(SynchronousAgentOrchestrator::class);
+    app()->forgetInstance(AgentOrchestrator::class);
+    app()->forgetInstance(PromptExecutionMapper::class);
+    app()->forgetInstance(AiRuntime::class);
+    app()->forgetInstance(ContainerAgentRegistry::class);
+    app()->forgetInstance(AgentRegistry::class);
+}
+
+/**
+ * @param array<string, array{driver:string, enabled:bool, capabilities:list<string>, options:array<string, mixed>}> $providers
+ * @param list<string>|null $failoverOrder
+ */
+function bootTextToStructuredEvaluationBlueprintTestbed(
+    array $providers,
+    string $defaultProvider = 'openai-default',
+    ?array $failoverOrder = null,
+): void {
+    config()->set('ai-agent-kit.providers', $providers);
+    config()->set('ai-agent-kit.default_provider', $defaultProvider);
+    config()->set('ai-agent-kit.failover_order', $failoverOrder ?? array_keys($providers));
+
+    refreshTextToStructuredEvaluationBindings();
+
+    $promptRepository = new InMemoryPromptRepository([
+      'text-to-structured-evaluation.specialist' => [
+        '1.0.0' => <<<PROMPT
+                       Evaluate the following text for {{subject}}.
+                       Enabled dimensions: {{enabled_dimensions}}
+                       Text: {{text}}
+                       PROMPT,
+      ],
+    ]);
+
+    app()->instance(InMemoryPromptRepository::class, $promptRepository);
+    app()->instance(PromptRepository::class, $promptRepository);
+
+    app()->forgetInstance(PromptExecutionMapper::class);
+}
+
+/**
+ * @return array<string, array{driver:string, enabled:bool, capabilities:list<string>, options:array<string, mixed>}>
+ */
+function textToStructuredEvaluationDefaultProviders(): array
+{
+    return [
+      'openai-default' => [
+        'driver' => 'openai',
+        'enabled' => true,
+        'capabilities' => ['text_generation'],
+        'options' => [],
+      ],
+      'openai-structured' => [
+        'driver' => 'openai',
+        'enabled' => true,
+        'capabilities' => ['text_generation', 'structured_output'],
+        'options' => [],
+      ],
+      'anthropic-structured' => [
+        'driver' => 'anthropic',
+        'enabled' => true,
+        'capabilities' => ['text_generation', 'structured_output'],
+        'options' => [],
+      ],
+      'gemini-structured' => [
+        'driver' => 'gemini',
+        'enabled' => true,
+        'capabilities' => ['text_generation', 'structured_output'],
+        'options' => [],
+      ],
+    ];
+}
+
+/**
+ * @return array<string, array{driver:string, enabled:bool, capabilities:list<string>, options:array<string, mixed>}>
+ */
+function textToStructuredEvaluationProvidersOrderedFor(string $structuredProfile): array
+{
+    $providers = textToStructuredEvaluationDefaultProviders();
+
+    $ordered = [
+      'openai-default' => $providers['openai-default'],
+    ];
+
+    foreach ([$structuredProfile, 'openai-structured', 'anthropic-structured', 'gemini-structured'] as $providerProfile) {
+        if ($providerProfile === 'openai-default') {
+            continue;
+        }
+
+        if (!array_key_exists($providerProfile, $providers)) {
+            continue;
+        }
+
+        if (array_key_exists($providerProfile, $ordered)) {
+            continue;
+        }
+
+        $ordered[$providerProfile] = $providers[$providerProfile];
+    }
+
+    return $ordered;
+}
+
+function assertTextToStructuredEvaluationProfileConforms(string $providerProfile): void
+{
+    $matrix = new AuditedProviderCapabilityMatrix();
+    $provider = app(ProviderRegistry::class)->get($providerProfile);
+
+    expect($matrix->conformedCapabilitiesForProfile($provider))
+      ->toContain('text_to_structured_evaluation');
+}
+
+/**
+ * @return array{
+ *   summary:string,
+ *   recommended_action:string,
+ *   confidence:float,
+ *   dimensions:array<string, array{score:int, summary:string, evidence:list<string>}>
+ * }
+ */
+function textToStructuredEvaluationParityPayload(): array
+{
+    return [
+      'summary' => 'The response is specific and easy to action.',
+      'recommended_action' => 'Send the response as drafted.',
+      'confidence' => 0.88,
+      'dimensions' => [
+        'clarity' => [
+          'score' => 5,
+          'summary' => 'The wording is direct and unambiguous.',
+          'evidence' => ['The next step is stated clearly in the first sentence.'],
+        ],
+      ],
+    ];
+}
+
+/**
+ * @return array{
+ *   subject:string,
+ *   summary:string,
+ *   recommended_action:string,
+ *   confidence:float,
+ *   enabled_dimensions:list<string>,
+ *   dimensions:array<string, array{name:string, score:int, summary:string, evidence:list<string>}>,
+ *   orchestration_summary:string,
+ *   final_agent:string,
+ *   prompt_name:string,
+ *   prompt_version:?string
+ * }
+ */
+function textToStructuredEvaluationExpectedParitySnapshot(string $subject): array
+{
+    return [
+      'subject' => $subject,
+      'summary' => 'The response is specific and easy to action.',
+      'recommended_action' => 'Send the response as drafted.',
+      'confidence' => 0.88,
+      'enabled_dimensions' => ['clarity'],
+      'dimensions' => [
+        'clarity' => [
+          'name' => 'clarity',
+          'score' => 5,
+          'summary' => 'The wording is direct and unambiguous.',
+          'evidence' => ['The next step is stated clearly in the first sentence.'],
+        ],
+      ],
+      'orchestration_summary' => 'TextToStructuredEvaluation coordinator finalized the structured result.',
+      'final_agent' => TextToStructuredEvaluationCoordinatorAgent::KEY,
+      'prompt_name' => 'text-to-structured-evaluation.specialist',
+      'prompt_version' => '1.0.0',
+    ];
+}
+
+/**
+ * @return array{
+ *   subject:string,
+ *   summary:string,
+ *   recommended_action:string,
+ *   confidence:float,
+ *   enabled_dimensions:list<string>,
+ *   dimensions:array<string, array{name:string, score:int, summary:string, evidence:list<string>}>,
+ *   orchestration_summary:string,
+ *   final_agent:string,
+ *   prompt_name:string,
+ *   prompt_version:?string
+ * }
+ */
+function textToStructuredEvaluationParitySnapshot(TextToStructuredEvaluationResult $result): array
+{
+    return [
+      'subject' => $result->subject,
+      'summary' => $result->summary,
+      'recommended_action' => $result->recommendedAction,
+      'confidence' => $result->confidence,
+      'enabled_dimensions' => $result->enabledDimensions,
+      'dimensions' => array_map(
+          static fn ($dimension): array => $dimension->toArray(),
+          $result->dimensions,
+      ),
+      'orchestration_summary' => $result->orchestrationSummary,
+      'final_agent' => $result->finalAgent,
+      'prompt_name' => $result->promptName,
+      'prompt_version' => $result->promptVersion,
+    ];
+}

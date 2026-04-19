@@ -46,7 +46,7 @@ beforeEach(function (): void {
       'openai-structured' => [
         'driver' => 'openai',
         'enabled' => true,
-        'capabilities' => ['structured_output'],
+        'capabilities' => ['text_generation', 'structured_output'],
         'options' => [],
       ],
     ]);
@@ -313,7 +313,7 @@ it('fails fast when no enabled provider supports audio transcription', function 
       'openai-structured' => [
         'driver' => 'openai',
         'enabled' => true,
-        'capabilities' => ['structured_output'],
+        'capabilities' => ['text_generation', 'structured_output'],
         'options' => [],
       ],
     ]);
