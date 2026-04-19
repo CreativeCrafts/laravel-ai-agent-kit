@@ -31,7 +31,7 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
 
     public function definition(): AgentDefinition
     {
-        $requiredCapabilities = ['structured_output'];
+        $requiredCapabilities = ['text_generation', 'structured_output'];
         $primaryProfile = $this->selectPrimaryProfile($requiredCapabilities);
         $fallbackProfiles = $this->fallbackProfiles($primaryProfile, $requiredCapabilities);
 
