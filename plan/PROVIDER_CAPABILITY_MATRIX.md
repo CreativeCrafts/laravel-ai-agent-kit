@@ -137,6 +137,53 @@ Those issues should not invent separate capability truth tables.
 
 ---
 
+## P1Y-I6 Stage-Parity Requirements
+
+`P1Y-I6` proves the package-owned staged workflow expectations for `audio_to_text_to_evaluation`.
+
+That parity layer must remain grounded in the audited matrix rather than ad hoc provider assumptions.
+
+### What counts as a valid staged provider mix
+
+A staged combination is valid only when:
+
+- the selected `transcription` profile declares `audio_transcription`, and
+- the selected `evaluation` profile declares both `text_generation` and `structured_output`.
+
+Driver branding does not matter here. The package truth is capability-based.
+
+### What parity coverage must prove
+
+The mixed-provider audio parity suite must prove all of the following:
+
+1. Mixed-provider transcription and evaluation stages can use different compatible provider profiles.
+2. The final `AudioToTextToEvaluation` result remains stable in package-owned terms regardless of provider mix.
+3. Stage-local capability mismatches fail explicitly through typed package exceptions.
+4. Execution traces preserve provider-profile lineage across the transcription and evaluation stage boundaries.
+5. The tests remain deterministic and network-free, using package fakes or deterministic runtime behavior only.
+
+### What parity coverage must not do
+
+The staged parity suite must not:
+
+- rely on live providers,
+- treat provider-native payloads as public package truth,
+- change the public result DTO by provider,
+- or bypass the audited matrix when deciding which provider combinations are valid.
+
+### Current proven staged baseline
+
+The staged parity baseline is currently expected to cover:
+
+- more than one matrix-valid transcription profile,
+- more than one matrix-valid evaluation profile,
+- at least one mixed-provider transcription/evaluation pairing,
+- and at least one fallback case where earlier compatible stage profiles are disabled and later compatible stage profiles are selected instead.
+
+The concrete proven combinations live in the test suite, not in marketing-facing docs.
+
+---
+
 ## Decision Rules
 
 Going forward:
