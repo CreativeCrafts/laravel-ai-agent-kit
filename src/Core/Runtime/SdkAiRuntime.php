@@ -5,10 +5,15 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Runtime;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\Redactor;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeBudgetExceededException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeExecutionException;
+use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\RuntimeExecutionFailed;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Support\FailureCategory;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\RuntimeBudgetEnforcer;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
+use Illuminate\Contracts\Events\Dispatcher;
 use Throwable;
 
 final readonly class SdkAiRuntime implements AiRuntime
@@ -17,54 +22,99 @@ final readonly class SdkAiRuntime implements AiRuntime
         private SdkToolMaterializer $toolMaterializer,
         private RuntimeConversationMemoryBridge $runtimeConversationMemoryBridge,
         private RuntimeBudgetEnforcer $runtimeBudgetEnforcer,
+        private ?Dispatcher $events = null,
+        private ?Redactor $redactor = null,
     ) {
     }
 
     public function execute(ExecutionRequest $request): ExecutionResult
     {
-        $promptTokens = 0;
-        $completionTokens = 0;
-        $estimatedCostUsd = $this->estimatedCostUsd($request);
+        try {
+            $estimatedCostUsd = $this->estimatedCostUsd($request);
+        } catch (RuntimeBudgetExceededException $exception) {
+            $this->reportRuntimeFailure($request, $exception);
+
+            throw $exception;
+        }
 
         try {
             $projectedConversation = $this->runtimeConversationMemoryBridge->project($request);
+        } catch (Throwable $throwable) {
+            throw $this->wrapAndReportRuntimeFailure($request, $throwable);
+        }
+
+        try {
             $materializedTools = $this->toolMaterializer->materialize($request->toolNames);
-            $telemetryContext = RuntimeTelemetryContext::fromRequest($request, $projectedConversation);
-
-            $agent = new RuntimeTelemetryAgent(
-                telemetryContext: $telemetryContext,
-                instructions: $this->instructionsAsString($request, $projectedConversation->systemInstructions),
-                messages: $projectedConversation->messages,
-                tools: $materializedTools,
+        } catch (Throwable $throwable) {
+            throw $this->wrapAndReportRuntimeFailure(
+                request: $request,
+                throwable: $throwable,
+                projectedMessageCount: $projectedConversation->projectedMessageCount(),
+                packageConversationId: $this->packageConversationId($request, $projectedConversation),
             );
+        }
 
+        $telemetryContext = RuntimeTelemetryContext::fromRequest($request, $projectedConversation);
+
+        $agent = new RuntimeTelemetryAgent(
+            telemetryContext: $telemetryContext,
+            instructions: $this->instructionsAsString($request, $projectedConversation->systemInstructions),
+            messages: $projectedConversation->messages,
+            tools: $materializedTools,
+        );
+
+        try {
             $response = $agent->prompt(
                 prompt: $request->prompt,
                 provider: $request->provider,
                 model: $request->model,
                 timeout: $request->timeout,
             );
+        } catch (Throwable $throwable) {
+            throw $this->wrapAndReportRuntimeFailure(
+                request: $request,
+                throwable: $throwable,
+                projectedMessageCount: $telemetryContext->projectedMessageCount,
+                packageConversationId: $telemetryContext->packageConversationId?->toString(),
+                failureCategory: FailureCategory::ProviderFailure->value,
+            );
+        }
 
-            $promptTokens = $response->usage->promptTokens ?? 0;
-            $completionTokens = $response->usage->completionTokens ?? 0;
-            $totalTokens = $promptTokens + $completionTokens;
+        $promptTokens = $response->usage->promptTokens ?? 0;
+        $completionTokens = $response->usage->completionTokens ?? 0;
+        $totalTokens = $promptTokens + $completionTokens;
 
+        try {
             $this->runtimeBudgetEnforcer->assertResponseWithinBudgets(
                 runId: $request->runId,
                 totalTokens: $totalTokens,
                 toolCallCount: $response->toolCalls->count(),
                 estimatedCostUsd: $estimatedCostUsd,
             );
+        } catch (RuntimeBudgetExceededException $exception) {
+            $this->reportRuntimeFailure(
+                request: $request,
+                throwable: $exception,
+                projectedMessageCount: $telemetryContext->projectedMessageCount,
+                packageConversationId: $telemetryContext->packageConversationId?->toString(),
+            );
 
+            throw $exception;
+        }
+
+        try {
             $conversation = $this->runtimeConversationMemoryBridge->reconcile(
                 projected: $projectedConversation,
                 request: $request,
                 response: $response,
             );
-        } catch (RuntimeBudgetExceededException $exception) {
-            throw $exception;
         } catch (Throwable $throwable) {
-            throw RuntimeExecutionException::forRequest($request->runId, $throwable);
+            throw $this->wrapAndReportRuntimeFailure(
+                request: $request,
+                throwable: $throwable,
+                projectedMessageCount: $telemetryContext->projectedMessageCount,
+                packageConversationId: $telemetryContext->packageConversationId?->toString(),
+            );
         }
 
         $usage = [
@@ -113,6 +163,65 @@ final readonly class SdkAiRuntime implements AiRuntime
         }
 
         return (float)$value;
+    }
+
+    private function reportRuntimeFailure(
+        ExecutionRequest $request,
+        Throwable $throwable,
+        int $projectedMessageCount = 0,
+        ?string $packageConversationId = null,
+    ): void {
+        if (!$this->events instanceof Dispatcher) {
+            return;
+        }
+
+        try {
+            $this->events->dispatch(
+                RuntimeExecutionFailed::fromRequest(
+                    request: $request,
+                    throwable: $throwable,
+                    projectedMessageCount: $projectedMessageCount,
+                    packageConversationId: $packageConversationId,
+                    redactor: $this->redactor,
+                ),
+            );
+        } catch (Throwable) {
+            // Intentionally suppressed – preserving the original exception is paramount.
+        }
+    }
+
+    private function wrapAndReportRuntimeFailure(
+        ExecutionRequest $request,
+        Throwable $throwable,
+        int $projectedMessageCount = 0,
+        ?string $packageConversationId = null,
+        string $failureCategory = FailureCategory::ExecutionFailed->value,
+    ): RuntimeExecutionException {
+        $exception = RuntimeExecutionException::forRequest(
+            runId: $request->runId,
+            previous: $throwable,
+            failureCategory: $failureCategory,
+        );
+
+        $this->reportRuntimeFailure(
+            request: $request,
+            throwable: $exception,
+            projectedMessageCount: $projectedMessageCount,
+            packageConversationId: $packageConversationId,
+        );
+
+        return $exception;
+    }
+
+    private function packageConversationId(
+        ExecutionRequest $request,
+        ProjectedConversationContext $projectedConversation,
+    ): ?string {
+        if ($projectedConversation->context?->conversationId instanceof ConversationId) {
+            return $projectedConversation->context->conversationId->toString();
+        }
+
+        return $request->conversationId?->toString();
     }
 
     /**

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions;
 
+use CreativeCrafts\LaravelAiAgentKit\Observability\Contracts\HasFailureCategory;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Support\FailureCategory;
 use RuntimeException;
 
-final class RuntimeBudgetExceededException extends RuntimeException
+final class RuntimeBudgetExceededException extends RuntimeException implements HasFailureCategory
 {
     public static function forMaxTokens(string $runId, int|float $maxTokens, int $actualTotalTokens): self
     {
@@ -75,5 +77,10 @@ final class RuntimeBudgetExceededException extends RuntimeException
                 $actualValue,
             ),
         );
+    }
+
+    public function failureCategory(): string
+    {
+        return FailureCategory::BudgetExceeded->value;
     }
 }
