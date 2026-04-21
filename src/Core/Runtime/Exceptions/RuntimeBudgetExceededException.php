@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions;
 
+use CreativeCrafts\LaravelAiAgentKit\Observability\Support\FailureCategory;
 use RuntimeException;
 
 final class RuntimeBudgetExceededException extends RuntimeException
@@ -75,5 +76,10 @@ final class RuntimeBudgetExceededException extends RuntimeException
                 $actualValue,
             ),
         );
+    }
+
+    public function failureCategory(): string
+    {
+        return FailureCategory::BudgetExceeded->value;
     }
 }

@@ -6,6 +6,8 @@ namespace CreativeCrafts\LaravelAiAgentKit\Observability\Events;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\Redactor;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationResult;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Support\FailureCategory;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Support\FailureCategoryResolver;
 
 final readonly class OrchestrationFailed
 {
@@ -14,6 +16,8 @@ final readonly class OrchestrationFailed
     public ?string $exceptionMessage;
 
     public ?string $failureReason;
+
+    public string $failureCategory;
 
     public function __construct(
         public string $orchestrationId,
@@ -25,6 +29,7 @@ final readonly class OrchestrationFailed
         ?string $failureReason = null,
         public string $status = OrchestrationResult::STATUS_FAILED,
         ?Redactor $redactor = null,
+        ?string $failureCategory = null,
     ) {
         $this->task = $redactor instanceof Redactor
           ? $redactor->redactText($task)
@@ -37,5 +42,20 @@ final readonly class OrchestrationFailed
         $this->failureReason = is_string($failureReason) && $redactor instanceof Redactor
           ? $redactor->redactText($failureReason)
           : $failureReason;
+
+        $this->failureCategory = $this->resolveFailureCategory($failureCategory);
+    }
+
+    private function resolveFailureCategory(?string $failureCategory): string
+    {
+        if (is_string($failureCategory) && $failureCategory !== '') {
+            return $failureCategory;
+        }
+
+        if ($this->exceptionClass === null && $this->failureReason !== null) {
+            return FailureCategoryResolver::logicalFailure();
+        }
+
+        return FailureCategory::ExecutionFailed->value;
     }
 }

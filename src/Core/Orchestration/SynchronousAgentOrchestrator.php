@@ -20,6 +20,7 @@ use CreativeCrafts\LaravelAiAgentKit\Observability\Events\OrchestrationCompleted
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\OrchestrationDelegated;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\OrchestrationFailed;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\OrchestrationStarted;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Support\FailureCategoryResolver;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -113,6 +114,7 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
                     exceptionMessage: $throwable->getMessage(),
                     conversationId: $normalizedRequest->conversationId?->toString(),
                     redactor: $this->redactor,
+                    failureCategory: FailureCategoryResolver::forThrowable($throwable),
                 ),
             );
 
@@ -141,6 +143,7 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
                     failureReason: $result->summary,
                     status: $result->status,
                     redactor: $this->redactor,
+                    failureCategory: FailureCategoryResolver::logicalFailure(),
                 ),
             );
         }
@@ -556,6 +559,7 @@ final readonly class SynchronousAgentOrchestrator implements AgentOrchestrator
           : [];
 
         $conversationId = $metadata[self::META_CONVERSATION_ID] ?? null;
+
         if (is_string($conversationId) && $conversationId !== '') {
             $childMetadata[self::META_CONVERSATION_ID] = $conversationId;
         }

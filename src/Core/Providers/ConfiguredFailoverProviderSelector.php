@@ -9,6 +9,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\CircuitBreakerManager;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderDisabledException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderNotInFailoverOrderException;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\ProviderFailoverExhausted;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\ProviderFailoverResolved;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\ProviderSkippedByCircuitBreaker;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
@@ -55,11 +56,22 @@ final readonly class ConfiguredFailoverProviderSelector implements FailoverProvi
             break;
         }
 
+        $eligibleProviders = $this->filterByCircuitBreaker($orderedProviders, false);
+
+        if (!$nextProvider instanceof ProviderDefinition) {
+            $this->dispatch(
+                ProviderFailoverExhausted::fromDefinitions(
+                    $currentProviderName,
+                    $eligibleProviders,
+                ),
+            );
+        }
+
         $this->dispatch(
             ProviderFailoverResolved::fromDefinitions(
                 $currentProviderName,
                 $nextProvider,
-                $this->filterByCircuitBreaker($orderedProviders, false),
+                $eligibleProviders,
             ),
         );
 
@@ -91,9 +103,11 @@ final readonly class ConfiguredFailoverProviderSelector implements FailoverProvi
             if (!is_string($providerName)) {
                 continue;
             }
+
             if ($providerName === '') {
                 continue;
             }
+
             $provider = $this->providerRegistry->get($providerName);
 
             if (!$provider->enabled) {
