@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Observability\Support;
 
-use CreativeCrafts\LaravelAiAgentKit\Blueprints\Exceptions\TextToStructuredEvaluationException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\NoCompatibleAgentProviderProfileException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderDisabledException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderNotInFailoverOrderException;
-use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeBudgetExceededException;
-use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeExecutionException;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Contracts\HasFailureCategory;
 use Throwable;
 
 final class FailureCategoryResolver
@@ -39,9 +37,7 @@ final class FailureCategoryResolver
     private static function resolveSingle(Throwable $throwable): ?string
     {
         return match (true) {
-            $throwable instanceof RuntimeBudgetExceededException => $throwable->failureCategory(),
-            $throwable instanceof RuntimeExecutionException => $throwable->failureCategory(),
-            $throwable instanceof TextToStructuredEvaluationException => $throwable->failureCategory(),
+            $throwable instanceof HasFailureCategory => $throwable->failureCategory(),
             $throwable instanceof NoCompatibleAgentProviderProfileException => FailureCategory::ProviderProfileMismatch->value,
             $throwable instanceof ProviderDisabledException,
               $throwable instanceof ProviderNotInFailoverOrderException => FailureCategory::FailoverPolicyError->value,

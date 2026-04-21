@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions;
 
+use CreativeCrafts\LaravelAiAgentKit\Observability\Contracts\HasFailureCategory;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Support\FailureCategory;
 use RuntimeException;
 use Throwable;
 
-final class RuntimeExecutionException extends RuntimeException
+final class RuntimeExecutionException extends RuntimeException implements HasFailureCategory
 {
     private function __construct(
         string $message,

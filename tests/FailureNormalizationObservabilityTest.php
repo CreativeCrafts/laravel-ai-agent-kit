@@ -21,17 +21,31 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\RuntimeConversationMemoryBridge;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\SdkAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Contracts\HasFailureCategory;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\OrchestrationFailed;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\ProviderFailoverExhausted;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\ProviderFailoverResolved;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\RuntimeExecutionFailed;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Support\FailureCategory;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Support\FailureCategoryResolver;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\RuntimeBudgetEnforcer;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fixtures\Agents\OrchestratorRefusalAgent;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
 use Illuminate\Config\Repository;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Facades\Event;
+
+it('resolves categories through the package-owned failure-category carrier interface', function (): void {
+    $throwable = new class ('carrier failure') extends RuntimeException implements HasFailureCategory {
+        public function failureCategory(): string
+        {
+            return FailureCategory::ProviderFailure->value;
+        }
+    };
+
+    expect(FailureCategoryResolver::forThrowable($throwable))
+      ->toBe(FailureCategory::ProviderFailure->value);
+});
 
 it('exposes stable package-owned failure categories for structured output and budget failures', function (): void {
     expect(TextToStructuredEvaluationException::invalidSpecialistPayload('summary must be present.')->failureCategory())
@@ -84,6 +98,51 @@ it('emits redacted runtime failure telemetry when execution fails before provide
           ->and($event->exceptionClass)->toBe(RuntimeExecutionException::class)
           ->and($event->exceptionMessage)->toBe(
               app(Redactor::class)->redactText('AI runtime execution failed for run [run-runtime-failure-001]'),
+          )
+          ->and(property_exists($event, 'prompt'))->toBeFalse();
+
+        return true;
+    });
+});
+
+it('emits provider-failure runtime telemetry when the provider prompt edge fails', function (): void {
+    Event::fake([
+      RuntimeExecutionFailed::class,
+    ]);
+
+    $runtime = runtimeForFailureTests(noOpConversationContextManager());
+
+    try {
+        $runtime->execute(
+            new ExecutionRequest(
+                runId: 'run-provider-failure-001',
+                prompt: 'Handle api_token protected work.',
+                provider: 'missing-provider',
+                model: 'gpt-4o-mini',
+                input: ['api_token' => 'secret'],
+                metadata: ['trace_id' => 'trace-provider-001'],
+            ),
+        );
+
+        $this->fail('Expected provider failure was not thrown.');
+    } catch (RuntimeExecutionException $exception) {
+        expect($exception->failureCategory())
+          ->toBe(FailureCategory::ProviderFailure->value);
+    }
+
+    Event::assertDispatched(RuntimeExecutionFailed::class, function (RuntimeExecutionFailed $event): bool {
+        expect($event->runId)
+          ->toBe('run-provider-failure-001')
+          ->and($event->provider)->toBe('missing-provider')
+          ->and($event->model)->toBe('gpt-4o-mini')
+          ->and($event->requestedToolNames)->toBe([])
+          ->and($event->inputKeys)->toBe(['[redacted-key]'])
+          ->and($event->metadataKeys)->toBe(['trace_id'])
+          ->and($event->projectedMessageCount)->toBe(0)
+          ->and($event->failureCategory)->toBe(FailureCategory::ProviderFailure->value)
+          ->and($event->exceptionClass)->toBe(RuntimeExecutionException::class)
+          ->and($event->exceptionMessage)->toBe(
+              app(Redactor::class)->redactText('AI runtime execution failed for run [run-provider-failure-001]'),
           )
           ->and(property_exists($event, 'prompt'))->toBeFalse();
 
