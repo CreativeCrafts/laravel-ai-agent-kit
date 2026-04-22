@@ -55,8 +55,8 @@ That means each example is constrained by the audited matrix:
 - structured evaluation requires `text_generation` + `structured_output`
 - audio transcription requires `audio_transcription`
 - staged audio-to-text-to-evaluation requires:
-		- `audio_transcription` for the transcription stage
-		- `text_generation` + `structured_output` for the evaluation stage
+  - `audio_transcription` for the transcription stage
+  - `text_generation` + `structured_output` for the evaluation stage
 
 If a preset cannot satisfy those package-owned requirements, it does not belong here.
 
@@ -147,6 +147,9 @@ If your application already has additional provider profiles, merge selectively 
 
 ## Example workflows
 
+In application code, prefer constructor or method injection for top-level workflows. The examples below use the `AgentKit` facade as a concise shortcut once that injection-first pattern is already
+familiar.
+
 ### Gemini-first structured evaluation
 
 Choose:
@@ -156,10 +159,10 @@ Choose:
 Then run the package-owned blueprint normally:
 
 ~~~php
-use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluation;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Facades\AgentKit;
 
-$result = app(TextToStructuredEvaluation::class)->evaluate(
+$result = AgentKit::evaluateText(
     new TextToStructuredEvaluationRequest(
         subject: 'support reply',
         text: 'We can refund the unused portion of your subscription within five business days.',
@@ -189,10 +192,10 @@ Choose:
 Then run the staged blueprint:
 
 ~~~php
-use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluation;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Facades\AgentKit;
 
-$result = app(AudioToTextToEvaluation::class)->evaluate(
+$result = AgentKit::evaluateAudio(
     new AudioToTextToEvaluationRequest(
         subject: 'support call',
         audioReference: 's3://bucket/audio/support-call.wav',
@@ -223,10 +226,10 @@ Choose:
 Then run an orchestrator-backed package workflow:
 
 ~~~php
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Facades\AgentKit;
 
-$result = app(AgentOrchestrator::class)->run(
+$result = AgentKit::orchestrate(
     new OrchestrationRequest(
         entryAgent: 'support.agent',
         task: 'Draft a short, customer-safe response for a refund question.',

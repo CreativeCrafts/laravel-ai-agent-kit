@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit;
 
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluation;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluation;
 use CreativeCrafts\LaravelAiAgentKit\Commands\MakeAgentCommand;
 use CreativeCrafts\LaravelAiAgentKit\Commands\MakePipelineCommand;
 use CreativeCrafts\LaravelAiAgentKit\Commands\MakePromptCommand;
@@ -65,6 +67,7 @@ use CreativeCrafts\LaravelAiAgentKit\Resilience\PipelineBudgetEnforcer;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\RuntimeBudgetEnforcer;
 use CreativeCrafts\LaravelAiAgentKit\Security\DefaultRedactor;
 use CreativeCrafts\LaravelAiAgentKit\Security\LaravelEncryptionService;
+use CreativeCrafts\LaravelAiAgentKit\Support\AgentKitManager;
 use CreativeCrafts\LaravelAiAgentKit\Tools\DenyAllToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
@@ -145,6 +148,14 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 
         $this->app->singleton(AgentOrchestrator::class, function (Application $app): AgentOrchestrator {
             return $app->make(SynchronousAgentOrchestrator::class);
+        });
+
+        $this->app->singleton(AgentKitManager::class, function (Application $app): AgentKitManager {
+            return new AgentKitManager(
+                textEvaluation: $app->make(TextToStructuredEvaluation::class),
+                audioEvaluation: $app->make(AudioToTextToEvaluation::class),
+                orchestrator: $app->make(AgentOrchestrator::class),
+            );
         });
 
         $this->app->singleton(ConfigValidator::class, function (Application $app): ConfigValidator {
