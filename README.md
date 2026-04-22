@@ -183,6 +183,75 @@ $defaultProvider = $selector->selectDefault();
 $provider = $registry->get('null');
 ~~~
 
+For package-facing workflows, prefer dependency injection in controllers, jobs, commands, or application services. Direct container resolution is still appropriate for infrastructure and advanced
+extension points, but it should not be the default teaching style for common workflow execution.
+
+### Injection-first workflow usage
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluation;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationRequest;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+final class SupportReplyEvaluationController
+{
+    public function __invoke(Request $request, TextToStructuredEvaluation $evaluation): JsonResponse
+    {
+        $result = $evaluation->evaluate(
+            new TextToStructuredEvaluationRequest(
+                subject: 'support reply',
+                text: $request->string('text')->toString(),
+                enabledDimensions: ['clarity', 'accuracy', 'completeness'],
+                promptVersion: '1.0.0',
+            ),
+        );
+
+        return response()->json($result->toArray());
+    }
+}
+~~~
+
+### AgentKit facade shortcuts
+
+The `AgentKit` facade is an optional convenience surface for application-facing workflow calls. Package internals and advanced extension points should continue to prefer dependency injection and
+explicit contracts.
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Facades\AgentKit;
+
+$textResult = AgentKit::evaluateText(
+    new TextToStructuredEvaluationRequest(
+        subject: 'support reply',
+        text: 'We can refund the unused portion of your subscription within five business days.',
+        enabledDimensions: ['clarity', 'accuracy', 'completeness'],
+        promptVersion: '1.0.0',
+    ),
+);
+
+$audioResult = AgentKit::evaluateAudio(
+    new AudioToTextToEvaluationRequest(
+        subject: 'support call',
+        audioReference: 's3://bucket/audio/support-call.wav',
+        audioMimeType: 'audio/wav',
+        enabledDimensions: ['clarity', 'accuracy'],
+        transcriptionPromptVersion: '1.0.0',
+        evaluationPromptVersion: '1.0.0',
+    ),
+);
+
+$orchestrationResult = AgentKit::orchestrate(
+    new OrchestrationRequest(
+        entryAgent: 'support.agent',
+        task: 'Handle a support refund workflow',
+        input: ['subscription_id' => 'sub-123'],
+    ),
+);
+~~~
+
 Register first-class agents explicitly through the package agent registry in your application service provider:
 
 ~~~php
@@ -222,10 +291,10 @@ Run the package-owned `TextToStructuredEvaluation` blueprint when you want one s
 behind the public API:
 
 ~~~php
-use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluation;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Facades\AgentKit;
 
-$result = app(TextToStructuredEvaluation::class)->evaluate(
+$result = AgentKit::evaluateText(
     new TextToStructuredEvaluationRequest(
         subject: 'support reply',
         text: 'We can refund the unused portion of your subscription within five business days.',
@@ -257,10 +326,10 @@ Run the package-owned `AudioToTextToEvaluation` blueprint when you want one orch
 evaluation pipeline:
 
 ~~~php
-use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluation;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Facades\AgentKit;
 
-$result = app(AudioToTextToEvaluation::class)->evaluate(
+$result = AgentKit::evaluateAudio(
     new AudioToTextToEvaluationRequest(
         subject: 'support call',
         audioReference: 's3://bucket/audio/support-call.wav',
@@ -415,10 +484,10 @@ $context = $manager->buildContext($conversation->id);
 Run orchestrated multi-agent flows through the package agent orchestrator:
 
 ~~~php
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Facades\AgentKit;
 
-$result = app(AgentOrchestrator::class)->run(
+$result = AgentKit::orchestrate(
     new OrchestrationRequest(
         entryAgent: 'support.agent',
         task: 'Handle a support refund workflow',
