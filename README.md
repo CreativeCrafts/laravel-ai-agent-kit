@@ -364,7 +364,7 @@ Provider profiles for the audio blueprint must be compatible with both stages:
 Register both prompt templates before execution. The transcription stage returns one transcript string, and the evaluation stage returns valid JSON matching the package-owned structured
 evaluation schema.
 
-Build and run a synchronous pipeline with typed steps:
+Build and run a synchronous pipeline with typed steps through dependency injection:
 
 ~~~php
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
@@ -372,30 +372,39 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineStep;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\PipelineBuilder;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\RunContext;
 
-$pipeline = PipelineBuilder::make()
-    ->addStep(new class implements PipelineStep
+final class NormalizePipelineService
+{
+    public function __construct(
+        private PipelineRunner $runner,
+    ) {
+    }
+
+    public function run(): RunContext
     {
-        public function handle(RunContext $context): RunContext
-        {
-            return $context
-                ->withStateValue('normalized', true)
-                ->incrementStepCount();
-        }
-    })
-    ->build();
+        $pipeline = PipelineBuilder::make()
+            ->addStep(new class implements PipelineStep
+            {
+                public function handle(RunContext $context): RunContext
+                {
+                    return $context
+                        ->withStateValue('normalized', true)
+                        ->incrementStepCount();
+                }
+            })
+            ->build();
 
-$runner = app(PipelineRunner::class);
-
-$result = $runner->run(
-    $pipeline,
-    new RunContext(
-        runId: 'run-001',
-        input: ['text' => 'Hello world'],
-    ),
-);
+        return $this->runner->run(
+            $pipeline,
+            new RunContext(
+                runId: 'run-001',
+                input: ['text' => 'Hello world'],
+            ),
+        );
+    }
+}
 ~~~
 
-Dispatch a queued pipeline using a typed pipeline definition and explicit result handler:
+Dispatch a queued pipeline using a typed pipeline definition and injected dispatcher:
 
 ~~~php
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineResultHandler;
@@ -439,23 +448,32 @@ final class PersistPipelineResult implements PipelineResultHandler
     }
 }
 
-$dispatcher = app(QueuedPipelineDispatcher::class);
+final class QueueTranscriptNormalizationCommand
+{
+    public function __construct(
+        private QueuedPipelineDispatcher $dispatcher,
+    ) {
+    }
 
-$dispatcher->dispatch(
-    definition: new NormalizeTranscriptPipeline(),
-    context: new RunContext(
-        runId: 'queued-run-001',
-        input: ['text' => 'Queued pipeline input'],
-    ),
-    handler: new PersistPipelineResult(),
-    options: new QueueDispatchOptions(
-        queue: 'ai-pipelines',
-        connection: 'sync',
-    ),
-);
+    public function __invoke(): void
+    {
+        $this->dispatcher->dispatch(
+            definition: new NormalizeTranscriptPipeline(),
+            context: new RunContext(
+                runId: 'queued-run-001',
+                input: ['text' => 'Queued pipeline input'],
+            ),
+            handler: new PersistPipelineResult(),
+            options: new QueueDispatchOptions(
+                queue: 'ai-pipelines',
+                connection: 'sync',
+            ),
+        );
+    }
+}
 ~~~
 
-Use conversation memory through the package-owned context manager and store contracts:
+Use conversation memory through injected package-owned context manager and store contracts:
 
 ~~~php
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager;
@@ -465,20 +483,34 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessage;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessageRole;
 use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
 
-$store = app(ConversationStore::class);
+final class SupportConversationService
+{
+    public function __construct(
+        private ConversationStore $store,
+        private ConversationContextManager $contextManager,
+    ) {
+    }
 
-$conversation = $store->appendMessage(
-    new ConversationId('conv-001'),
-    new ConversationMessage(
-        id: new MessageId('msg-001'),
-        role: ConversationMessageRole::User,
-        content: 'Please summarize my refund options.',
-        metadata: ['channel' => 'support'],
-    ),
-);
+    public function appendAndBuildContext(): array
+    {
+        $conversation = $this->store->appendMessage(
+            new ConversationId('conv-001'),
+            new ConversationMessage(
+                id: new MessageId('msg-001'),
+                role: ConversationMessageRole::User,
+                content: 'Please summarize my refund options.',
+                metadata: ['channel' => 'support'],
+            ),
+        );
 
-$manager = app(ConversationContextManager::class);
-$context = $manager->buildContext($conversation->id);
+        $context = $this->contextManager->buildContext($conversation->id);
+
+        return [
+            'conversation' => $conversation,
+            'context' => $context,
+        ];
+    }
+}
 ~~~
 
 Run orchestrated multi-agent flows through the package agent orchestrator:
@@ -509,31 +541,40 @@ Delegation semantics are explicit:
 - `delegate_and_resume` sends work to a child agent and then resumes the parent agent after the child finishes
 - `transfer_control` hands ownership to the child agent, making the delegated agent the final owner if it completes the workflow
 
-Use vector storage through the package contract to keep embeddings and semantic search behind a stable boundary:
+Use vector storage through the injected package contract to keep embeddings and semantic search behind a stable boundary:
 
 ~~~php
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreInterface;
 use CreativeCrafts\LaravelAiAgentKit\Vector\VectorDocument;
 use CreativeCrafts\LaravelAiAgentKit\Vector\VectorSearchQuery;
 
-$vectorStore = app(VectorStoreInterface::class);
+final class SupportKnowledgeService
+{
+    public function __construct(
+        private VectorStoreInterface $vectorStore,
+    ) {
+    }
 
-$vectorStore->upsert('support', [
-    new VectorDocument(
-        id: 'doc-001',
-        embedding: [0.8, 0.2, 0.1],
-        metadata: ['topic' => 'refunds'],
-    ),
-]);
+    public function indexAndSearch(): array
+    {
+        $this->vectorStore->upsert('support', [
+            new VectorDocument(
+                id: 'doc-001',
+                embedding: [0.8, 0.2, 0.1],
+                metadata: ['topic' => 'refunds'],
+            ),
+        ]);
 
-$results = $vectorStore->search(
-    'support',
-    new VectorSearchQuery(
-        embedding: [0.9, 0.1, 0.0],
-        limit: 3,
-        filter: ['topic' => 'refunds'],
-    ),
-);
+        return $this->vectorStore->search(
+            'support',
+            new VectorSearchQuery(
+                embedding: [0.9, 0.1, 0.0],
+                limit: 3,
+                filter: ['topic' => 'refunds'],
+            ),
+        );
+    }
+}
 ~~~
 
 ## Testing

@@ -15,6 +15,22 @@ it('teaches injection-first workflow usage in the readme', function (): void {
       ->toContain('AgentKit::orchestrate(');
 });
 
+it('uses dependency injection for the remaining infrastructure contract examples in the readme', function (): void {
+    $contents = documentationContents('README.md');
+
+    expect($contents)
+      ->toContain('private PipelineRunner $runner')
+      ->toContain('private QueuedPipelineDispatcher $dispatcher')
+      ->toContain('private ConversationStore $store')
+      ->toContain('private ConversationContextManager $contextManager')
+      ->toContain('private VectorStoreInterface $vectorStore')
+      ->not->toContain('app(PipelineRunner::class)')
+      ->not->toContain('app(QueuedPipelineDispatcher::class)')
+      ->not->toContain('app(ConversationStore::class)')
+      ->not->toContain('app(ConversationContextManager::class)')
+      ->not->toContain('app(VectorStoreInterface::class)');
+});
+
 it('aligns the provider preset documentation with the new workflow dx guidance', function (): void {
     $contents = documentationContents('docs/provider-profile-presets.md');
 
