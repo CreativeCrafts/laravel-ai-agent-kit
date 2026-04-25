@@ -55,7 +55,12 @@ it('denies execution by default even for registered tools', function () {
 it('executes a registered tool when authorization explicitly permits it', function () {
     $registry = new InMemoryToolRegistry(
         authorizer: new class () implements ToolAuthorizer {
-          public function authorize(Tool $tool, array $input): bool
+          public function authorizeCustomTool(Tool $tool, array $input): bool
+          {
+              return true;
+          }
+
+          public function authorizeProviderTool(string $providerToolName): bool
           {
               return true;
           }
@@ -98,7 +103,12 @@ it('fails with a typed exception when a tool is not registered', function () {
 it('rejects invalid tool input before execution', function () {
     $registry = new InMemoryToolRegistry(
         authorizer: new class () implements ToolAuthorizer {
-          public function authorize(Tool $tool, array $input): bool
+          public function authorizeCustomTool(Tool $tool, array $input): bool
+          {
+              return true;
+          }
+
+          public function authorizeProviderTool(string $providerToolName): bool
           {
               return true;
           }
@@ -137,7 +147,12 @@ it('rejects invalid tool input before execution', function () {
 it('accepts associative arrays for properties declared as array type', function () {
     $registry = new InMemoryToolRegistry(
         authorizer: new class () implements ToolAuthorizer {
-          public function authorize(Tool $tool, array $input): bool
+          public function authorizeCustomTool(Tool $tool, array $input): bool
+          {
+              return true;
+          }
+
+          public function authorizeProviderTool(string $providerToolName): bool
           {
               return true;
           }

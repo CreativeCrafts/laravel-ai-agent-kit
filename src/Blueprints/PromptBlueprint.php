@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Blueprints;
 
+use Closure;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\GenerationOptions;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use InvalidArgumentException;
+use Laravel\Ai\Files\File;
+use Laravel\Ai\ObjectSchema;
 
 final readonly class PromptBlueprint
 {
@@ -13,6 +17,8 @@ final readonly class PromptBlueprint
      * @param array<string, scalar|null> $variables
      * @param list<string> $instructions
      * @param list<string> $toolNames
+     * @param list<string> $providerToolNames
+     * @param list<File> $attachments
      * @param array<string, mixed> $input
      * @param array<string, mixed> $metadata
      */
@@ -31,6 +37,10 @@ final readonly class PromptBlueprint
         public ?ConversationId $conversationId = null,
         public bool $storeConversation = false,
         public bool $continueConversation = false,
+        public ?GenerationOptions $generationOptions = null,
+        public Closure|ObjectSchema|string|null $schema = null,
+        public array $attachments = [],
+        public array $providerToolNames = [],
     ) {
         if ($this->promptName === '') {
             throw new InvalidArgumentException('Prompt blueprints require a non-empty prompt name.');
@@ -56,6 +66,12 @@ final readonly class PromptBlueprint
         if ($this->continueConversation && !$this->conversationId instanceof ConversationId) {
             throw new InvalidArgumentException('Prompt blueprints that continue a conversation require a conversationId.');
         }
+
+        if (is_string($this->schema) && $this->schema === '') {
+            throw new InvalidArgumentException('Prompt blueprint schema class-string must be non-empty.');
+        }
+
+        $this->validateAttachments($this->attachments);
     }
 
     public static function forPrompt(string $promptName): self
@@ -80,6 +96,10 @@ final readonly class PromptBlueprint
             conversationId: $this->conversationId,
             storeConversation: $this->storeConversation,
             continueConversation: $this->continueConversation,
+            generationOptions: $this->generationOptions,
+            schema: $this->schema,
+            attachments: $this->attachments,
+            providerToolNames: $this->providerToolNames,
         );
     }
 
@@ -100,6 +120,10 @@ final readonly class PromptBlueprint
             conversationId: $this->conversationId,
             storeConversation: $this->storeConversation,
             continueConversation: $this->continueConversation,
+            generationOptions: $this->generationOptions,
+            schema: $this->schema,
+            attachments: $this->attachments,
+            providerToolNames: $this->providerToolNames,
         );
     }
 
@@ -131,6 +155,10 @@ final readonly class PromptBlueprint
             conversationId: $this->conversationId,
             storeConversation: $this->storeConversation,
             continueConversation: $this->continueConversation,
+            generationOptions: $this->generationOptions,
+            schema: $this->schema,
+            attachments: $this->attachments,
+            providerToolNames: $this->providerToolNames,
         );
     }
 
@@ -162,6 +190,10 @@ final readonly class PromptBlueprint
             conversationId: $this->conversationId,
             storeConversation: $this->storeConversation,
             continueConversation: $this->continueConversation,
+            generationOptions: $this->generationOptions,
+            schema: $this->schema,
+            attachments: $this->attachments,
+            providerToolNames: $this->providerToolNames,
         );
     }
 
@@ -182,6 +214,10 @@ final readonly class PromptBlueprint
             conversationId: $this->conversationId,
             storeConversation: $this->storeConversation,
             continueConversation: $this->continueConversation,
+            generationOptions: $this->generationOptions,
+            schema: $this->schema,
+            attachments: $this->attachments,
+            providerToolNames: $this->providerToolNames,
         );
     }
 
@@ -202,6 +238,10 @@ final readonly class PromptBlueprint
             conversationId: $this->conversationId,
             storeConversation: $this->storeConversation,
             continueConversation: $this->continueConversation,
+            generationOptions: $this->generationOptions,
+            schema: $this->schema,
+            attachments: $this->attachments,
+            providerToolNames: $this->providerToolNames,
         );
     }
 
@@ -233,6 +273,45 @@ final readonly class PromptBlueprint
             conversationId: $this->conversationId,
             storeConversation: $this->storeConversation,
             continueConversation: $this->continueConversation,
+            generationOptions: $this->generationOptions,
+            schema: $this->schema,
+            attachments: $this->attachments,
+            providerToolNames: $this->providerToolNames,
+        );
+    }
+
+    public function addProviderTool(string $providerToolName): self
+    {
+        $providerToolNames = $this->providerToolNames;
+        $providerToolNames[] = $providerToolName;
+
+        return $this->withProviderTools($providerToolNames);
+    }
+
+    /**
+     * @param list<string> $providerToolNames
+     */
+    public function withProviderTools(array $providerToolNames): self
+    {
+        return new self(
+            promptName: $this->promptName,
+            runId: $this->runId,
+            version: $this->version,
+            variables: $this->variables,
+            instructions: $this->instructions,
+            provider: $this->provider,
+            model: $this->model,
+            toolNames: $this->toolNames,
+            input: $this->input,
+            metadata: $this->metadata,
+            timeout: $this->timeout,
+            conversationId: $this->conversationId,
+            storeConversation: $this->storeConversation,
+            continueConversation: $this->continueConversation,
+            generationOptions: $this->generationOptions,
+            schema: $this->schema,
+            attachments: $this->attachments,
+            providerToolNames: $this->normalizeStringList($providerToolNames),
         );
     }
 
@@ -264,6 +343,10 @@ final readonly class PromptBlueprint
             conversationId: $this->conversationId,
             storeConversation: $this->storeConversation,
             continueConversation: $this->continueConversation,
+            generationOptions: $this->generationOptions,
+            schema: $this->schema,
+            attachments: $this->attachments,
+            providerToolNames: $this->providerToolNames,
         );
     }
 
@@ -295,6 +378,10 @@ final readonly class PromptBlueprint
             conversationId: $this->conversationId,
             storeConversation: $this->storeConversation,
             continueConversation: $this->continueConversation,
+            generationOptions: $this->generationOptions,
+            schema: $this->schema,
+            attachments: $this->attachments,
+            providerToolNames: $this->providerToolNames,
         );
     }
 
@@ -315,6 +402,93 @@ final readonly class PromptBlueprint
             conversationId: $this->conversationId,
             storeConversation: $this->storeConversation,
             continueConversation: $this->continueConversation,
+            generationOptions: $this->generationOptions,
+            schema: $this->schema,
+            attachments: $this->attachments,
+            providerToolNames: $this->providerToolNames,
+        );
+    }
+
+    public function withGenerationOptions(?GenerationOptions $generationOptions): self
+    {
+        return new self(
+            promptName: $this->promptName,
+            runId: $this->runId,
+            version: $this->version,
+            variables: $this->variables,
+            instructions: $this->instructions,
+            provider: $this->provider,
+            model: $this->model,
+            toolNames: $this->toolNames,
+            input: $this->input,
+            metadata: $this->metadata,
+            timeout: $this->timeout,
+            conversationId: $this->conversationId,
+            storeConversation: $this->storeConversation,
+            continueConversation: $this->continueConversation,
+            generationOptions: $generationOptions,
+            schema: $this->schema,
+            attachments: $this->attachments,
+            providerToolNames: $this->providerToolNames,
+        );
+    }
+
+    public function withSchema(Closure|ObjectSchema|string|null $schema): self
+    {
+        return new self(
+            promptName: $this->promptName,
+            runId: $this->runId,
+            version: $this->version,
+            variables: $this->variables,
+            instructions: $this->instructions,
+            provider: $this->provider,
+            model: $this->model,
+            toolNames: $this->toolNames,
+            input: $this->input,
+            metadata: $this->metadata,
+            timeout: $this->timeout,
+            conversationId: $this->conversationId,
+            storeConversation: $this->storeConversation,
+            continueConversation: $this->continueConversation,
+            generationOptions: $this->generationOptions,
+            schema: $schema,
+            attachments: $this->attachments,
+            providerToolNames: $this->providerToolNames,
+        );
+    }
+
+    public function withAttachment(File $attachment): self
+    {
+        $attachments = $this->attachments;
+        $attachments[] = $attachment;
+
+        return $this->withAttachments($attachments);
+    }
+
+    /**
+     * @param list<File> $attachments
+     */
+    public function withAttachments(array $attachments): self
+    {
+        return new self(
+            promptName: $this->promptName,
+            runId: $this->runId,
+            version: $this->version,
+            variables: $this->variables,
+            instructions: $this->instructions,
+            provider: $this->provider,
+            model: $this->model,
+            toolNames: $this->toolNames,
+            input: $this->input,
+            metadata: $this->metadata,
+            timeout: $this->timeout,
+            conversationId: $this->conversationId,
+            storeConversation: $this->storeConversation,
+            continueConversation: $this->continueConversation,
+            generationOptions: $this->generationOptions,
+            schema: $this->schema,
+            attachments: $attachments,
+            providerToolNames: $this->providerToolNames,
         );
     }
 
@@ -335,6 +509,10 @@ final readonly class PromptBlueprint
             conversationId: $this->resolveConversationId($conversationId),
             storeConversation: $storeConversation,
             continueConversation: false,
+            generationOptions: $this->generationOptions,
+            schema: $this->schema,
+            attachments: $this->attachments,
+            providerToolNames: $this->providerToolNames,
         );
     }
 
@@ -355,6 +533,10 @@ final readonly class PromptBlueprint
             conversationId: $this->resolveConversationId($conversationId),
             storeConversation: $storeConversation,
             continueConversation: true,
+            generationOptions: $this->generationOptions,
+            schema: $this->schema,
+            attachments: $this->attachments,
+            providerToolNames: $this->providerToolNames,
         );
     }
 
@@ -375,7 +557,35 @@ final readonly class PromptBlueprint
             conversationId: null,
             storeConversation: false,
             continueConversation: false,
+            generationOptions: $this->generationOptions,
+            schema: $this->schema,
+            attachments: $this->attachments,
+            providerToolNames: $this->providerToolNames,
         );
+    }
+
+    /**
+     * Validate attachment elements at the runtime boundary. The constructor's
+     * `@param list<File>` docblock makes PHPStan certain about element types
+     * inside the constructor body; widening through this helper keeps the
+     * boundary check meaningful for non-PHPStan callers.
+     *
+     * @param array<int, mixed> $attachments
+     */
+    private function validateAttachments(array $attachments): void
+    {
+        foreach ($attachments as $index => $attachment) {
+            if (!$attachment instanceof File) {
+                throw new InvalidArgumentException(
+                    sprintf(
+                        'Prompt blueprint attachment at index [%d] must be an instance of [%s], got [%s].',
+                        $index,
+                        File::class,
+                        get_debug_type($attachment),
+                    ),
+                );
+            }
+        }
     }
 
     /**

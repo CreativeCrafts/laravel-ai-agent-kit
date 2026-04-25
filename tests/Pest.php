@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\GenerationOptions;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Assertions\PackageAssertions;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAiRuntime;
@@ -21,6 +23,46 @@ expect()->extend('toHaveRuntimeExecutions', function (int $expectedCount) {
     }
 
     PackageAssertions::assertRuntimeExecutedTimes($this->value, $expectedCount);
+
+    return $this;
+});
+
+expect()->extend('toHaveGenerationOptions', function (GenerationOptions $expected) {
+    if (!$this->value instanceof FakeAiRuntime) {
+        Assert::fail('toHaveGenerationOptions() expects a FakeAiRuntime instance.');
+    }
+
+    PackageAssertions::assertRuntimeRequestedGenerationOptions($this->value, $expected);
+
+    return $this;
+});
+
+expect()->extend('toHaveStructuredOutput', function (?array $expected) {
+    if (!$this->value instanceof ExecutionResult) {
+        Assert::fail('toHaveStructuredOutput() expects an ExecutionResult instance.');
+    }
+
+    PackageAssertions::assertResultStructuredOutput($this->value, $expected);
+
+    return $this;
+});
+
+expect()->extend('toHaveAttachmentOfType', function (string $fileClass) {
+    if (!$this->value instanceof FakeAiRuntime) {
+        Assert::fail('toHaveAttachmentOfType() expects a FakeAiRuntime instance.');
+    }
+
+    PackageAssertions::assertRuntimeRequestedAttachmentOfType($this->value, $fileClass);
+
+    return $this;
+});
+
+expect()->extend('toHaveRequestedProviderTool', function (string $providerToolName) {
+    if (!$this->value instanceof FakeAiRuntime) {
+        Assert::fail('toHaveRequestedProviderTool() expects a FakeAiRuntime instance.');
+    }
+
+    PackageAssertions::assertRuntimeRequestedProviderTool($this->value, $providerToolName);
 
     return $this;
 });

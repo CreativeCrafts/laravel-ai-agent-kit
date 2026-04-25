@@ -69,7 +69,10 @@ use CreativeCrafts\LaravelAiAgentKit\Security\DefaultRedactor;
 use CreativeCrafts\LaravelAiAgentKit\Security\LaravelEncryptionService;
 use CreativeCrafts\LaravelAiAgentKit\Support\AgentKitManager;
 use CreativeCrafts\LaravelAiAgentKit\Tools\DenyAllToolAuthorizer;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ProviderToolRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryProviderToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryToolRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Tools\ProviderToolMaterializer;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
 use CreativeCrafts\LaravelAiAgentKit\Vector\InMemoryVectorStore;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
@@ -82,9 +85,13 @@ use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\ToolInvoked;
+use Laravel\Ai\Providers\Tools\FileSearch;
+use Laravel\Ai\Providers\Tools\WebFetch;
+use Laravel\Ai\Providers\Tools\WebSearch;
 use RuntimeException;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
+use Closure;
 
 class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 {
@@ -155,6 +162,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
                 textEvaluation: $app->make(TextToStructuredEvaluation::class),
                 audioEvaluation: $app->make(AudioToTextToEvaluation::class),
                 orchestrator: $app->make(AgentOrchestrator::class),
+                blueprintRunner: $app->make(BlueprintRunner::class),
             );
         });
 
@@ -423,6 +431,21 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return $app->make(InMemoryToolRegistry::class);
         });
 
+        $this->app->singleton(InMemoryProviderToolRegistry::class, function (Application $app): InMemoryProviderToolRegistry {
+            $registry = new InMemoryProviderToolRegistry();
+
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
+            $this->seedProviderToolRegistryFromConfig($registry, $config);
+
+            return $registry;
+        });
+
+        $this->app->singleton(ProviderToolRegistry::class, function (Application $app): ProviderToolRegistry {
+            return $app->make(InMemoryProviderToolRegistry::class);
+        });
+
         $this->app->singleton(InMemoryVectorStore::class, function (): InMemoryVectorStore {
             return new InMemoryVectorStore();
         });
@@ -438,12 +461,15 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         });
 
         $this->app->singleton(SdkToolMaterializer::class, function (Application $app): SdkToolMaterializer {
-            /** @var ConfigRepository $config */
-            $config = $app->make(ConfigRepository::class);
-
             return new SdkToolMaterializer(
                 toolRegistry: $app->make(ToolRegistry::class),
-                config: $config,
+            );
+        });
+
+        $this->app->singleton(ProviderToolMaterializer::class, function (Application $app): ProviderToolMaterializer {
+            return new ProviderToolMaterializer(
+                providerToolRegistry: $app->make(ProviderToolRegistry::class),
+                authorizer: $app->make(ToolAuthorizer::class),
             );
         });
 
@@ -473,8 +499,12 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         $this->app->singleton(SdkAiRuntime::class, function (Application $app): SdkAiRuntime {
             return new SdkAiRuntime(
                 toolMaterializer: $app->make(SdkToolMaterializer::class),
+                providerToolMaterializer: $app->make(ProviderToolMaterializer::class),
                 runtimeConversationMemoryBridge: $app->make(RuntimeConversationMemoryBridge::class),
                 runtimeBudgetEnforcer: $app->make(RuntimeBudgetEnforcer::class),
+                container: $app,
+                events: $app->make(Dispatcher::class),
+                redactor: $app->make(Redactor::class),
             );
         });
 
@@ -730,5 +760,122 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
     private function promptDriver(ConfigRepository $config): string
     {
         return $this->stringConfig($config, 'ai-agent-kit.prompts.default_driver');
+    }
+
+    private function seedProviderToolRegistryFromConfig(
+        InMemoryProviderToolRegistry $registry,
+        ConfigRepository $config,
+    ): void {
+        $providerTools = $config->get('ai-agent-kit.tools.provider_tools', []);
+
+        if (!is_array($providerTools)) {
+            return;
+        }
+
+        foreach ($providerTools as $name => $definition) {
+            if (!is_string($name)) {
+                continue;
+            }
+            if ($name === '') {
+                continue;
+            }
+            if (!is_array($definition)) {
+                continue;
+            }
+            $stringKeyedDefinition = [];
+
+            foreach ($definition as $key => $value) {
+                if (is_string($key)) {
+                    $stringKeyedDefinition[$key] = $value;
+                }
+            }
+
+            if (($stringKeyedDefinition['enabled'] ?? true) !== true) {
+                continue;
+            }
+
+            $factory = $this->providerToolFactoryFor($stringKeyedDefinition);
+
+            if (!$factory instanceof Closure) {
+                continue;
+            }
+
+            $registry->register($name, $factory);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $definition
+     */
+    private function providerToolFactoryFor(array $definition): ?Closure
+    {
+        $type = $definition['type'] ?? null;
+
+        if (!is_string($type) || $type === '') {
+            return null;
+        }
+
+        return match ($type) {
+            'web_search' => $this->webSearchFactory($definition),
+            'web_fetch' => $this->webFetchFactory($definition),
+            'file_search' => $this->fileSearchFactory($definition),
+            default => null,
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $definition
+     */
+    private function webSearchFactory(array $definition): Closure
+    {
+        $maxSearches = is_int($definition['max_searches'] ?? null) ? $definition['max_searches'] : null;
+        /** @var list<string> $allowedDomains */
+        $allowedDomains = is_array($definition['allowed_domains'] ?? null)
+          ? array_values(array_filter($definition['allowed_domains'], static fn ($value): bool => is_string($value) && $value !== ''))
+          : [];
+
+        $location = is_array($definition['location'] ?? null) ? $definition['location'] : null;
+
+        return function () use ($maxSearches, $allowedDomains, $location): WebSearch {
+            $tool = new WebSearch(maxSearches: $maxSearches, allowedDomains: $allowedDomains);
+
+            if ($location !== null) {
+                $tool->location(
+                    city: is_string($location['city'] ?? null) ? $location['city'] : null,
+                    region: is_string($location['region'] ?? null) ? $location['region'] : null,
+                    country: is_string($location['country'] ?? null) ? $location['country'] : null,
+                );
+            }
+
+            return $tool;
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $definition
+     */
+    private function webFetchFactory(array $definition): Closure
+    {
+        /** @var list<string> $allowedDomains */
+        $allowedDomains = is_array($definition['allowed_domains'] ?? null)
+          ? array_values(array_filter($definition['allowed_domains'], static fn ($value): bool => is_string($value) && $value !== ''))
+          : [];
+
+        return static fn (): WebFetch => new WebFetch(allowedDomains: $allowedDomains);
+    }
+
+    /**
+     * @param array<string, mixed> $definition
+     */
+    private function fileSearchFactory(array $definition): Closure
+    {
+        /** @var list<string> $stores */
+        $stores = is_array($definition['stores'] ?? null)
+          ? array_values(array_filter($definition['stores'], static fn ($value): bool => is_string($value) && $value !== ''))
+          : [];
+
+        $filters = is_array($definition['filters'] ?? null) ? $definition['filters'] : null;
+
+        return static fn (): FileSearch => new FileSearch(stores: $stores, where: $filters);
     }
 }

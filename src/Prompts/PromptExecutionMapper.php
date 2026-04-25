@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Prompts;
 
+use Closure;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Prompts\PromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\GenerationOptions;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
+use Laravel\Ai\Files\File;
+use Laravel\Ai\ObjectSchema;
 
 final readonly class PromptExecutionMapper
 {
@@ -19,6 +23,8 @@ final readonly class PromptExecutionMapper
      * @param array<string, scalar|null> $variables
      * @param list<string> $instructions
      * @param list<string> $toolNames
+     * @param list<string> $providerToolNames
+     * @param list<File> $attachments
      * @param array<string, mixed> $input
      * @param array<string, mixed> $metadata
      */
@@ -37,6 +43,10 @@ final readonly class PromptExecutionMapper
         ?ConversationId $conversationId = null,
         bool $storeConversation = false,
         bool $continueConversation = false,
+        ?GenerationOptions $generationOptions = null,
+        Closure|ObjectSchema|string|null $schema = null,
+        array $attachments = [],
+        array $providerToolNames = [],
     ): ExecutionRequest {
         $template = $this->promptRepository->get($name, $version);
         $renderedPrompt = $template->render($variables);
@@ -68,6 +78,10 @@ final readonly class PromptExecutionMapper
             conversationId: $conversationId,
             storeConversation: $storeConversation,
             continueConversation: $continueConversation,
+            generationOptions: $generationOptions,
+            schema: $schema,
+            attachments: $attachments,
+            providerToolNames: $providerToolNames,
         );
     }
 }

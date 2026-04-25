@@ -12,7 +12,11 @@ arch('public contracts do not depend on laravel ai sdk types')
 
 arch('public blueprints do not depend on laravel ai sdk types')
   ->expect('CreativeCrafts\\LaravelAiAgentKit\\Blueprints')
-  ->not->toUse('Laravel\\Ai');
+  ->not->toUse('Laravel\\Ai')
+  // PromptBlueprint intentionally accepts SDK Files\File attachments and
+  // Laravel\Ai\ObjectSchema as ergonomic schema inputs — see the
+  // evolve-text-execution-surface change (design decisions D2, D4).
+  ->ignoring('CreativeCrafts\\LaravelAiAgentKit\\Blueprints\\PromptBlueprint');
 
 arch('public vector contracts and strategy types do not depend on laravel ai sdk types')
   ->expect([

@@ -345,7 +345,12 @@ it('keeps fake agent orchestrator aligned with package orchestration result sema
 function packageFakeParityAllowAllToolAuthorizer(): ToolAuthorizer
 {
     return new class () implements ToolAuthorizer {
-        public function authorize(Tool $tool, array $input): bool
+        public function authorizeCustomTool(Tool $tool, array $input): bool
+        {
+            return true;
+        }
+
+        public function authorizeProviderTool(string $providerToolName): bool
         {
             return true;
         }

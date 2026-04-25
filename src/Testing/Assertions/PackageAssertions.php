@@ -8,6 +8,8 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\ExecutionTraceRecord;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationResult;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\GenerationOptions;
 use CreativeCrafts\LaravelAiAgentKit\Memory\Conversation;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAgentOrchestrator;
@@ -40,6 +42,64 @@ final class PackageAssertions
         Assert::assertNotNull($request, 'Expected fake runtime to have a last execution request.');
 
         $assertion($request);
+    }
+
+    public static function assertRuntimeRequestedGenerationOptions(FakeAiRuntime $fake, GenerationOptions $expected): void
+    {
+        $request = $fake->lastRequest();
+
+        Assert::assertNotNull($request, 'Expected fake runtime to have a last execution request.');
+        Assert::assertEquals(
+            $expected,
+            $request->generationOptions,
+            'Expected fake runtime last request to carry the given GenerationOptions.',
+        );
+    }
+
+    /**
+     * @param array<string, mixed>|null $expected Expected structuredOutput. Pass null to assert the result is unstructured.
+     */
+    public static function assertResultStructuredOutput(ExecutionResult $result, ?array $expected): void
+    {
+        Assert::assertSame(
+            $expected,
+            $result->structuredOutput,
+            'Expected ExecutionResult structuredOutput to match.',
+        );
+    }
+
+    /**
+     * Assert that the last fake-runtime request carried an attachment of the given class (or subclass).
+     *
+     * The class-string is accepted as `string` (not `class-string<…>`) so this assertion remains
+     * SDK-neutral and does not import `Laravel\Ai\Files\File`. Consumers pass any FQCN, typically
+     * one of the SDK's `Laravel\Ai\Files\…` subclasses.
+     */
+    public static function assertRuntimeRequestedAttachmentOfType(FakeAiRuntime $fake, string $fileClass): void
+    {
+        $request = $fake->lastRequest();
+
+        Assert::assertNotNull($request, 'Expected fake runtime to have a last execution request.');
+
+        foreach ($request->attachments as $attachment) {
+            if ($attachment instanceof $fileClass) {
+                return;
+            }
+        }
+
+        Assert::fail(sprintf('Expected fake runtime last request to carry an attachment of type [%s].', $fileClass));
+    }
+
+    public static function assertRuntimeRequestedProviderTool(FakeAiRuntime $fake, string $providerToolName): void
+    {
+        $request = $fake->lastRequest();
+
+        Assert::assertNotNull($request, 'Expected fake runtime to have a last execution request.');
+        Assert::assertContains(
+            $providerToolName,
+            $request->providerToolNames,
+            sprintf('Expected fake runtime last request to carry provider tool [%s].', $providerToolName),
+        );
     }
 
     public static function assertDefaultProviderSelected(FakeProviderPolicy $fake, string $providerName): void

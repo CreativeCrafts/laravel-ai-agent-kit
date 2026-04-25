@@ -29,7 +29,12 @@ final class FakeToolRunner implements ToolRegistry
               /**
                * @param array<string, mixed> $input
                */
-              public function authorize(Tool $tool, array $input): bool
+              public function authorizeCustomTool(Tool $tool, array $input): bool
+              {
+                  return true;
+              }
+
+              public function authorizeProviderTool(string $providerToolName): bool
               {
                   return true;
               }
@@ -115,7 +120,12 @@ final class FakeToolRunner implements ToolRegistry
               /**
                * @param array<string, mixed> $input
                */
-              public function authorize(Tool $tool, array $input): bool
+              public function authorizeCustomTool(Tool $tool, array $input): bool
+              {
+                  return true;
+              }
+
+              public function authorizeProviderTool(string $providerToolName): bool
               {
                   return true;
               }

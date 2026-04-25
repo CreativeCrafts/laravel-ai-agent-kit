@@ -7,12 +7,15 @@ use CreativeCrafts\LaravelAiAgentKit\Blueprints\Agents\TextToStructuredEvaluatio
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluation;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluationResult;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\PromptBlueprint;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluation;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationResult;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\BlueprintRunner;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
 use CreativeCrafts\LaravelAiAgentKit\Facades\AgentKit;
 use CreativeCrafts\LaravelAiAgentKit\Support\AgentKitManager;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\AgentKitTestingAgentRegistry;
@@ -34,6 +37,50 @@ it('resolves the top-level manager and facade from the container', function (): 
       ->and($manager->audioToTextToEvaluation())->toBeInstanceOf(AudioToTextToEvaluation::class)
       ->and($manager->orchestrator())->toBe($orchestrator)
       ->and(AgentKit::getFacadeRoot())->toBe($manager);
+
+    /** @var BlueprintRunner $resolvedBlueprintRunner */
+    $resolvedBlueprintRunner = app(BlueprintRunner::class);
+    expect($resolvedBlueprintRunner)->toBeInstanceOf(BlueprintRunner::class);
+});
+
+it('delegates run() through the facade to BlueprintRunner exactly once', function (): void {
+    configureAgentKitFacadeTestBindings();
+
+    $expected = new ExecutionResult(
+        runId: 'run-facade-001',
+        output: 'Manager pass-through.',
+    );
+
+    $blueprintRunner = new class ($expected) implements BlueprintRunner {
+        public int $invocations = 0;
+
+        /** @var list<PromptBlueprint> */
+        public array $receivedBlueprints = [];
+
+        public function __construct(public readonly ExecutionResult $expected)
+        {
+        }
+
+        public function run(PromptBlueprint $blueprint): ExecutionResult
+        {
+            $this->invocations++;
+            $this->receivedBlueprints[] = $blueprint;
+
+            return $this->expected;
+        }
+    };
+
+    app()->instance(BlueprintRunner::class, $blueprintRunner);
+    app()->forgetInstance(AgentKitManager::class);
+    Facade::clearResolvedInstance(AgentKitManager::class);
+
+    $blueprint = PromptBlueprint::forPrompt('package.test')->withRunId('run-facade-001');
+
+    $result = AgentKit::run($blueprint);
+
+    expect($blueprintRunner->invocations)->toBe(1)
+      ->and($blueprintRunner->receivedBlueprints[0])->toBe($blueprint)
+      ->and($result)->toBe($expected);
 });
 
 it('delegates text evaluation through the facade to the existing blueprint workflow', function (): void {

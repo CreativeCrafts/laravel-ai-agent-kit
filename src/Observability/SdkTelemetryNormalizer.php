@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Observability;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\Redactor;
-use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\RuntimeTelemetryAgent;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\CarriesRuntimeTelemetry;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\RuntimeExecutionCompleted;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\RuntimeExecutionStarted;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\RuntimeToolInvocationCompleted;
@@ -29,11 +29,11 @@ final readonly class SdkTelemetryNormalizer
     {
         $agent = $event->prompt->agent;
 
-        if (!$agent instanceof RuntimeTelemetryAgent) {
+        if (!$agent instanceof CarriesRuntimeTelemetry) {
             return;
         }
 
-        $telemetry = $agent->telemetryContext;
+        $telemetry = $agent->telemetryContext();
 
         $this->events->dispatch(
             new RuntimeExecutionStarted(
@@ -59,11 +59,11 @@ final readonly class SdkTelemetryNormalizer
     {
         $agent = $event->prompt->agent;
 
-        if (!$agent instanceof RuntimeTelemetryAgent) {
+        if (!$agent instanceof CarriesRuntimeTelemetry) {
             return;
         }
 
-        $telemetry = $agent->telemetryContext;
+        $telemetry = $agent->telemetryContext();
         $response = $event->response;
 
         $this->events->dispatch(
@@ -92,18 +92,18 @@ final readonly class SdkTelemetryNormalizer
     {
         $agent = $event->agent;
 
-        if (!$agent instanceof RuntimeTelemetryAgent) {
+        if (!$agent instanceof CarriesRuntimeTelemetry) {
             return;
         }
 
         $this->events->dispatch(
             new RuntimeToolInvocationStarted(
-                runId: $agent->telemetryContext->runId,
+                runId: $agent->telemetryContext()->runId,
                 invocationId: $event->invocationId,
                 toolInvocationId: $event->toolInvocationId,
                 toolName: $this->resolveToolName($event->tool),
                 argumentKeys: $this->redactor->redactKeys($this->argumentsAsMap($event->arguments)),
-                packageConversationId: $agent->telemetryContext->packageConversationId?->toString(),
+                packageConversationId: $agent->telemetryContext()->packageConversationId?->toString(),
             ),
         );
     }
@@ -112,19 +112,19 @@ final readonly class SdkTelemetryNormalizer
     {
         $agent = $event->agent;
 
-        if (!$agent instanceof RuntimeTelemetryAgent) {
+        if (!$agent instanceof CarriesRuntimeTelemetry) {
             return;
         }
 
         $this->events->dispatch(
             new RuntimeToolInvocationCompleted(
-                runId: $agent->telemetryContext->runId,
+                runId: $agent->telemetryContext()->runId,
                 invocationId: $event->invocationId,
                 toolInvocationId: $event->toolInvocationId,
                 toolName: $this->resolveToolName($event->tool),
                 argumentKeys: $this->redactor->redactKeys($this->argumentsAsMap($event->arguments)),
                 resultType: get_debug_type($event->result),
-                packageConversationId: $agent->telemetryContext->packageConversationId?->toString(),
+                packageConversationId: $agent->telemetryContext()->packageConversationId?->toString(),
             ),
         );
     }

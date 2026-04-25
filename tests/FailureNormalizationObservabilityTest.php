@@ -34,6 +34,7 @@ use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
 use Illuminate\Config\Repository;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Facades\Event;
+use CreativeCrafts\LaravelAiAgentKit\Tools\ProviderToolMaterializer;
 
 it('resolves categories through the package-owned failure-category carrier interface', function (): void {
     $throwable = new class ('carrier failure') extends RuntimeException implements HasFailureCategory {
@@ -299,6 +300,7 @@ function runtimeForFailureTests(ConversationContextManager $conversationContextM
 
     return new SdkAiRuntime(
         toolMaterializer: app(SdkToolMaterializer::class),
+        providerToolMaterializer: app(ProviderToolMaterializer::class),
         runtimeConversationMemoryBridge: new RuntimeConversationMemoryBridge($conversationContextManager),
         runtimeBudgetEnforcer: new RuntimeBudgetEnforcer(
             new Repository([
@@ -307,6 +309,7 @@ function runtimeForFailureTests(ConversationContextManager $conversationContextM
           ],
         ]),
         ),
+        container: app(),
         events: $eventDispatcher,
         redactor: app(Redactor::class),
     );

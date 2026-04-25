@@ -53,7 +53,7 @@ final class InMemoryToolRegistry implements ToolRegistry
 
         $this->assertValidInput($tool, $input);
 
-        if (!$this->authorizer->authorize($tool, $input)) {
+        if (!$this->authorizer->authorizeCustomTool($tool, $input)) {
             throw ToolUnauthorizedException::forName($tool->name());
         }
 

@@ -39,6 +39,10 @@ final readonly class PromptBlueprintCompiler implements BlueprintCompiler
             conversationId: $blueprint->conversationId,
             storeConversation: $blueprint->storeConversation,
             continueConversation: $blueprint->continueConversation,
+            generationOptions: $blueprint->generationOptions,
+            schema: $blueprint->schema,
+            attachments: $blueprint->attachments,
+            providerToolNames: $blueprint->providerToolNames,
         );
     }
 }

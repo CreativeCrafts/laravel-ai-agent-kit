@@ -7,12 +7,15 @@ namespace CreativeCrafts\LaravelAiAgentKit\Support;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluation;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluationResult;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\PromptBlueprint;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluation;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationResult;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\BlueprintRunner;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
 
 final readonly class AgentKitManager
 {
@@ -20,6 +23,7 @@ final readonly class AgentKitManager
         private TextToStructuredEvaluation $textEvaluation,
         private AudioToTextToEvaluation $audioEvaluation,
         private AgentOrchestrator $orchestrator,
+        private BlueprintRunner $blueprintRunner,
     ) {
     }
 
@@ -36,6 +40,11 @@ final readonly class AgentKitManager
     public function orchestrate(OrchestrationRequest $request): OrchestrationResult
     {
         return $this->orchestrator->run($request);
+    }
+
+    public function run(PromptBlueprint $blueprint): ExecutionResult
+    {
+        return $this->blueprintRunner->run($blueprint);
     }
 
     public function textToStructuredEvaluation(): TextToStructuredEvaluation

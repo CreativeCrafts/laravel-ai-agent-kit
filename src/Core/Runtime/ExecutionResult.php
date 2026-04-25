@@ -9,6 +9,7 @@ final readonly class ExecutionResult
     /**
      * @param array<string, int> $usage
      * @param array<string, mixed> $metadata
+     * @param array<string, mixed>|null $structuredOutput Populated from Laravel\Ai\Responses\StructuredAgentResponse::$structured when a schema drove the call; null otherwise.
      */
     public function __construct(
         public string $runId,
@@ -17,6 +18,7 @@ final readonly class ExecutionResult
         public ?string $model = null,
         public array $usage = [],
         public array $metadata = [],
+        public ?array $structuredOutput = null,
     ) {
     }
 }

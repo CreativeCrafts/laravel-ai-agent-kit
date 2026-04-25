@@ -4,24 +4,37 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Runtime;
 
+use Laravel\Ai\Responses\AgentResponse;
+use Closure;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\Redactor;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeBudgetExceededException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeExecutionException;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\SchemaResolutionException;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\RuntimeExecutionFailed;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Support\FailureCategory;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\RuntimeBudgetEnforcer;
+use CreativeCrafts\LaravelAiAgentKit\Tools\ProviderToolMaterializer;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
+use CreativeCrafts\LaravelAiAgentKit\Tools\Exceptions\ToolAuthorizationDeniedException;
+use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Ai\AnonymousAgent;
+use Laravel\Ai\Contracts\HasStructuredOutput;
+use Laravel\Ai\ObjectSchema;
+use Laravel\Ai\Responses\StructuredAgentResponse;
 use Throwable;
 
 final readonly class SdkAiRuntime implements AiRuntime
 {
     public function __construct(
         private SdkToolMaterializer $toolMaterializer,
+        private ProviderToolMaterializer $providerToolMaterializer,
         private RuntimeConversationMemoryBridge $runtimeConversationMemoryBridge,
         private RuntimeBudgetEnforcer $runtimeBudgetEnforcer,
+        private Container $container,
         private ?Dispatcher $events = null,
         private ?Redactor $redactor = null,
     ) {
@@ -44,7 +57,19 @@ final readonly class SdkAiRuntime implements AiRuntime
         }
 
         try {
-            $materializedTools = $this->toolMaterializer->materialize($request->toolNames);
+            $materializedTools = [
+                ...$this->toolMaterializer->materialize($request->toolNames),
+                ...$this->providerToolMaterializer->materialize($request->providerToolNames),
+            ];
+        } catch (ToolAuthorizationDeniedException $exception) {
+            $this->reportRuntimeFailure(
+                request: $request,
+                throwable: $exception,
+                projectedMessageCount: $projectedConversation->projectedMessageCount(),
+                packageConversationId: $this->packageConversationId($request, $projectedConversation),
+            );
+
+            throw $exception;
         } catch (Throwable $throwable) {
             throw $this->wrapAndReportRuntimeFailure(
                 request: $request,
@@ -55,17 +80,38 @@ final readonly class SdkAiRuntime implements AiRuntime
         }
 
         $telemetryContext = RuntimeTelemetryContext::fromRequest($request, $projectedConversation);
+        $instructions = $this->instructionsAsString($request, $projectedConversation->systemInstructions);
 
-        $agent = new RuntimeTelemetryAgent(
-            telemetryContext: $telemetryContext,
-            instructions: $this->instructionsAsString($request, $projectedConversation->systemInstructions),
-            messages: $projectedConversation->messages,
-            tools: $materializedTools,
-        );
+        try {
+            $agent = $this->buildAgent(
+                request: $request,
+                telemetryContext: $telemetryContext,
+                instructions: $instructions,
+                messages: $projectedConversation->messages,
+                materializedTools: $materializedTools,
+            );
+        } catch (SchemaResolutionException $exception) {
+            $this->reportRuntimeFailure(
+                request: $request,
+                throwable: $exception,
+                projectedMessageCount: $telemetryContext->projectedMessageCount,
+                packageConversationId: $telemetryContext->packageConversationId?->toString(),
+            );
+
+            throw $exception;
+        } catch (Throwable $throwable) {
+            throw $this->wrapAndReportRuntimeFailure(
+                request: $request,
+                throwable: $throwable,
+                projectedMessageCount: $telemetryContext->projectedMessageCount,
+                packageConversationId: $telemetryContext->packageConversationId?->toString(),
+            );
+        }
 
         try {
             $response = $agent->prompt(
                 prompt: $request->prompt,
+                attachments: $request->attachments,
                 provider: $request->provider,
                 model: $request->model,
                 timeout: $request->timeout,
@@ -137,13 +183,96 @@ final readonly class SdkAiRuntime implements AiRuntime
             'tool_result_count' => $response->toolResults->count(),
             'step_count' => $response->steps->count(),
             'requested_tool_names' => $request->toolNames,
+            'requested_provider_tool_names' => $request->providerToolNames,
             'materialized_tool_count' => count($materializedTools),
             'projected_message_count' => $projectedConversation->projectedMessageCount(),
             'package_conversation_id' => $conversation?->id->toString(),
             'package_conversation_message_count' => $conversation?->messageCount(),
             'estimated_cost_usd' => $estimatedCostUsd,
           ],
+            structuredOutput: $this->extractStructuredOutput($response),
         );
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function extractStructuredOutput(AgentResponse $response): ?array
+    {
+        if (!$response instanceof StructuredAgentResponse) {
+            return null;
+        }
+
+        $structured = [];
+
+        foreach ($response->structured as $key => $value) {
+            if (is_string($key)) {
+                $structured[$key] = $value;
+            }
+        }
+
+        return $structured;
+    }
+
+    /**
+     * @param iterable<mixed> $messages
+     * @param iterable<mixed> $materializedTools
+     */
+    private function buildAgent(
+        ExecutionRequest $request,
+        RuntimeTelemetryContext $telemetryContext,
+        string $instructions,
+        iterable $messages,
+        iterable $materializedTools,
+    ): AnonymousAgent {
+        if ($request->schema === null) {
+            return new RuntimeTelemetryAgent(
+                telemetryContext: $telemetryContext,
+                instructions: $instructions,
+                messages: $messages,
+                tools: $materializedTools,
+                generationOptions: $request->generationOptions,
+            );
+        }
+
+        $schemaClosure = $this->normalizeSchema($request->schema);
+
+        return new StructuredRuntimeTelemetryAgent(
+            telemetryContext: $telemetryContext,
+            instructions: $instructions,
+            messages: $messages,
+            tools: $materializedTools,
+            schema: $schemaClosure,
+            generationOptions: $request->generationOptions,
+        );
+    }
+
+    /**
+     * Normalize any of {Closure, ObjectSchema, class-string<HasStructuredOutput>}
+     * into the Closure that StructuredAnonymousAgent consumes.
+     */
+    private function normalizeSchema(Closure|ObjectSchema|string $schema): Closure
+    {
+        if ($schema instanceof Closure) {
+            return $schema;
+        }
+
+        if ($schema instanceof ObjectSchema) {
+            return fn (JsonSchema $js): array => $schema->toSchema();
+        }
+
+        // class-string<HasStructuredOutput>
+        if (!class_exists($schema)) {
+            throw SchemaResolutionException::forMissingClass($schema);
+        }
+
+        $instance = $this->container->make($schema);
+
+        if (!$instance instanceof HasStructuredOutput) {
+            throw SchemaResolutionException::forContractMismatch($schema);
+        }
+
+        return fn (JsonSchema $js): array => $instance->schema($js);
     }
 
     private function estimatedCostUsd(ExecutionRequest $request): ?float

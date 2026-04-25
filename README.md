@@ -250,6 +250,16 @@ $orchestrationResult = AgentKit::orchestrate(
         input: ['subscription_id' => 'sub-123'],
     ),
 );
+
+// Single-prompt execution with the new request surface
+// (generation options, structured output, attachments, provider tools).
+use CreativeCrafts\LaravelAiAgentKit\LaravelAiAgentKit;
+
+$result = AgentKit::run(
+    LaravelAiAgentKit::prompt('package.followup-summary')
+      ->withVariable('topic', 'refund window')
+      ->withSchema(\App\Schemas\FollowUpSummary::class)
+);
 ~~~
 
 Register first-class agents explicitly through the package agent registry in your application service provider:

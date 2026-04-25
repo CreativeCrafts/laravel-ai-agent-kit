@@ -12,7 +12,12 @@ final class DenyAllToolAuthorizer implements ToolAuthorizer
     /**
      * @param array<string, mixed> $input
      */
-    public function authorize(Tool $tool, array $input): bool
+    public function authorizeCustomTool(Tool $tool, array $input): bool
+    {
+        return false;
+    }
+
+    public function authorizeProviderTool(string $providerToolName): bool
     {
         return false;
     }

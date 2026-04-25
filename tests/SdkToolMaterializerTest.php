@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\Tool;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolAuthorizer;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ProviderToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Tools\Exceptions\ToolNotRegisteredException;
 use CreativeCrafts\LaravelAiAgentKit\Tools\Exceptions\ToolUnauthorizedException;
 use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryToolRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Tools\ProviderToolMaterializer;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolAdapter;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
 use Laravel\Ai\Providers\Tools\WebFetch;
@@ -48,7 +50,12 @@ it('preserves package authorization when an sdk tool adapter is invoked', functi
 it('serializes sdk tool adapter results through the package registry execution path', function () {
     $registry = new InMemoryToolRegistry(
         authorizer: new class () implements ToolAuthorizer {
-          public function authorize(Tool $tool, array $input): bool
+          public function authorizeCustomTool(Tool $tool, array $input): bool
+          {
+              return true;
+          }
+
+          public function authorizeProviderTool(string $providerToolName): bool
           {
               return true;
           }
@@ -66,24 +73,27 @@ it('serializes sdk tool adapter results through the package registry execution p
 });
 
 it('materializes explicitly configured provider-native tools', function () {
-    config()->set('ai-agent-kit.tools.provider_tools', [
-      'web.search' => [
-        'type' => 'web_search',
-        'enabled' => true,
-        'max_searches' => 3,
-        'allowed_domains' => ['example.com'],
-        'location' => [
-          'city' => 'Stockholm',
-          'region' => 'Stockholm County',
-          'country' => 'SE',
-        ],
-      ],
-    ]);
+    $authorizer = new class () implements ToolAuthorizer {
+        public function authorizeCustomTool(Tool $tool, array $input): bool
+        {
+            return true;
+        }
 
-    app()->forgetInstance(SdkToolMaterializer::class);
+        public function authorizeProviderTool(string $providerToolName): bool
+        {
+            return true;
+        }
+    };
 
-    /** @var SdkToolMaterializer $materializer */
-    $materializer = app(SdkToolMaterializer::class);
+    app()->bind(ToolAuthorizer::class, fn () => $authorizer);
+    app()->forgetInstance(ProviderToolMaterializer::class);
+
+    /** @var ProviderToolRegistry $registry */
+    $registry = app(ProviderToolRegistry::class);
+    $registry->register('web.search', fn () => new WebSearch(maxSearches: 3, allowedDomains: ['example.com']));
+
+    /** @var ProviderToolMaterializer $materializer */
+    $materializer = app(ProviderToolMaterializer::class);
 
     $tools = $materializer->materialize(['web.search']);
 
@@ -91,26 +101,31 @@ it('materializes explicitly configured provider-native tools', function () {
       ->toHaveCount(1)
       ->and($tools[0])->toBeInstanceOf(WebSearch::class)
       ->and($tools[0]->maxSearches)->toBe(3)
-      ->and($tools[0]->allowedDomains)->toBe(['example.com'])
-      ->and($tools[0]->city)->toBe('Stockholm')
-      ->and($tools[0]->region)->toBe('Stockholm County')
-      ->and($tools[0]->country)->toBe('SE');
+      ->and($tools[0]->allowedDomains)->toBe(['example.com']);
 });
 
 it('materializes explicitly configured web fetch provider-native tools', function () {
-    config()->set('ai-agent-kit.tools.provider_tools', [
-      'web.fetch' => [
-        'type' => 'web_fetch',
-        'enabled' => true,
-        'max_searches' => 2,
-        'allowed_domains' => ['example.com'],
-      ],
-    ]);
+    $authorizer = new class () implements ToolAuthorizer {
+        public function authorizeCustomTool(Tool $tool, array $input): bool
+        {
+            return true;
+        }
 
-    app()->forgetInstance(SdkToolMaterializer::class);
+        public function authorizeProviderTool(string $providerToolName): bool
+        {
+            return true;
+        }
+    };
 
-    /** @var SdkToolMaterializer $materializer */
-    $materializer = app(SdkToolMaterializer::class);
+    app()->bind(ToolAuthorizer::class, fn () => $authorizer);
+    app()->forgetInstance(ProviderToolMaterializer::class);
+
+    /** @var ProviderToolRegistry $registry */
+    $registry = app(ProviderToolRegistry::class);
+    $registry->register('web.fetch', fn () => new WebFetch(maxSearches: 2, allowedDomains: ['example.com']));
+
+    /** @var ProviderToolMaterializer $materializer */
+    $materializer = app(ProviderToolMaterializer::class);
 
     $tools = $materializer->materialize(['web.fetch']);
 

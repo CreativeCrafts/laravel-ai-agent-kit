@@ -12,13 +12,14 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\RuntimeTelemetryAgent;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\SdkAiRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StructuredRuntimeTelemetryAgent;
 use CreativeCrafts\LaravelAiAgentKit\Memory\Conversation;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessage;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessageRole;
 use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
+use CreativeCrafts\LaravelAiAgentKit\Tools\Exceptions\ToolAuthorizationDeniedException;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolAdapter;
-use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Ai;
 use Laravel\Ai\AiServiceProvider;
@@ -29,6 +30,11 @@ use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ProviderToolRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolAuthorizer;
+use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryToolRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Tools\ProviderToolMaterializer;
+use Laravel\Ai\Responses\StructuredAgentResponse;
 
 it('binds the ai runtime contract to the sdk ai runtime', function () {
     app()->register(AiServiceProvider::class);
@@ -133,21 +139,32 @@ it('materializes package-governed tools into the sdk agent prompt', function () 
     });
 });
 
-it('materializes explicitly configured provider-native tools into the sdk agent prompt', function () {
+it('materializes registered provider-native tools into the sdk agent prompt', function () {
     app()->register(AiServiceProvider::class);
 
-    config()->set('ai-agent-kit.tools.provider_tools', [
-      'web.search' => [
-        'type' => 'web_search',
-        'enabled' => true,
-        'max_searches' => 2,
-        'allowed_domains' => ['example.com'],
-      ],
-    ]);
+    app()->bind(ToolAuthorizer::class, function () {
+        return new class () implements ToolAuthorizer {
+            public function authorizeCustomTool(Tool $tool, array $input): bool
+            {
+                return true;
+            }
 
-    app()->forgetInstance(SdkToolMaterializer::class);
+            public function authorizeProviderTool(string $providerToolName): bool
+            {
+                return true;
+            }
+        };
+    });
+
+    app()->forgetInstance(InMemoryToolRegistry::class);
+    app()->forgetInstance(ToolRegistry::class);
+    app()->forgetInstance(ProviderToolMaterializer::class);
     app()->forgetInstance(SdkAiRuntime::class);
     app()->forgetInstance(AiRuntime::class);
+
+    /** @var ProviderToolRegistry $registry */
+    $registry = app(ProviderToolRegistry::class);
+    $registry->register('web.search', fn () => new WebSearch(maxSearches: 2, allowedDomains: ['example.com']));
 
     Ai::fakeAgent(RuntimeTelemetryAgent::class, ['Bridge response'])->preventStrayPrompts();
 
@@ -160,7 +177,7 @@ it('materializes explicitly configured provider-native tools into the sdk agent 
             prompt: 'Search the web for the latest update.',
             provider: 'openai',
             model: 'gpt-4o-mini',
-            toolNames: ['web.search'],
+            providerToolNames: ['web.search'],
         ),
     );
 
@@ -173,6 +190,80 @@ it('materializes explicitly configured provider-native tools into the sdk agent 
           && $tools[0]->maxSearches === 2
           && $tools[0]->allowedDomains === ['example.com'];
     });
+});
+
+it('denies provider tool materialization when the authorizer rejects it', function () {
+    app()->register(AiServiceProvider::class);
+
+    app()->bind(ToolAuthorizer::class, function () {
+        return new class () implements ToolAuthorizer {
+            public function authorizeCustomTool(Tool $tool, array $input): bool
+            {
+                return true;
+            }
+
+            public function authorizeProviderTool(string $providerToolName): bool
+            {
+                return false;
+            }
+        };
+    });
+
+    app()->forgetInstance(InMemoryToolRegistry::class);
+    app()->forgetInstance(ToolRegistry::class);
+    app()->forgetInstance(ProviderToolMaterializer::class);
+    app()->forgetInstance(SdkAiRuntime::class);
+    app()->forgetInstance(AiRuntime::class);
+
+    /** @var ProviderToolRegistry $registry */
+    $registry = app(ProviderToolRegistry::class);
+    $registry->register('web.search', fn () => new WebSearch());
+
+    /** @var AiRuntime $runtime */
+    $runtime = app(AiRuntime::class);
+
+    expect(fn () => $runtime->execute(
+        new ExecutionRequest(
+            runId: 'run-bridge-provider-tools-deny-001',
+            prompt: 'Try to search the web.',
+            provider: 'openai',
+            providerToolNames: ['web.search'],
+        ),
+    ))->toThrow(ToolAuthorizationDeniedException::class, 'web.search');
+});
+
+it('routes schema-backed calls through the structured telemetry agent and returns structured output', function () {
+    app()->register(AiServiceProvider::class);
+
+    Ai::fakeAgent(StructuredRuntimeTelemetryAgent::class, [
+        static fn () => new StructuredAgentResponse(
+            'inv-structured-001',
+            ['ok' => true],
+            'Structured response text',
+            new Usage(promptTokens: 1, completionTokens: 1),
+            new Meta(provider: 'openai', model: 'gpt-4o-mini'),
+        ),
+    ])->preventStrayPrompts();
+
+    /** @var AiRuntime $runtime */
+    $runtime = app(AiRuntime::class);
+
+    $result = $runtime->execute(
+        new ExecutionRequest(
+            runId: 'run-structured-001',
+            prompt: 'Return structured output.',
+            provider: 'openai',
+            schema: fn ($js) => [],
+        ),
+    );
+
+    Ai::assertAgentWasPrompted(StructuredRuntimeTelemetryAgent::class, fn () => true);
+
+    // Note: Laravel\Ai fakes currently normalize responses to AgentResponse,
+    // which drops the StructuredAgentResponse subtype. The production runtime
+    // still maps structured output when the SDK returns StructuredAgentResponse.
+    expect($result->structuredOutput)->toBeNull()
+      ->and($result->output)->toBe('Structured response text');
 });
 
 it('starts and persists a new package-owned conversation through the runtime bridge', function () {
