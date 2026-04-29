@@ -105,6 +105,12 @@ Register optional middleware classes under `ai-agent-kit.runtime.middleware` (or
 
 Implement `CreativeCrafts\LaravelAiAgentKit\Contracts\Core\TerminatingRuntimeMiddleware` when you need a hook that runs **after** a successful execution, in reverse order relative to the `handle` chain.
 
+### Runtime streaming
+
+Inject `CreativeCrafts\LaravelAiAgentKit\Contracts\Core\StreamingAiRuntime` (same concrete instance family as `AiRuntime`, including the middleware wrapper when configured). Call `executeStream(ExecutionRequest $request)` and consume the generator: zero or more `StreamChunk` (`text_delta`), then exactly one terminal `StreamComplete` or `StreamFailure`. Do not set `ExecutionRequest::$schema` for streaming.
+
+Optional Laravel Echo integration: configure `ai-agent-kit.runtime.streaming.broadcast_channel` or set request metadata `streaming_broadcast_channel` to a public channel string. Broadcast event names are `runtime.stream.chunk`, `runtime.stream.completed`, and `runtime.stream.failed`; payloads omit prompt content and mirror the redacted Laravel events the package dispatches on the default event bus.
+
 ### Attachments scope
 
 Attachments attached via `PromptBlueprint::withAttachment()` / `withAttachments()` are scoped to the **current call only**. The conversation memory bridge does not persist attachments across turns in this phase. Continuing a stored conversation will not replay prior attachments.

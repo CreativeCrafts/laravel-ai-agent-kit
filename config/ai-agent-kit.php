@@ -256,6 +256,22 @@ return [
     */
   'runtime' => [
     'middleware' => [],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Runtime streaming
+    |--------------------------------------------------------------------------
+    |
+    | Optional default broadcast channel name for Laravel Echo when you want
+    | stream lifecycle events (chunk / completed / failed) to implement
+    | ShouldBroadcast. Payloads are redacted (no prompt text). Per-request
+    | override: set metadata key `streaming_broadcast_channel` to a non-empty
+    | string (takes precedence over this default).
+    |
+    */
+    'streaming' => [
+      'broadcast_channel' => env('AI_AGENT_KIT_STREAMING_BROADCAST_CHANNEL'),
+    ],
   ],
 
     /*

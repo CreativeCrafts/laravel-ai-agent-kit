@@ -7,13 +7,16 @@ namespace CreativeCrafts\LaravelAiAgentKit\Core\Runtime;
 use Closure;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\RuntimeMiddleware;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\StreamingAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\TerminatingRuntimeMiddleware;
 use Throwable;
+use Generator;
+use RuntimeException;
 
 /**
  * Wraps an inner {@see AiRuntime} with an ordered stack of {@see RuntimeMiddleware}.
  */
-final readonly class MiddlewareExecutingAiRuntime implements AiRuntime
+final readonly class MiddlewareExecutingAiRuntime implements AiRuntime, StreamingAiRuntime
 {
     /**
      * @param list<RuntimeMiddleware> $middleware
@@ -49,5 +52,18 @@ final readonly class MiddlewareExecutingAiRuntime implements AiRuntime
         }
 
         return $result;
+    }
+
+    public function executeStream(ExecutionRequest $request): Generator
+    {
+        if ($this->inner instanceof StreamingAiRuntime) {
+            yield from $this->inner->executeStream($request);
+
+            return;
+        }
+
+        throw new RuntimeException(
+            sprintf('Inner %s does not implement %s.', $this->inner::class, StreamingAiRuntime::class),
+        );
     }
 }

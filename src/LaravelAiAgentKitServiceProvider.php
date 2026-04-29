@@ -16,6 +16,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\BlueprintCompiler;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\BlueprintRunner;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\RuntimeMiddleware;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\StreamingAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\QueuedPipelineDispatcher;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager;
@@ -519,6 +520,18 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             }
 
             return new MiddlewareExecutingAiRuntime($inner, $middleware);
+        });
+
+        $this->app->singleton(StreamingAiRuntime::class, function (Application $app): StreamingAiRuntime {
+            $runtime = $app->make(AiRuntime::class);
+
+            if (!$runtime instanceof StreamingAiRuntime) {
+                throw new RuntimeException(
+                    sprintf('Resolved %s must implement %s for streaming.', AiRuntime::class, StreamingAiRuntime::class),
+                );
+            }
+
+            return $runtime;
         });
 
         $this->app->singleton(CompiledBlueprintRunner::class, function (Application $app): CompiledBlueprintRunner {

@@ -923,35 +923,52 @@ final readonly class ConfigValidator
 
         $runtime = $config['runtime'];
 
-        if (!array_key_exists('middleware', $runtime)) {
+        if (array_key_exists('middleware', $runtime)) {
+            if (!is_array($runtime['middleware'])) {
+                throw InvalidConfigurationException::invalidType('runtime.middleware', 'array');
+            }
+
+            foreach ($runtime['middleware'] as $index => $class) {
+                if (!is_string($class) || $class === '') {
+                    throw InvalidConfigurationException::invalidValue(
+                        "runtime.middleware.{$index}",
+                        'Must be a non-empty class-string implementing RuntimeMiddleware.',
+                    );
+                }
+
+                if (!class_exists($class)) {
+                    throw InvalidConfigurationException::invalidValue(
+                        "runtime.middleware.{$index}",
+                        sprintf('Class [%s] does not exist.', $class),
+                    );
+                }
+
+                if (!is_subclass_of($class, RuntimeMiddleware::class)) {
+                    throw InvalidConfigurationException::invalidValue(
+                        "runtime.middleware.{$index}",
+                        sprintf('Class [%s] must implement %s.', $class, RuntimeMiddleware::class),
+                    );
+                }
+            }
+        }
+
+        if (!array_key_exists('streaming', $runtime)) {
             return;
         }
 
-        if (!is_array($runtime['middleware'])) {
-            throw InvalidConfigurationException::invalidType('runtime.middleware', 'array');
+        if (!is_array($runtime['streaming'])) {
+            throw InvalidConfigurationException::invalidType('runtime.streaming', 'array');
         }
 
-        foreach ($runtime['middleware'] as $index => $class) {
-            if (!is_string($class) || $class === '') {
-                throw InvalidConfigurationException::invalidValue(
-                    "runtime.middleware.{$index}",
-                    'Must be a non-empty class-string implementing RuntimeMiddleware.',
-                );
-            }
+        $streaming = $runtime['streaming'];
 
-            if (!class_exists($class)) {
-                throw InvalidConfigurationException::invalidValue(
-                    "runtime.middleware.{$index}",
-                    sprintf('Class [%s] does not exist.', $class),
-                );
-            }
-
-            if (!is_subclass_of($class, RuntimeMiddleware::class)) {
-                throw InvalidConfigurationException::invalidValue(
-                    "runtime.middleware.{$index}",
-                    sprintf('Class [%s] must implement %s.', $class, RuntimeMiddleware::class),
-                );
-            }
+        if (array_key_exists('broadcast_channel', $streaming)
+            && $streaming['broadcast_channel'] !== null
+            && (!is_string($streaming['broadcast_channel']) || $streaming['broadcast_channel'] === '')) {
+            throw InvalidConfigurationException::invalidValue(
+                'runtime.streaming.broadcast_channel',
+                'Must be null or a non-empty string channel name.',
+            );
         }
     }
 }

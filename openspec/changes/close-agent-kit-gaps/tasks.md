@@ -31,10 +31,10 @@ Satisfies `specs/runtime-middleware/spec.md`.
 
 Satisfies `specs/runtime-streaming/spec.md`.
 
-- [ ] 3.1 Add stream-oriented API on `AiRuntime` or parallel interface (per design D4); define chunk/complete/fail value objects.
-- [ ] 3.2 Implement SDK-backed streaming for at least one mainstream text path; normalize provider events into package events.
-- [ ] 3.3 Optional broadcast/event forwarding behind config; document channel naming and payload redaction rules.
-- [ ] 3.4 Pest tests: chunk ordering, terminal completion, terminal failure stops further chunks, optional broadcast assertion using `Event::fake`.
+- [x] 3.1 Add stream-oriented API on `AiRuntime` or parallel interface (per design D4); define chunk/complete/fail value objects.
+- [x] 3.2 Implement SDK-backed streaming for at least one mainstream text path; normalize provider events into package events.
+- [x] 3.3 Optional broadcast/event forwarding behind config; document channel naming and payload redaction rules.
+- [x] 3.4 Pest tests: chunk ordering, terminal completion, terminal failure stops further chunks, optional broadcast assertion using `Event::fake`.
 
 ## Phase 4 — Modality runtimes
 

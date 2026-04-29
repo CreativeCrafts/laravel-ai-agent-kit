@@ -14,11 +14,13 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 - Runtime budget enforcement for `max_tokens`, `max_tool_calls`, and `max_cost_usd` in the SDK runtime bridge via `RuntimeBudgetEnforcer`.
 - Typed runtime budget exceptions with explicit failure reasons for exceeded ceilings and invalid/missing cost metadata.
 - Runtime budget regression coverage in `tests/SdkAiRuntimeTest.php`.
-- `SECURITY.md` with private vulnerability reporting guidance and supported-version policy.
+- `CreativeCrafts\LaravelAiAgentKit\Contracts\Core\StreamingAiRuntime` and `SdkAiRuntime::executeStream()` / `MiddlewareExecutingAiRuntime::executeStream()` for ordered text streaming (`StreamChunk`, `StreamComplete`, `StreamFailure`).
+- Redacted streaming observability events `RuntimeStreamChunkEmitted`, `RuntimeStreamCompleted`, and `RuntimeStreamFailed`; optional `ShouldBroadcast` when `runtime.streaming.broadcast_channel` or request metadata `streaming_broadcast_channel` is set.
+- `RequestObservabilityKeys` helper for metadata key extraction shared with streaming completion events.
 
 ### Changed
 
-- `AiRuntime` resolves to `MiddlewareExecutingAiRuntime` around `SdkAiRuntime` when `runtime.middleware` lists one or more middleware classes (blueprints and orchestration use the same binding).
+- `AiRuntime` resolves to `MiddlewareExecutingAiRuntime` around `SdkAiRuntime` when `runtime.middleware` lists one or more middleware classes (blueprints and orchestration use the same binding); the same wrapper now implements `StreamingAiRuntime` and delegates streaming to the inner SDK runtime.
 - `TextToStructuredEvaluation` specialist now requests structured output via `ExecutionRequest::$schema`, prefers `ExecutionResult::$structuredOutput` when valid, and falls back to the existing text normalizer when structured output is missing or invalid; coordinator forwards path flags into the final blueprint result.
 - README documents the new observability fields and clarifies that the audio transcription stage remains plain text from the runtime.
 - Runtime now includes `estimated_cost_usd` metadata in `ExecutionResult` when provided in request metadata.
