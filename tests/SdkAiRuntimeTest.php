@@ -12,6 +12,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\RuntimeTelemetryAgent;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\SdkAiRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StructuredAgentResponseMapper;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StructuredRuntimeTelemetryAgent;
 use CreativeCrafts\LaravelAiAgentKit\Memory\Conversation;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
@@ -235,14 +236,19 @@ it('denies provider tool materialization when the authorizer rejects it', functi
 it('routes schema-backed calls through the structured telemetry agent and returns structured output', function () {
     app()->register(AiServiceProvider::class);
 
+    $structuredForMapper = new StructuredAgentResponse(
+        'inv-structured-001',
+        ['ok' => true],
+        'Structured response text',
+        new Usage(promptTokens: 1, completionTokens: 1),
+        new Meta(provider: 'openai', model: 'gpt-4o-mini'),
+    );
+
+    expect(StructuredAgentResponseMapper::mapStructuredPayload($structuredForMapper))
+        ->toBe(['ok' => true]);
+
     Ai::fakeAgent(StructuredRuntimeTelemetryAgent::class, [
-        static fn () => new StructuredAgentResponse(
-            'inv-structured-001',
-            ['ok' => true],
-            'Structured response text',
-            new Usage(promptTokens: 1, completionTokens: 1),
-            new Meta(provider: 'openai', model: 'gpt-4o-mini'),
-        ),
+        static fn () => $structuredForMapper,
     ])->preventStrayPrompts();
 
     /** @var AiRuntime $runtime */
@@ -259,9 +265,10 @@ it('routes schema-backed calls through the structured telemetry agent and return
 
     Ai::assertAgentWasPrompted(StructuredRuntimeTelemetryAgent::class, fn () => true);
 
-    // Note: Laravel\Ai fakes currently normalize responses to AgentResponse,
-    // which drops the StructuredAgentResponse subtype. The production runtime
-    // still maps structured output when the SDK returns StructuredAgentResponse.
+    // Laravel\Ai fakes may normalize the returned response to a plain AgentResponse, so
+    // ExecutionResult->structuredOutput can be null here even though production maps
+    // StructuredAgentResponse via StructuredAgentResponseMapper (covered above and in
+    // StructuredAgentResponseMapperTest).
     expect($result->structuredOutput)->toBeNull()
       ->and($result->output)->toBe('Structured response text');
 });

@@ -1,6 +1,6 @@
 {
   "name": "creativecrafts/laravel-ai-agent-kit",
-  "description": "Laravel AI Agent Kit is a Laravel package that delivers a full agent‑workflow toolkit built atop the official Laravel AI SDK. It simplifies how developers build, orchestrate, and deploy AI‑powered agents in their applications by providing structured pipelines, safe tooling, and out‑of‑the‑box resilience and observability.",
+  "description": "Laravel AI Agent Kit is a Laravel package that delivers a structured agent-workflow toolkit on the official Laravel AI SDK: pipelines, queued jobs, multi-agent orchestration, safe tooling, resilience, and redacted domain events for operational visibility.",
   "keywords": [
     "CreativeCrafts",
     "laravel",
