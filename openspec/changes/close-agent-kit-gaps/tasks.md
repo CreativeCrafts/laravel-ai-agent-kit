@@ -21,11 +21,11 @@ Satisfies `specs/structured-evaluation-migration/spec.md` and unblocks normalize
 
 Satisfies `specs/runtime-middleware/spec.md`.
 
-- [ ] 2.1 Add middleware contract(s), registration (service provider + config for ordered class names or tagged middleware), and pipeline executor.
-- [ ] 2.2 Integrate pipeline into `SdkAiRuntime::execute` inner dispatch.
-- [ ] 2.3 Integrate same pipeline into `CompiledBlueprintRunner` / `BlueprintRunner` so blueprints cannot bypass middleware.
-- [ ] 2.4 Ensure orchestration-invoked runtime calls use the same middleware stack (audit all `AiRuntime` resolution sites).
-- [ ] 2.5 Pest tests: deterministic order, failure propagation, blueprint vs direct parity.
+- [x] 2.1 Add middleware contract(s), registration (service provider + config for ordered class names or tagged middleware), and pipeline executor.
+- [x] 2.2 Integrate pipeline into `SdkAiRuntime::execute` inner dispatch.
+- [x] 2.3 Integrate same pipeline into `CompiledBlueprintRunner` / `BlueprintRunner` so blueprints cannot bypass middleware.
+- [x] 2.4 Ensure orchestration-invoked runtime calls use the same middleware stack (audit all `AiRuntime` resolution sites).
+- [x] 2.5 Pest tests: deterministic order, failure propagation, blueprint vs direct parity.
 
 ## Phase 3 — Streaming runtime
 

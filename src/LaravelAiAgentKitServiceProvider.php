@@ -15,6 +15,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\AgentRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\BlueprintCompiler;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\BlueprintRunner;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\RuntimeMiddleware;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\QueuedPipelineDispatcher;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager;
@@ -47,6 +48,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredFailoverProviderSe
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\CompiledBlueprintRunner;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\MiddlewareExecutingAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\PromptBlueprintCompiler;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\RuntimeConversationMemoryBridge;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\SdkAiRuntime;
@@ -509,7 +511,14 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         });
 
         $this->app->singleton(AiRuntime::class, function (Application $app): AiRuntime {
-            return $app->make(SdkAiRuntime::class);
+            $inner = $app->make(SdkAiRuntime::class);
+            $middleware = $this->resolveRuntimeMiddlewareStack($app);
+
+            if ($middleware === []) {
+                return $inner;
+            }
+
+            return new MiddlewareExecutingAiRuntime($inner, $middleware);
         });
 
         $this->app->singleton(CompiledBlueprintRunner::class, function (Application $app): CompiledBlueprintRunner {
@@ -760,6 +769,42 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
     private function promptDriver(ConfigRepository $config): string
     {
         return $this->stringConfig($config, 'ai-agent-kit.prompts.default_driver');
+    }
+
+    /**
+     * @return list<RuntimeMiddleware>
+     */
+    private function resolveRuntimeMiddlewareStack(Application $app): array
+    {
+        /** @var ConfigRepository $config */
+        $config = $app->make(ConfigRepository::class);
+        $entries = $config->get('ai-agent-kit.runtime.middleware', []);
+
+        if (!is_array($entries)) {
+            return [];
+        }
+
+        $middleware = [];
+
+        foreach ($entries as $index => $class) {
+            if (!is_string($class) || $class === '') {
+                throw new RuntimeException(
+                    sprintf('Configuration key [ai-agent-kit.runtime.middleware.%s] must be a non-empty class-string.', $index),
+                );
+            }
+
+            $instance = $app->make($class);
+
+            if (!$instance instanceof RuntimeMiddleware) {
+                throw new RuntimeException(
+                    sprintf('Runtime middleware [%s] must implement %s.', $class, RuntimeMiddleware::class),
+                );
+            }
+
+            $middleware[] = $instance;
+        }
+
+        return $middleware;
     }
 
     private function seedProviderToolRegistryFromConfig(

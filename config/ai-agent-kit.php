@@ -246,6 +246,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Runtime execution
+    |--------------------------------------------------------------------------
+    |
+    | Optional middleware stack around every AiRuntime::execute call (direct,
+    | blueprint, orchestration). List fully-qualified class names in order; each
+    | must implement CreativeCrafts\LaravelAiAgentKit\Contracts\Core\RuntimeMiddleware.
+    |
+    */
+  'runtime' => [
+    'middleware' => [],
+  ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Conversation Summarization
     |--------------------------------------------------------------------------
     |

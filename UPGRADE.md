@@ -99,6 +99,12 @@ The `AgentKit` facade gains a matching `@method static ExecutionResult run(Promp
 
 `toArray()` on the result includes `structured_evaluation_path` and `structured_evaluation_repaired`.
 
+### Runtime middleware
+
+Register optional middleware classes under `ai-agent-kit.runtime.middleware` (ordered list of class names). Each class must implement `CreativeCrafts\LaravelAiAgentKit\Contracts\Core\RuntimeMiddleware` and is resolved from the container. When the list is non-empty, the package wraps `SdkAiRuntime` so **every** `AiRuntime::execute` call (direct, blueprint, orchestration) passes through the stack.
+
+Implement `CreativeCrafts\LaravelAiAgentKit\Contracts\Core\TerminatingRuntimeMiddleware` when you need a hook that runs **after** a successful execution, in reverse order relative to the `handle` chain.
+
 ### Attachments scope
 
 Attachments attached via `PromptBlueprint::withAttachment()` / `withAttachments()` are scoped to the **current call only**. The conversation memory bridge does not persist attachments across turns in this phase. Continuing a stored conversation will not replay prior attachments.

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Config;
 
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\RuntimeMiddleware;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\Exceptions\InvalidConfigurationException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\DelegationPolicyMode;
@@ -169,6 +170,7 @@ final readonly class ConfigValidator
         $this->validateVector($config);
         $this->validateTools($config);
         $this->validateSummarization($config);
+        $this->validateRuntime($config);
     }
 
     /**
@@ -902,6 +904,53 @@ final readonly class ConfigValidator
 
             if (!is_int($triggerMessageCount) || $triggerMessageCount < 1) {
                 throw InvalidConfigurationException::invalidValue('summarization.trigger_message_count', 'Must be an integer >= 1.');
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function validateRuntime(array $config): void
+    {
+        if (!array_key_exists('runtime', $config)) {
+            return;
+        }
+
+        if (!is_array($config['runtime'])) {
+            throw InvalidConfigurationException::invalidType('runtime', 'array');
+        }
+
+        $runtime = $config['runtime'];
+
+        if (!array_key_exists('middleware', $runtime)) {
+            return;
+        }
+
+        if (!is_array($runtime['middleware'])) {
+            throw InvalidConfigurationException::invalidType('runtime.middleware', 'array');
+        }
+
+        foreach ($runtime['middleware'] as $index => $class) {
+            if (!is_string($class) || $class === '') {
+                throw InvalidConfigurationException::invalidValue(
+                    "runtime.middleware.{$index}",
+                    'Must be a non-empty class-string implementing RuntimeMiddleware.',
+                );
+            }
+
+            if (!class_exists($class)) {
+                throw InvalidConfigurationException::invalidValue(
+                    "runtime.middleware.{$index}",
+                    sprintf('Class [%s] does not exist.', $class),
+                );
+            }
+
+            if (!is_subclass_of($class, RuntimeMiddleware::class)) {
+                throw InvalidConfigurationException::invalidValue(
+                    "runtime.middleware.{$index}",
+                    sprintf('Class [%s] must implement %s.', $class, RuntimeMiddleware::class),
+                );
             }
         }
     }

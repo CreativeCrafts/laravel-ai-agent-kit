@@ -59,6 +59,8 @@ Pipeline execution now enforces both `budgets.max_steps` and `budgets.max_total_
 
 Runtime execution now enforces `budgets.max_tokens` and `budgets.max_tool_calls` using SDK usage/tool-call telemetry.
 
+Optional **runtime middleware** wraps every `AiRuntime::execute` call (including blueprints and orchestration): register ordered class names under `runtime.middleware` in `config/ai-agent-kit.php`. Each class must implement `CreativeCrafts\LaravelAiAgentKit\Contracts\Core\RuntimeMiddleware`. Implement `TerminatingRuntimeMiddleware` when you need a reverse-order hook after a successful response.
+
 `budgets.max_cost_usd` is enforced in fail-closed mode: when configured, each runtime request must provide numeric `metadata.cost_usd` (or `metadata.estimated_cost_usd`) so cost ceilings can be
 validated deterministically.
 
@@ -118,6 +120,12 @@ return [
             'failure_threshold' => 3,
             'reset_timeout_seconds' => 60,
             'half_open_success_threshold' => 1,
+        ],
+    ],
+
+    'runtime' => [
+        'middleware' => [
+            // \App\Runtime\LogAiRuntimeRequest::class,
         ],
     ],
 
