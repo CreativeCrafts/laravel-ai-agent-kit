@@ -11,11 +11,11 @@ Documentation, messaging, and testability gaps that do not depend on runtime pha
 
 Satisfies `specs/structured-evaluation-migration/spec.md` and unblocks normalizer retirement.
 
-- [ ] 1.1 Define the evaluation JSON schema for `TextToStructuredEvaluation` as `ObjectSchema`, `HasStructuredOutput`, or closure; thread `schema` (and optional `generationOptions`) through `PromptExecutionMapper` / specialist agent `ExecutionRequest` construction.
-- [ ] 1.2 Primary path: build specialist `AgentExecutionResult` / blueprint mapping from `ExecutionResult->structuredOutput` when present and valid; validate required keys before returning.
-- [ ] 1.3 Fallback path: when `structuredOutput` is null or fails validation, run existing `StructuredEvaluationOutputNormalizer` on `output`; set explicit observability (`metadata` flag and/or new redacted package event) per spec.
-- [ ] 1.4 Extend `tests/TextToStructuredEvaluationBlueprintTest.php` (or add focused tests) for: structured primary success, fallback when `structuredOutput` null, refusal/invalid still typed.
-- [ ] 1.5 Evaluate `AudioToTextToEvaluationTranscriptionAgent`: document interim behavior or add schema/structured path if SDK supports structured transcript object in-kit.
+- [x] 1.1 Define the evaluation JSON schema for `TextToStructuredEvaluation` as `ObjectSchema`, `HasStructuredOutput`, or closure; thread `schema` (and optional `generationOptions`) through `PromptExecutionMapper` / specialist agent `ExecutionRequest` construction.
+- [x] 1.2 Primary path: build specialist `AgentExecutionResult` / blueprint mapping from `ExecutionResult->structuredOutput` when present and valid; validate required keys before returning.
+- [x] 1.3 Fallback path: when `structuredOutput` is null or fails validation, run existing `StructuredEvaluationOutputNormalizer` on `output`; set explicit observability (`metadata` flag and/or new redacted package event) per spec.
+- [x] 1.4 Extend `tests/TextToStructuredEvaluationBlueprintTest.php` (or add focused tests) for: structured primary success, fallback when `structuredOutput` null, refusal/invalid still typed.
+- [x] 1.5 Evaluate `AudioToTextToEvaluationTranscriptionAgent`: document interim behavior or add schema/structured path if SDK supports structured transcript object in-kit.
 
 ## Phase 2 — Runtime middleware
 

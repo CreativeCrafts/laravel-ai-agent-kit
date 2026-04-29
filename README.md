@@ -326,10 +326,13 @@ The blueprint returns a fixed package-owned result schema with:
 - `dimensions` keyed by dimension name, each with `score`, `summary`, and `evidence`
 - `orchestrationSummary`, `finalAgent`, `promptName`, and `promptVersion`
 
+- `structuredEvaluationPath` (`structured_output` when the runtime returned typed structured output, or `text_normalization` when the kit fell back to parsing model text)
+- `structuredEvaluationRepaired` (true when the text fallback path repaired wrapped or embedded JSON)
+
 The enabled dimensions are caller-configurable, but the top-level result contract remains package-owned and stable.
 
-Before running the blueprint, register the prompt template referenced by `promptName` and `promptVersion`. The specialist stage expects the model output to be valid JSON matching the fixed package
-schema.
+Before running the blueprint, register the prompt template referenced by `promptName` and `promptVersion`. The specialist stage requests structured output from the runtime using a package-owned JSON
+schema; if the provider does not populate structured output, the kit falls back to the same bounded text normalization used previously.
 
 Run the package-owned `AudioToTextToEvaluation` blueprint when you want one orchestration call to transcribe audio first and then evaluate the resulting transcript through the same structured
 evaluation pipeline:
@@ -370,8 +373,8 @@ Provider profiles for the audio blueprint must be compatible with both stages:
 - the transcription stage requires a provider profile that supports `audio_transcription`
 - the evaluation stage requires a provider profile that supports `structured_output`
 
-Register both prompt templates before execution. The transcription stage returns one transcript string, and the evaluation stage returns valid JSON matching the package-owned structured
-evaluation schema.
+Register both prompt templates before execution. The transcription stage returns one transcript string (plain text from the runtime, not a separate structured-output schema). The evaluation
+stage uses the same structured evaluation path as `TextToStructuredEvaluation` (runtime schema plus bounded text fallback).
 
 Build and run a synchronous pipeline with typed steps through dependency injection:
 

@@ -6,6 +6,26 @@ use CreativeCrafts\LaravelAiAgentKit\Blueprints\Exceptions\TextToStructuredEvalu
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\Support\StructuredEvaluationOutputNormalizationResult;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\Support\StructuredEvaluationOutputNormalizer;
 
+it('normalizes decoded structured arrays without re-encoding to json', function (): void {
+    $normalizer = new StructuredEvaluationOutputNormalizer();
+
+    $result = $normalizer->normalizeFromDecodedArray([
+      'summary' => 'The answer is concise and direct.',
+      'recommended_action' => 'Send the response.',
+      'confidence' => 0.95,
+      'dimensions' => [
+        'clarity' => [
+          'score' => 5,
+          'summary' => 'The wording is easy to follow.',
+          'evidence' => ['The main recommendation is stated in the first sentence.'],
+        ],
+      ],
+    ]);
+
+    expect($result->status)->toBe(StructuredEvaluationOutputNormalizationResult::STATUS_VALID)
+      ->and($result->payload['summary'])->toBe('The answer is concise and direct.');
+});
+
 it('classifies direct valid structured output without repair', function (): void {
     $normalizer = new StructuredEvaluationOutputNormalizer();
 

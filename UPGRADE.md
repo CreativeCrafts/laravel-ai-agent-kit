@@ -88,6 +88,17 @@ $result = AgentKit::run(
 
 The `AgentKit` facade gains a matching `@method static ExecutionResult run(PromptBlueprint $blueprint)` annotation.
 
+### TextToStructuredEvaluation structured-output path
+
+`TextToStructuredEvaluation` now passes a stable `ObjectSchema` handle on the specialist `ExecutionRequest` (`CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StructuredEvaluationJsonSchema::objectSchema()`). When the runtime returns a populated `ExecutionResult::$structuredOutput` that validates, the blueprint uses it as the primary path. Otherwise it falls back to parsing `ExecutionResult::$output` with the existing `StructuredEvaluationOutputNormalizer`.
+
+`TextToStructuredEvaluationResult` gained two optional fields:
+
+- `structuredEvaluationPath`: `structured_output` or `text_normalization`
+- `structuredEvaluationRepaired`: `true` when the text fallback path repaired embedded or wrapped JSON (same meaning as the normalizer’s repaired status)
+
+`toArray()` on the result includes `structured_evaluation_path` and `structured_evaluation_repaired`.
+
 ### Attachments scope
 
 Attachments attached via `PromptBlueprint::withAttachment()` / `withAttachments()` are scoped to the **current call only**. The conversation memory bridge does not persist attachments across turns in this phase. Continuing a stored conversation will not replay prior attachments.

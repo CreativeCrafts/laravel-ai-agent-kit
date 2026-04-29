@@ -13,6 +13,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionContext;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StructuredEvaluationJsonSchema;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptExecutionMapper;
 
@@ -75,11 +76,31 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
             conversationId: $this->conversationIdValue($context),
             storeConversation: (bool)$context->payloadValue('store_conversation', false),
             continueConversation: (bool)$context->payloadValue('continue_conversation', false),
+            schema: StructuredEvaluationJsonSchema::objectSchema(),
         );
 
         $runtimeResult = $this->aiRuntime->execute($request);
-        $normalizedOutput = $this->structuredEvaluationOutputNormalizer->normalize($runtimeResult->output);
+
+        $structured = $runtimeResult->structuredOutput;
+        $usedStructuredPrimaryPath = false;
+        $normalizedOutput = null;
+
+        if (is_array($structured) && $structured !== []) {
+            try {
+                $normalizedOutput = $this->structuredEvaluationOutputNormalizer->normalizeFromDecodedArray($structured);
+                $usedStructuredPrimaryPath = true;
+            } catch (TextToStructuredEvaluationException) {
+                $normalizedOutput = null;
+            }
+        }
+
+        if ($normalizedOutput === null) {
+            $normalizedOutput = $this->structuredEvaluationOutputNormalizer->normalize($runtimeResult->output);
+        }
+
         $parsed = $normalizedOutput->payload;
+
+        $repaired = !$usedStructuredPrimaryPath && $normalizedOutput->wasRepaired();
 
         return new AgentExecutionResult(
             kind: AgentExecutionResult::KIND_COMPLETE,
@@ -88,6 +109,8 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
             'recommended_action' => $parsed['recommended_action'],
             'confidence' => $parsed['confidence'],
             'dimensions' => $parsed['dimensions'],
+            'structured_evaluation_path' => $usedStructuredPrimaryPath ? 'structured_output' : 'text_normalization',
+            'structured_evaluation_repaired' => $repaired,
           ],
             summary: 'TextToStructuredEvaluation specialist completed structured analysis.',
         );
