@@ -2,6 +2,16 @@
 
 declare(strict_types=1);
 
+it('links readme github action badges to workflows that exist in the repository', function (): void {
+    $contents = documentationContents('README.md');
+
+    expect($contents)
+      ->toContain('github/actions/workflow/status/creativecrafts/laravel-ai-agent-kit/ci.yml')
+      ->toContain('github.com/creativecrafts/laravel-ai-agent-kit/actions/workflows/ci.yml')
+      ->not->toContain('run-tests.yml')
+      ->not->toContain('fix-php-code-style-issues.yml');
+});
+
 it('teaches injection-first workflow usage in the readme', function (): void {
     $contents = documentationContents('README.md');
 
@@ -13,6 +23,14 @@ it('teaches injection-first workflow usage in the readme', function (): void {
       ->toContain('AgentKit::evaluateText(')
       ->toContain('AgentKit::evaluateAudio(')
       ->toContain('AgentKit::orchestrate(');
+});
+
+it('documents that the default vector store binding is in-memory', function (): void {
+    $contents = documentationContents('README.md');
+
+    expect($contents)
+      ->toContain('in-memory')
+      ->toContain('VectorStoreInterface');
 });
 
 it('uses dependency injection for the remaining infrastructure contract examples in the readme', function (): void {

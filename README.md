@@ -1,8 +1,7 @@
 # Laravel AI Agent Kit
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/creativecrafts/laravel-ai-agent-kit.svg?style=flat-square)](https://packagist.org/packages/creativecrafts/laravel-ai-agent-kit)
-[![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/creativecrafts/laravel-ai-agent-kit/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/creativecrafts/laravel-ai-agent-kit/actions?query=workflow%3Arun-tests+branch%3Amain)
-[![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/creativecrafts/laravel-ai-agent-kit/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/creativecrafts/laravel-ai-agent-kit/actions?query=workflow%3A%22Fix+PHP+code+style+issues%22+branch%3Amain)
+[![GitHub CI](https://img.shields.io/github/actions/workflow/status/creativecrafts/laravel-ai-agent-kit/ci.yml?branch=main&label=ci&style=flat-square)](https://github.com/creativecrafts/laravel-ai-agent-kit/actions/workflows/ci.yml)
 [![Total Downloads](https://img.shields.io/packagist/dt/creativecrafts/laravel-ai-agent-kit.svg?style=flat-square)](https://packagist.org/packages/creativecrafts/laravel-ai-agent-kit)
 
 Laravel AI Agent Kit is a Laravel package that delivers a structured agent-workflow toolkit built on top of the official Laravel AI SDK. It provides provider abstraction, pipeline orchestration,
@@ -551,7 +550,7 @@ Delegation semantics are explicit:
 - `delegate_and_resume` sends work to a child agent and then resumes the parent agent after the child finishes
 - `transfer_control` hands ownership to the child agent, making the delegated agent the final owner if it completes the workflow
 
-Use vector storage through the injected package contract to keep embeddings and semantic search behind a stable boundary:
+Use vector storage through the injected package contract to keep embeddings and semantic search behind a stable boundary. The default `VectorStoreInterface` binding is **in-memory only**; ship a custom binding (for example Pinecone, pgvector, or an SDK-backed adapter) when you need persistent or shared vector storage.
 
 ~~~php
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreInterface;

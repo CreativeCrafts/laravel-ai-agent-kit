@@ -24,7 +24,6 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\AnonymousAgent;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\ObjectSchema;
-use Laravel\Ai\Responses\StructuredAgentResponse;
 use Throwable;
 
 final readonly class SdkAiRuntime implements AiRuntime
@@ -190,28 +189,8 @@ final readonly class SdkAiRuntime implements AiRuntime
             'package_conversation_message_count' => $conversation?->messageCount(),
             'estimated_cost_usd' => $estimatedCostUsd,
           ],
-            structuredOutput: $this->extractStructuredOutput($response),
+            structuredOutput: StructuredAgentResponseMapper::mapStructuredPayload($response),
         );
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function extractStructuredOutput(AgentResponse $response): ?array
-    {
-        if (!$response instanceof StructuredAgentResponse) {
-            return null;
-        }
-
-        $structured = [];
-
-        foreach ($response->structured as $key => $value) {
-            if (is_string($key)) {
-                $structured[$key] = $value;
-            }
-        }
-
-        return $structured;
     }
 
     /**

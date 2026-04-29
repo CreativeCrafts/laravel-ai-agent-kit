@@ -2,10 +2,10 @@
 
 Documentation, messaging, and testability gaps that do not depend on runtime phases.
 
-- [ ] 0.1 Update README GitHub Actions badge URLs and any hard-coded workflow links to match files under `.github/workflows/` (or add missing workflows if product policy requires those names). Verify links on default branch.
-- [ ] 0.2 Revise `composer.json` description (and keywords if needed) so claims match shipped public API: replace overstated “full observability” language with accurate event/redaction semantics unless a new observability API is shipped in the same phase.
-- [ ] 0.3 Implement `package-hardening` vector requirement: either (A) add a documented second `VectorStoreInterface` driver and wire `ai-agent-kit.vector.default_driver`, or (B) narrow config/README to `in_memory` only and remove misleading driver placeholders.
-- [ ] 0.4 Add CI-verifiable structured-output assertion per `package-hardening` spec (test double or harness that preserves structured payload; document any remaining SDK fake limitations in test comments only if unavoidable).
+- [x] 0.1 Update README GitHub Actions badge URLs and any hard-coded workflow links to match files under `.github/workflows/` (or add missing workflows if product policy requires those names). Verify links on default branch.
+- [x] 0.2 Revise `composer.json` description (and keywords if needed) so claims match shipped public API: replace overstated “full observability” language with accurate event/redaction semantics unless a new observability API is shipped in the same phase.
+- [x] 0.3 Implement `package-hardening` vector requirement: either (A) add a documented second `VectorStoreInterface` driver and wire `ai-agent-kit.vector.default_driver`, or (B) narrow config/README to `in_memory` only and remove misleading driver placeholders.
+- [x] 0.4 Add CI-verifiable structured-output assertion per `package-hardening` spec (test double or harness that preserves structured payload; document any remaining SDK fake limitations in test comments only if unavoidable).
 
 ## Phase 1 — Structured evaluation migration
 
