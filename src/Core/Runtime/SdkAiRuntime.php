@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Runtime;
 
-use Laravel\Ai\Responses\AgentResponse;
 use Closure;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\Redactor;
