@@ -63,7 +63,9 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkTranscriptionRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\SdkAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationRetentionPurger;
 use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationStore;
+use CreativeCrafts\LaravelAiAgentKit\Memory\FallingBackToLegacyLaravelAiConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\InMemoryConversationStore;
+use CreativeCrafts\LaravelAiAgentKit\Memory\LegacyLaravelAiDatabaseConversationReader;
 use CreativeCrafts\LaravelAiAgentKit\Memory\NullConversationSummarizer;
 use CreativeCrafts\LaravelAiAgentKit\Memory\RedisConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\RetentionPurgeService;
@@ -329,12 +331,33 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             /** @var ConfigRepository $config */
             $config = $app->make(ConfigRepository::class);
 
-            return match ($this->memoryDriver($config)) {
+            $inner = match ($this->memoryDriver($config)) {
                 'database' => $app->make(DatabaseConversationStore::class),
                 'in_memory' => $app->make(InMemoryConversationStore::class),
                 'redis' => $app->make(RedisConversationStore::class),
                 default => throw new RuntimeException('Unsupported memory driver.'),
             };
+
+            if ($this->memoryDriver($config) === 'database'
+                && (bool)$config->get('ai-agent-kit.memory.laravel_ai_legacy.enabled', false)) {
+                /** @var DatabaseManager $database */
+                $database = $app->make(DatabaseManager::class);
+
+                $legacyReader = new LegacyLaravelAiDatabaseConversationReader(
+                    database: $database,
+                    connectionName: $this->nullableStringConfig($config, 'ai-agent-kit.memory.laravel_ai_legacy.connection')
+                        ?? $this->nullableStringConfig($config, 'ai-agent-kit.memory.database.connection'),
+                    conversationsTable: $this->stringConfig($config, 'ai-agent-kit.memory.laravel_ai_legacy.conversations_table'),
+                    messagesTable: $this->stringConfig($config, 'ai-agent-kit.memory.laravel_ai_legacy.messages_table'),
+                );
+
+                return new FallingBackToLegacyLaravelAiConversationStore(
+                    inner: $inner,
+                    legacyReader: $legacyReader,
+                );
+            }
+
+            return $inner;
         });
 
         $this->app->singleton(DatabaseConversationRetentionPurger::class, function (Application $app): DatabaseConversationRetentionPurger {

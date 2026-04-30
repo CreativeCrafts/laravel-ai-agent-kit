@@ -173,6 +173,14 @@ return [
             'driver_name' => 'redis',
             'retention_days' => 7,
         ],
+
+        // Optional: read Laravel AI default `agent_*` tables when package store misses (see UPGRADE.md).
+        // 'laravel_ai_legacy' => [
+        //     'enabled' => true,
+        //     'connection' => null,
+        //     'conversations_table' => 'agent_conversations',
+        //     'messages_table' => 'agent_conversation_messages',
+        // ],
     ],
 ];
 ~~~

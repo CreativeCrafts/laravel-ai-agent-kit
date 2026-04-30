@@ -590,6 +590,41 @@ final readonly class ConfigValidator
             }
         }
 
+        if (array_key_exists('laravel_ai_legacy', $config['memory'])) {
+            if (!is_array($config['memory']['laravel_ai_legacy'])) {
+                throw InvalidConfigurationException::invalidType('memory.laravel_ai_legacy', 'array');
+            }
+
+            $legacy = $config['memory']['laravel_ai_legacy'];
+
+            if (array_key_exists('enabled', $legacy) && !is_bool($legacy['enabled'])) {
+                throw InvalidConfigurationException::invalidType('memory.laravel_ai_legacy.enabled', 'bool');
+            }
+
+            if (array_key_exists('connection', $legacy)) {
+                $connection = $legacy['connection'];
+
+                if ($connection !== null && (!is_string($connection) || $connection === '')) {
+                    throw InvalidConfigurationException::invalidType('memory.laravel_ai_legacy.connection', 'string|null');
+                }
+            }
+
+            foreach (['conversations_table', 'messages_table'] as $key) {
+                if (!array_key_exists($key, $legacy)) {
+                    continue;
+                }
+
+                $value = $legacy[$key];
+
+                if (!is_string($value) || $value === '') {
+                    throw InvalidConfigurationException::invalidValue(
+                        "memory.laravel_ai_legacy.{$key}",
+                        'Must be a non-empty string.',
+                    );
+                }
+            }
+        }
+
         if (array_key_exists('redis', $config['memory'])) {
             if (!is_array($config['memory']['redis'])) {
                 throw InvalidConfigurationException::invalidType('memory.redis', 'array');

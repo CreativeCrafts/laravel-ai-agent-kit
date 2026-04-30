@@ -20,6 +20,7 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 - `CreativeCrafts\LaravelAiAgentKit\Contracts\Core\StreamingAiRuntime` and `SdkAiRuntime::executeStream()` / `MiddlewareExecutingAiRuntime::executeStream()` for ordered text streaming (`StreamChunk`, `StreamComplete`, `StreamFailure`).
 - Redacted streaming observability events `RuntimeStreamChunkEmitted`, `RuntimeStreamCompleted`, and `RuntimeStreamFailed`; optional `ShouldBroadcast` when `runtime.streaming.broadcast_channel` or request metadata `streaming_broadcast_channel` is set.
 - `RequestObservabilityKeys` helper for metadata key extraction shared with streaming completion events.
+- Optional Laravel AI legacy conversation read bridge: `memory.laravel_ai_legacy` config, `LegacyLaravelAiDatabaseConversationReader`, and `FallingBackToLegacyLaravelAiConversationStore` so `ConversationStore::find()` can load `agent_conversations` / `agent_conversation_messages` when the package store has no row (database driver only).
 
 ### Changed
 

@@ -50,9 +50,9 @@ Satisfies `specs/modality-runtimes/spec.md`.
 
 Satisfies `specs/conversation-store-convergence/spec.md`.
 
-- [ ] 5.1 Inventory Laravel AI conversation interfaces for the supported `laravel/ai` version; define adapter mapping from package `Conversation` / messages to aligned types.
-- [ ] 5.2 Implement read bridge for legacy persisted rows; add fixture SQL or factories for pre-migration records.
-- [ ] 5.3 Pest tests: legacy load, round-trip save/load for new format, contract assertions agreed in spec.
+- [x] 5.1 Inventory Laravel AI conversation interfaces for the supported `laravel/ai` version; define adapter mapping from package `Conversation` / messages to aligned types.
+- [x] 5.2 Implement read bridge for legacy persisted rows; add fixture SQL or factories for pre-migration records.
+- [x] 5.3 Pest tests: legacy load, round-trip save/load for new format, contract assertions agreed in spec.
 
 ## Phase 6 — Attachment persistence
 
