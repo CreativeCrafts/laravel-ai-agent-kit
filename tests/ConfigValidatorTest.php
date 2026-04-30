@@ -866,3 +866,33 @@ it('rejects duplicate provider capability declarations', function () {
       ],
     ]);
 })->throws(InvalidConfigurationException::class, 'providers.openai-fast.capabilities');
+
+it('rejects modality default_driver that does not implement the modality contract', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+        'providers' => [
+            'null' => [
+                'driver' => 'null',
+                'enabled' => true,
+                'options' => [],
+            ],
+        ],
+        'default_provider' => 'null',
+        'failover_order' => ['null'],
+        'budgets' => [
+            'max_steps' => 1,
+            'max_tool_calls' => 1,
+            'max_retries_per_step' => 1,
+            'max_total_timeout_seconds' => 1,
+            'max_tokens' => null,
+            'max_cost_usd' => null,
+        ],
+        'modalities' => [
+            'embeddings' => [
+                'default_driver' => self::class,
+            ],
+        ],
+    ]);
+})->throws(InvalidConfigurationException::class, 'modalities.embeddings.default_driver');

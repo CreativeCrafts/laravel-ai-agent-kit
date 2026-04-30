@@ -13,6 +13,7 @@ use CreativeCrafts\LaravelAiAgentKit\Blueprints\Exceptions\AudioToTextToEvaluati
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\Exceptions\TextToStructuredEvaluationException;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\AgentRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\TranscriptionRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Prompts\PromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\AgentProviderProfileSelector;
@@ -31,6 +32,9 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\InMemoryPromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptExecutionMapper;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAiRuntime;
+use Illuminate\Support\Facades\Config;
+use Laravel\Ai\AiServiceProvider;
+use Laravel\Ai\Transcription;
 
 beforeEach(function (): void {
     bootAudioToTextToEvaluationBlueprintTestbed(
@@ -116,6 +120,67 @@ it('transcribes and evaluates audio through one orchestration call', function ()
       ->and($requests[1]->prompt)->toContain('Evaluate the following text for refund call.')
       ->and($requests[1]->prompt)->toContain('Enabled dimensions: clarity, accuracy')
       ->and($requests[1]->prompt)->toContain('Please refund the unused portion of my subscription.');
+});
+
+it('uses the modality transcription runtime when audio_reference is decodable base64', function (): void {
+    app()->register(AiServiceProvider::class);
+
+    /** @var array<string, mixed> $ai */
+    $ai = require __DIR__.'/../vendor/laravel/ai/config/ai.php';
+    Config::set('ai', $ai);
+    Config::set('ai.default', 'openai');
+    Config::set('ai.default_for_transcription', 'openai');
+    Config::set('ai.providers', [
+        'openai' => [
+            'driver' => 'openai',
+            'key' => 'test-key-for-ci',
+        ],
+        'openai-transcription' => [
+            'driver' => 'openai',
+            'key' => 'test-key-for-ci',
+        ],
+    ]);
+
+    Transcription::fake(['modality transcript line'])->preventStrayTranscriptions();
+    app()->forgetInstance(TranscriptionRuntime::class);
+
+    $evaluationJson = json_encode([
+        'summary' => 'ok',
+        'recommended_action' => 'act',
+        'confidence' => 0.9,
+        'dimensions' => [
+            'clarity' => [
+                'score' => 5,
+                'summary' => 'clear',
+                'evidence' => ['e'],
+            ],
+        ],
+    ], JSON_THROW_ON_ERROR);
+
+    $fakeRuntime = new FakeAiRuntime([
+        new ExecutionResult(
+            runId: 'audio-run-eval-only',
+            output: $evaluationJson,
+            provider: 'openai-structured',
+            model: 'gpt-structured-test',
+        ),
+    ]);
+
+    app()->instance(AiRuntime::class, $fakeRuntime);
+
+    $result = app(AudioToTextToEvaluation::class)->evaluate(
+        new AudioToTextToEvaluationRequest(
+            subject: 'base64 clip',
+            audioReference: base64_encode('fake-audio-bytes'),
+            audioMimeType: 'audio/wav',
+            enabledDimensions: ['clarity'],
+            transcriptionPromptVersion: '1.0.0',
+            evaluationPromptVersion: '1.0.0',
+        ),
+    );
+
+    expect($result->transcript)->toBe('modality transcript line')
+        ->and($fakeRuntime->requests())->toHaveCount(1);
 });
 
 it('preserves the same package-owned result semantics across mixed-provider stage combinations that satisfy the audited capability matrix', function (): void {
@@ -522,6 +587,7 @@ function refreshAudioToTextToEvaluationBindings(): void
     app()->forgetInstance(AgentOrchestrator::class);
     app()->forgetInstance(PromptExecutionMapper::class);
     app()->forgetInstance(AiRuntime::class);
+    app()->forgetInstance(TranscriptionRuntime::class);
     app()->forgetInstance(ContainerAgentRegistry::class);
     app()->forgetInstance(AgentRegistry::class);
 }
