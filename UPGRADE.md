@@ -123,6 +123,25 @@ When `audio_reference` is **raw base64** or a `data:*;base64,...` data URI, the 
 
 The package registers `TranscriptionRuntime`, `EmbeddingsRuntime`, `ImageGenerationRuntime`, and `RerankingRuntime` in the container. Defaults use `ai-agent-kit.modalities.*.default_driver` = `sdk`. Set `default_driver` to a class-string that implements the corresponding contract to swap implementations.
 
+### Laravel AI legacy conversation read bridge (Phase 5)
+
+If you previously stored conversations with Laravel AI’s default `DatabaseConversationStore` (`agent_conversations` / `agent_conversation_messages`), enable the optional read bridge so `ConversationStore::find()` can load them when no matching `ai_agent_*` row exists:
+
+```php
+// config/ai-agent-kit.php
+'memory' => [
+    'default_driver' => 'database',
+    'laravel_ai_legacy' => [
+        'enabled' => true,
+        'connection' => null, // defaults to memory.database.connection
+        'conversations_table' => 'agent_conversations',
+        'messages_table' => 'agent_conversation_messages',
+    ],
+],
+```
+
+`save()` and `delete()` always use the package database tables; the bridge is **read-only** for legacy rows. Loaded legacy messages include a `metadata['laravel_ai']` payload (title, user id, tool JSON, usage, and so on) so nothing is dropped during migration.
+
 ### Documented limitations
 
 - Whether `temperature` / `maxTokens` / `maxSteps` are honoured by the provider driver is driver-specific. Mainline providers (OpenAI, Anthropic, …) honour them; edge drivers may vary.

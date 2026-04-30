@@ -190,6 +190,30 @@ return [
         ? null
         : (int)env('AI_AGENT_KIT_MEMORY_REDIS_RETENTION_DAYS'),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Laravel AI legacy conversation tables (read bridge)
+    |--------------------------------------------------------------------------
+    |
+    | When `memory.default_driver` is `database`, enabling this option wraps the
+    | package store so `find()` falls back to Laravel AI's default
+    | `agent_conversations` / `agent_conversation_messages` rows when no matching
+    | `ai_agent_*` record exists. Writes always use the package tables.
+    |
+    */
+    'laravel_ai_legacy' => [
+      'enabled' => (bool)env('AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_FALLBACK', false),
+      'connection' => env('AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_CONNECTION'),
+      'conversations_table' => (string)env(
+          'AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_CONVERSATIONS_TABLE',
+          'agent_conversations',
+      ),
+      'messages_table' => (string)env(
+          'AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_MESSAGES_TABLE',
+          'agent_conversation_messages',
+      ),
+    ],
   ],
 
     /*
