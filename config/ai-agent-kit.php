@@ -253,24 +253,41 @@ return [
     | blueprint, orchestration). List fully-qualified class names in order; each
     | must implement CreativeCrafts\LaravelAiAgentKit\Contracts\Core\RuntimeMiddleware.
     |
+    | Optional default broadcast channel for stream lifecycle events (see
+    | runtime.streaming). Per-request override: metadata key
+    | streaming_broadcast_channel.
+    |
     */
   'runtime' => [
     'middleware' => [],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Runtime streaming
-    |--------------------------------------------------------------------------
-    |
-    | Optional default broadcast channel name for Laravel Echo when you want
-    | stream lifecycle events (chunk / completed / failed) to implement
-    | ShouldBroadcast. Payloads are redacted (no prompt text). Per-request
-    | override: set metadata key `streaming_broadcast_channel` to a non-empty
-    | string (takes precedence over this default).
-    |
-    */
     'streaming' => [
       'broadcast_channel' => env('AI_AGENT_KIT_STREAMING_BROADCAST_CHANNEL'),
+    ],
+  ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Modality runtimes (transcription, embeddings, images, reranking)
+    |--------------------------------------------------------------------------
+    |
+    | Each modality resolves a runtime contract from the container. Use
+    | `default_driver` => `sdk` for the package Laravel AI bridge, or a
+    | fully-qualified class name implementing the modality contract.
+    |
+    */
+  'modalities' => [
+    'transcription' => [
+      'default_driver' => 'sdk',
+    ],
+    'embeddings' => [
+      'default_driver' => 'sdk',
+    ],
+    'image_generation' => [
+      'default_driver' => 'sdk',
+    ],
+    'reranking' => [
+      'default_driver' => 'sdk',
     ],
   ],
 

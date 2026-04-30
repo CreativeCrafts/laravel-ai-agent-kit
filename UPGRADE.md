@@ -115,6 +115,14 @@ Optional Laravel Echo integration: configure `ai-agent-kit.runtime.streaming.bro
 
 Attachments attached via `PromptBlueprint::withAttachment()` / `withAttachments()` are scoped to the **current call only**. The conversation memory bridge does not persist attachments across turns in this phase. Continuing a stored conversation will not replay prior attachments.
 
+### AudioToTextToEvaluation transcription path
+
+When `audio_reference` is **raw base64** or a `data:*;base64,...` data URI, the transcription stage calls `TranscriptionRuntime` (default: Laravel AI via `SdkTranscriptionRuntime`) using the orchestration provider profile name as the Laravel AI provider key. **Opaque references** (for example `s3://...`) are unchanged: the kit still builds the registered transcription prompt and runs `AiRuntime::execute()`.
+
+### Modality runtimes
+
+The package registers `TranscriptionRuntime`, `EmbeddingsRuntime`, `ImageGenerationRuntime`, and `RerankingRuntime` in the container. Defaults use `ai-agent-kit.modalities.*.default_driver` = `sdk`. Set `default_driver` to a class-string that implements the corresponding contract to swap implementations.
+
 ### Documented limitations
 
 - Whether `temperature` / `maxTokens` / `maxSteps` are honoured by the provider driver is driver-specific. Mainline providers (OpenAI, Anthropic, …) honour them; edge drivers may vary.

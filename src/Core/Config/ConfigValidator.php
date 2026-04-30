@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Config;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\RuntimeMiddleware;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\EmbeddingsRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\ImageGenerationRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\RerankingRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\TranscriptionRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\Exceptions\InvalidConfigurationException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\DelegationPolicyMode;
@@ -171,6 +175,7 @@ final readonly class ConfigValidator
         $this->validateTools($config);
         $this->validateSummarization($config);
         $this->validateRuntime($config);
+        $this->validateModalities($config);
     }
 
     /**
@@ -969,6 +974,72 @@ final readonly class ConfigValidator
                 'runtime.streaming.broadcast_channel',
                 'Must be null or a non-empty string channel name.',
             );
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function validateModalities(array $config): void
+    {
+        if (!array_key_exists('modalities', $config)) {
+            return;
+        }
+
+        if (!is_array($config['modalities'])) {
+            throw InvalidConfigurationException::invalidType('modalities', 'array');
+        }
+
+        $modalities = $config['modalities'];
+
+        $sections = [
+            'transcription' => TranscriptionRuntime::class,
+            'embeddings' => EmbeddingsRuntime::class,
+            'image_generation' => ImageGenerationRuntime::class,
+            'reranking' => RerankingRuntime::class,
+        ];
+
+        foreach ($sections as $section => $contract) {
+            if (!array_key_exists($section, $modalities)) {
+                continue;
+            }
+
+            if (!is_array($modalities[$section])) {
+                throw InvalidConfigurationException::invalidType("modalities.{$section}", 'array');
+            }
+
+            $block = $modalities[$section];
+
+            if (!array_key_exists('default_driver', $block)) {
+                continue;
+            }
+
+            $driver = $block['default_driver'];
+
+            if (!is_string($driver) || $driver === '') {
+                throw InvalidConfigurationException::invalidValue(
+                    "modalities.{$section}.default_driver",
+                    'Must be a non-empty string.',
+                );
+            }
+
+            if ($driver === 'sdk') {
+                continue;
+            }
+
+            if (!class_exists($driver)) {
+                throw InvalidConfigurationException::invalidValue(
+                    "modalities.{$section}.default_driver",
+                    sprintf('Class [%s] does not exist.', $driver),
+                );
+            }
+
+            if (!is_subclass_of($driver, $contract)) {
+                throw InvalidConfigurationException::invalidValue(
+                    "modalities.{$section}.default_driver",
+                    sprintf('Class [%s] must implement %s.', $driver, $contract),
+                );
+            }
         }
     }
 }

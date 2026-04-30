@@ -63,6 +63,8 @@ Optional **runtime middleware** wraps every `AiRuntime::execute` call (including
 
 **Streaming text** uses the Laravel AI SDK stream path for non-schema requests. Inject `CreativeCrafts\LaravelAiAgentKit\Contracts\Core\StreamingAiRuntime` and iterate `executeStream($request)` to receive `StreamChunk` values (ordered `text_delta` segments) followed by a single terminal `StreamComplete` or `StreamFailure`. Structured-output requests (`ExecutionRequest::$schema` set) are not supported for streaming; use `execute()` instead. Optional Echo broadcast: set `runtime.streaming.broadcast_channel` (or per-request metadata `streaming_broadcast_channel`) to a **public** channel name; the package dispatches `RuntimeStreamChunkEmitted`, `RuntimeStreamCompleted`, and `RuntimeStreamFailed` with **redacted** payloads (lengths, keys, identifiers — no prompt text).
 
+**Modality runtimes** (transcription, embeddings, image generation, reranking) use contracts under `CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\`. The default driver is `sdk`, which bridges to Laravel AI (`Transcription`, `Embeddings`, `Image`, `Reranking`). Override per modality with `modalities.<name>.default_driver` in `config/ai-agent-kit.php` (`sdk` or a class implementing the contract). The `AudioToTextToEvaluation` blueprint calls the transcription runtime when `audio_reference` is raw base64 or a `data:*;base64,...` URI; opaque references (for example `s3://...`) still use the registered prompt plus `AiRuntime`.
+
 `budgets.max_cost_usd` is enforced in fail-closed mode: when configured, each runtime request must provide numeric `metadata.cost_usd` (or `metadata.estimated_cost_usd`) so cost ceilings can be
 validated deterministically.
 
@@ -125,14 +127,21 @@ return [
         ],
     ],
 
-            'runtime' => [
-                'middleware' => [
-                    // \App\Runtime\LogAiRuntimeRequest::class,
-                ],
-                'streaming' => [
-                    'broadcast_channel' => env('AI_AGENT_KIT_STREAMING_BROADCAST_CHANNEL'),
-                ],
-            ],
+    'runtime' => [
+        'middleware' => [
+            // \App\Runtime\LogAiRuntimeRequest::class,
+        ],
+        'streaming' => [
+            'broadcast_channel' => env('AI_AGENT_KIT_STREAMING_BROADCAST_CHANNEL'),
+        ],
+    ],
+
+    'modalities' => [
+        'transcription' => ['default_driver' => 'sdk'],
+        'embeddings' => ['default_driver' => 'sdk'],
+        'image_generation' => ['default_driver' => 'sdk'],
+        'reranking' => ['default_driver' => 'sdk'],
+    ],
 
     'prompts' => [
         'default_driver' => 'in_memory',
