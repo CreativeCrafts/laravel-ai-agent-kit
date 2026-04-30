@@ -246,6 +246,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Runtime execution
+    |--------------------------------------------------------------------------
+    |
+    | Optional middleware stack around every AiRuntime::execute call (direct,
+    | blueprint, orchestration). List fully-qualified class names in order; each
+    | must implement CreativeCrafts\LaravelAiAgentKit\Contracts\Core\RuntimeMiddleware.
+    |
+    | Optional default broadcast channel for stream lifecycle events (see
+    | runtime.streaming). Per-request override: metadata key
+    | streaming_broadcast_channel.
+    |
+    */
+  'runtime' => [
+    'middleware' => [],
+
+    'streaming' => [
+      'broadcast_channel' => env('AI_AGENT_KIT_STREAMING_BROADCAST_CHANNEL'),
+    ],
+  ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Modality runtimes (transcription, embeddings, images, reranking)
     |--------------------------------------------------------------------------
     |

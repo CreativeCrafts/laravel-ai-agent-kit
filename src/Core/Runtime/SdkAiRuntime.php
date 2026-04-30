@@ -6,13 +6,19 @@ namespace CreativeCrafts\LaravelAiAgentKit\Core\Runtime;
 
 use Closure;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\StreamingAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\Redactor;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeBudgetExceededException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeExecutionException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\SchemaResolutionException;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\RuntimeExecutionFailed;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\RuntimeStreamChunkEmitted;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\RuntimeStreamCompleted;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\RuntimeStreamFailed;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Support\FailureCategory;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Support\FailureCategoryResolver;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Support\RequestObservabilityKeys;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\RuntimeBudgetEnforcer;
 use CreativeCrafts\LaravelAiAgentKit\Tools\ProviderToolMaterializer;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
@@ -20,12 +26,21 @@ use CreativeCrafts\LaravelAiAgentKit\Tools\Exceptions\ToolAuthorizationDeniedExc
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use InvalidArgumentException;
 use Laravel\Ai\AnonymousAgent;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\ObjectSchema;
+use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Streaming\Events\Error as StreamError;
+use Laravel\Ai\Streaming\Events\StreamStart;
+use Laravel\Ai\Streaming\Events\TextDelta;
+use Illuminate\Support\Collection;
+use RuntimeException;
 use Throwable;
+use Generator;
 
-final readonly class SdkAiRuntime implements AiRuntime
+final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
 {
     public function __construct(
         private SdkToolMaterializer $toolMaterializer,
@@ -193,6 +208,266 @@ final readonly class SdkAiRuntime implements AiRuntime
     }
 
     /**
+     * @return Generator<int, StreamChunk|StreamComplete|StreamFailure>
+     */
+    public function executeStream(ExecutionRequest $request): Generator
+    {
+        if ($request->schema !== null) {
+            throw new InvalidArgumentException(
+                'Streaming execution does not support structured output requests; omit ExecutionRequest::$schema or use execute().',
+            );
+        }
+
+        $broadcastChannel = $this->resolveStreamingBroadcastChannel($request);
+
+        try {
+            $estimatedCostUsd = $this->estimatedCostUsd($request);
+        } catch (RuntimeBudgetExceededException $exception) {
+            $this->reportStreamFailure($request, $exception, 0, null, $broadcastChannel);
+            yield $this->streamFailureFromThrowable($request, $exception);
+
+            return;
+        }
+
+        try {
+            $projectedConversation = $this->runtimeConversationMemoryBridge->project($request);
+        } catch (Throwable $throwable) {
+            $wrapped = $this->wrapStreamFailure($request, $throwable, 0, null, $broadcastChannel);
+            yield $this->streamFailureFromThrowable($request, $wrapped);
+
+            return;
+        }
+
+        try {
+            $materializedTools = [
+                ...$this->toolMaterializer->materialize($request->toolNames),
+                ...$this->providerToolMaterializer->materialize($request->providerToolNames),
+            ];
+        } catch (Throwable $throwable) {
+            $wrapped = $this->wrapStreamFailure(
+                $request,
+                $throwable,
+                $projectedConversation->projectedMessageCount(),
+                $this->packageConversationId($request, $projectedConversation),
+                $broadcastChannel,
+            );
+            yield $this->streamFailureFromThrowable($request, $wrapped);
+
+            return;
+        }
+
+        $telemetryContext = RuntimeTelemetryContext::fromRequest($request, $projectedConversation);
+        $instructions = $this->instructionsAsString($request, $projectedConversation->systemInstructions);
+
+        try {
+            $agent = $this->buildAgent(
+                request: $request,
+                telemetryContext: $telemetryContext,
+                instructions: $instructions,
+                messages: $projectedConversation->messages,
+                materializedTools: $materializedTools,
+            );
+        } catch (Throwable $throwable) {
+            $wrapped = $this->wrapStreamFailure(
+                $request,
+                $throwable,
+                $telemetryContext->projectedMessageCount,
+                $telemetryContext->packageConversationId?->toString(),
+                $broadcastChannel,
+            );
+            yield $this->streamFailureFromThrowable($request, $wrapped);
+
+            return;
+        }
+
+        $stream = $agent->stream(
+            prompt: $request->prompt,
+            attachments: $request->attachments,
+            provider: $request->provider,
+            model: $request->model,
+            timeout: $request->timeout,
+        );
+
+        $sequence = 0;
+        $terminalEmitted = false;
+
+        try {
+            foreach ($stream as $event) {
+                if ($event instanceof TextDelta) {
+                    yield new StreamChunk(
+                        runId: $request->runId,
+                        sequence: $sequence,
+                        type: 'text_delta',
+                        textDelta: $event->delta,
+                        metadata: [
+                            'message_id' => $event->messageId,
+                        ],
+                    );
+
+                    $this->dispatchStreamChunkObserved(
+                        $request,
+                        $sequence,
+                        'text_delta',
+                        $event->delta,
+                        $event->messageId,
+                        $broadcastChannel,
+                    );
+                    $sequence++;
+
+                    continue;
+                }
+
+                if ($event instanceof StreamError) {
+                    $exception = RuntimeExecutionException::forRequest(
+                        runId: $request->runId,
+                        previous: new RuntimeException($event->message),
+                        failureCategory: FailureCategory::ProviderFailure->value,
+                    );
+                    $this->reportStreamFailure(
+                        $request,
+                        $exception,
+                        $telemetryContext->projectedMessageCount,
+                        $telemetryContext->packageConversationId?->toString(),
+                        $broadcastChannel,
+                    );
+                    yield new StreamFailure(
+                        runId: $request->runId,
+                        failureCategory: FailureCategory::ProviderFailure->value,
+                        exceptionClass: StreamError::class,
+                        exceptionMessage: $event->message,
+                    );
+                    $terminalEmitted = true;
+                    break;
+                }
+            }
+        } catch (Throwable $throwable) {
+            $wrapped = $this->wrapStreamFailure(
+                $request,
+                $throwable,
+                $telemetryContext->projectedMessageCount,
+                $telemetryContext->packageConversationId?->toString(),
+                $broadcastChannel,
+            );
+            yield $this->streamFailureFromThrowable($request, $wrapped);
+            $terminalEmitted = true;
+        }
+
+        if ($terminalEmitted) {
+            return;
+        }
+
+        $text = $stream->text ?? '';
+        $usage = $stream->usage;
+        $promptTokens = $usage->promptTokens ?? 0;
+        $completionTokens = $usage->completionTokens ?? 0;
+        $totalTokens = $promptTokens + $completionTokens;
+
+        $meta = $this->resolveStreamMeta($stream->events);
+
+        if (!$meta instanceof Meta) {
+            $exception = RuntimeExecutionException::forRequest(
+                runId: $request->runId,
+                previous: new RuntimeException('Stream completed without provider metadata.'),
+                failureCategory: FailureCategory::ProviderFailure->value,
+            );
+            $this->reportStreamFailure(
+                $request,
+                $exception,
+                $telemetryContext->projectedMessageCount,
+                $telemetryContext->packageConversationId?->toString(),
+                $broadcastChannel,
+            );
+            yield $this->streamFailureFromThrowable($request, $exception);
+
+            return;
+        }
+
+        $streamedResponse = new StreamedAgentResponse(
+            $stream->invocationId,
+            $stream->events,
+            $meta,
+        );
+
+        try {
+            $this->runtimeBudgetEnforcer->assertResponseWithinBudgets(
+                runId: $request->runId,
+                totalTokens: $totalTokens,
+                toolCallCount: $streamedResponse->toolCalls->count(),
+                estimatedCostUsd: $estimatedCostUsd,
+            );
+        } catch (RuntimeBudgetExceededException $exception) {
+            $this->reportStreamFailure(
+                $request,
+                $exception,
+                $telemetryContext->projectedMessageCount,
+                $telemetryContext->packageConversationId?->toString(),
+                $broadcastChannel,
+            );
+            yield $this->streamFailureFromThrowable($request, $exception);
+
+            return;
+        }
+
+        try {
+            $conversation = $this->runtimeConversationMemoryBridge->reconcile(
+                projected: $projectedConversation,
+                request: $request,
+                response: $streamedResponse,
+            );
+        } catch (Throwable $throwable) {
+            $wrapped = $this->wrapStreamFailure(
+                $request,
+                $throwable,
+                $telemetryContext->projectedMessageCount,
+                $telemetryContext->packageConversationId?->toString(),
+                $broadcastChannel,
+            );
+            yield $this->streamFailureFromThrowable($request, $wrapped);
+
+            return;
+        }
+
+        $usageArray = [
+            'prompt_tokens' => $promptTokens,
+            'completion_tokens' => $completionTokens,
+            'total_tokens' => $totalTokens,
+        ];
+
+        $providerLabel = $meta->provider ?? 'unknown';
+        $modelLabel = $meta->model ?? 'unknown';
+
+        $this->dispatchStreamCompleted(
+            request: $request,
+            invocationId: $stream->invocationId,
+            provider: $providerLabel,
+            model: $modelLabel,
+            projectedMessageCount: $telemetryContext->projectedMessageCount,
+            packageConversationId: $conversation?->id->toString() ?? $telemetryContext->packageConversationId?->toString(),
+            usage: $usageArray,
+            outputLength: strlen($text),
+            broadcastChannel: $broadcastChannel,
+        );
+
+        yield new StreamComplete(
+            runId: $request->runId,
+            output: $text,
+            provider: $providerLabel,
+            model: $modelLabel,
+            usage: $usageArray,
+            metadata: [
+                'invocation_id' => $stream->invocationId,
+                'requested_tool_names' => $request->toolNames,
+                'requested_provider_tool_names' => $request->providerToolNames,
+                'materialized_tool_count' => count($materializedTools),
+                'projected_message_count' => $projectedConversation->projectedMessageCount(),
+                'package_conversation_id' => $conversation?->id->toString(),
+                'package_conversation_message_count' => $conversation?->messageCount(),
+                'estimated_cost_usd' => $estimatedCostUsd,
+            ],
+        );
+    }
+
+    /**
      * @param iterable<mixed> $messages
      * @param iterable<mixed> $materializedTools
      */
@@ -349,5 +624,170 @@ final readonly class SdkAiRuntime implements AiRuntime
         }
 
         return implode("\n\n", $instructions);
+    }
+
+    /**
+     * @param Collection<int, mixed> $events
+     */
+    private function resolveStreamMeta(Collection $events): ?Meta
+    {
+        $start = $events->first(static fn (mixed $event): bool => $event instanceof StreamStart);
+
+        if ($start instanceof StreamStart) {
+            return new Meta($start->provider, $start->model);
+        }
+
+        return null;
+    }
+
+    private function resolveStreamingBroadcastChannel(ExecutionRequest $request): ?string
+    {
+        $fromRequest = $request->metadata['streaming_broadcast_channel'] ?? null;
+
+        if (is_string($fromRequest) && $fromRequest !== '') {
+            return $fromRequest;
+        }
+
+        /** @var mixed $fromConfig */
+        $fromConfig = $this->container->make('config')->get('ai-agent-kit.runtime.streaming.broadcast_channel');
+
+        return is_string($fromConfig) && $fromConfig !== '' ? $fromConfig : null;
+    }
+
+    private function dispatchStreamChunkObserved(
+        ExecutionRequest $request,
+        int $sequence,
+        string $type,
+        string $delta,
+        string $messageId,
+        ?string $broadcastChannel,
+    ): void {
+        if (!$this->events instanceof Dispatcher) {
+            return;
+        }
+
+        try {
+            $this->events->dispatch(
+                new RuntimeStreamChunkEmitted(
+                    runId: $request->runId,
+                    sequence: $sequence,
+                    type: $type,
+                    deltaLength: strlen($delta),
+                    messageId: $messageId,
+                    broadcastChannel: $broadcastChannel,
+                ),
+            );
+        } catch (Throwable) {
+        }
+    }
+
+    /**
+     * @param array<string, int> $usage
+     */
+    private function dispatchStreamCompleted(
+        ExecutionRequest $request,
+        string $invocationId,
+        string $provider,
+        string $model,
+        int $projectedMessageCount,
+        ?string $packageConversationId,
+        array $usage,
+        int $outputLength,
+        ?string $broadcastChannel,
+    ): void {
+        if (!$this->events instanceof Dispatcher) {
+            return;
+        }
+
+        try {
+            $this->events->dispatch(
+                new RuntimeStreamCompleted(
+                    runId: $request->runId,
+                    invocationId: $invocationId,
+                    provider: $provider,
+                    model: $model,
+                    requestedToolNames: $request->toolNames,
+                    metadataKeys: RequestObservabilityKeys::metadataKeys($request, $this->redactor),
+                    packageConversationId: $packageConversationId,
+                    projectedMessageCount: $projectedMessageCount,
+                    promptTokens: $usage['prompt_tokens'] ?? 0,
+                    completionTokens: $usage['completion_tokens'] ?? 0,
+                    totalTokens: $usage['total_tokens'] ?? 0,
+                    outputLength: $outputLength,
+                    broadcastChannel: $broadcastChannel,
+                ),
+            );
+        } catch (Throwable) {
+        }
+    }
+
+    private function reportStreamFailure(
+        ExecutionRequest $request,
+        Throwable $throwable,
+        int $projectedMessageCount = 0,
+        ?string $packageConversationId = null,
+        ?string $broadcastChannel = null,
+    ): void {
+        if (!$this->events instanceof Dispatcher) {
+            return;
+        }
+
+        try {
+            $this->events->dispatch(
+                RuntimeStreamFailed::fromRequest(
+                    request: $request,
+                    throwable: $throwable,
+                    projectedMessageCount: $projectedMessageCount,
+                    packageConversationId: $packageConversationId,
+                    redactor: $this->redactor,
+                    broadcastChannel: $broadcastChannel,
+                ),
+            );
+        } catch (Throwable) {
+        }
+    }
+
+    private function wrapStreamFailure(
+        ExecutionRequest $request,
+        Throwable $throwable,
+        int $projectedMessageCount = 0,
+        ?string $packageConversationId = null,
+        ?string $broadcastChannel = null,
+        string $failureCategory = FailureCategory::ExecutionFailed->value,
+    ): RuntimeExecutionException {
+        $exception = RuntimeExecutionException::forRequest(
+            runId: $request->runId,
+            previous: $throwable,
+            failureCategory: $failureCategory,
+        );
+
+        $this->reportStreamFailure(
+            request: $request,
+            throwable: $exception,
+            projectedMessageCount: $projectedMessageCount,
+            packageConversationId: $packageConversationId,
+            broadcastChannel: $broadcastChannel,
+        );
+
+        return $exception;
+    }
+
+    private function streamFailureFromThrowable(ExecutionRequest $request, Throwable $throwable): StreamFailure
+    {
+        $category = $throwable instanceof RuntimeExecutionException
+            ? $throwable->failureCategory()
+            : FailureCategoryResolver::forThrowable($throwable);
+
+        $message = $throwable->getMessage();
+        if ($throwable instanceof RuntimeExecutionException && $throwable->getPrevious() instanceof Throwable) {
+            $message = $throwable->getPrevious()->getMessage();
+        }
+
+        return new StreamFailure(
+            runId: $request->runId,
+            failureCategory: $category,
+            exceptionClass: $throwable::class,
+            exceptionMessage: $message !== '' ? $message : null,
+        );
     }
 }

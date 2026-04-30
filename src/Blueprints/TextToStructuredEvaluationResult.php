@@ -27,6 +27,8 @@ final readonly class TextToStructuredEvaluationResult
         public string $promptName,
         public ?string $promptVersion,
         public array $trace = [],
+        public ?string $structuredEvaluationPath = null,
+        public bool $structuredEvaluationRepaired = false,
     ) {
         if ($this->orchestrationId === '') {
             throw new InvalidArgumentException('TextToStructuredEvaluation results require a non-empty orchestrationId.');
@@ -68,6 +70,11 @@ final readonly class TextToStructuredEvaluationResult
             throw new InvalidArgumentException('TextToStructuredEvaluation promptVersion must be null or a non-empty string.');
         }
 
+        if ($this->structuredEvaluationPath !== null
+            && !in_array($this->structuredEvaluationPath, ['structured_output', 'text_normalization'], true)) {
+            throw new InvalidArgumentException('TextToStructuredEvaluation structuredEvaluationPath must be structured_output, text_normalization, or null.');
+        }
+
         foreach ($this->enabledDimensions as $dimension) {
             if ($dimension === '') {
                 throw new InvalidArgumentException('TextToStructuredEvaluation enabled dimensions must be non-empty strings.');
@@ -104,7 +111,9 @@ final readonly class TextToStructuredEvaluationResult
      *   orchestration_summary:string,
      *   final_agent:string,
      *   prompt_name:string,
-     *   prompt_version:?string
+     *   prompt_version:?string,
+     *   structured_evaluation_path:?string,
+     *   structured_evaluation_repaired:bool
      * }
      */
     public function toArray(): array
@@ -125,6 +134,8 @@ final readonly class TextToStructuredEvaluationResult
           'final_agent' => $this->finalAgent,
           'prompt_name' => $this->promptName,
           'prompt_version' => $this->promptVersion,
+          'structured_evaluation_path' => $this->structuredEvaluationPath,
+          'structured_evaluation_repaired' => $this->structuredEvaluationRepaired,
         ];
     }
 }

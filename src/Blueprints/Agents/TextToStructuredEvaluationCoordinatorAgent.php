@@ -57,6 +57,8 @@ final readonly class TextToStructuredEvaluationCoordinatorAgent implements Agent
                 'prompt_name' => $this->stringPayloadValue($context, 'prompt_name'),
                 'prompt_version' => $context->payloadValue('prompt_version'),
                 'transcript' => $this->resolvedTranscript($context),
+                'structured_evaluation_path' => $delegatedResult['structured_evaluation_path'] ?? null,
+                'structured_evaluation_repaired' => $delegatedResult['structured_evaluation_repaired'] ?? false,
               ],
                 summary: 'TextToStructuredEvaluation coordinator finalized the structured result.',
             );

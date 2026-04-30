@@ -174,6 +174,17 @@ final readonly class TextToStructuredEvaluation
             );
         }
 
+        $path = $payload['structured_evaluation_path'] ?? null;
+        $repaired = (bool)($payload['structured_evaluation_repaired'] ?? false);
+
+        if ($path !== null && !is_string($path)) {
+            throw TextToStructuredEvaluationException::invalidSpecialistPayload('final structured_evaluation_path must be null or a string.');
+        }
+
+        if ($path !== null && !in_array($path, ['structured_output', 'text_normalization'], true)) {
+            throw TextToStructuredEvaluationException::invalidSpecialistPayload('final structured_evaluation_path must be structured_output or text_normalization.');
+        }
+
         return new TextToStructuredEvaluationResult(
             orchestrationId: $result->orchestrationId,
             subject: $subject,
@@ -187,6 +198,8 @@ final readonly class TextToStructuredEvaluation
             promptName: $promptName,
             promptVersion: $promptVersion,
             trace: $result->trace,
+            structuredEvaluationPath: is_string($path) ? $path : null,
+            structuredEvaluationRepaired: $repaired,
         );
     }
 }

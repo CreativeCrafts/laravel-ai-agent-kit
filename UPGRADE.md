@@ -88,6 +88,29 @@ $result = AgentKit::run(
 
 The `AgentKit` facade gains a matching `@method static ExecutionResult run(PromptBlueprint $blueprint)` annotation.
 
+### TextToStructuredEvaluation structured-output path
+
+`TextToStructuredEvaluation` now passes a stable `ObjectSchema` handle on the specialist `ExecutionRequest` (`CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StructuredEvaluationJsonSchema::objectSchema()`). When the runtime returns a populated `ExecutionResult::$structuredOutput` that validates, the blueprint uses it as the primary path. Otherwise it falls back to parsing `ExecutionResult::$output` with the existing `StructuredEvaluationOutputNormalizer`.
+
+`TextToStructuredEvaluationResult` gained two optional fields:
+
+- `structuredEvaluationPath`: `structured_output` or `text_normalization`
+- `structuredEvaluationRepaired`: `true` when the text fallback path repaired embedded or wrapped JSON (same meaning as the normalizer’s repaired status)
+
+`toArray()` on the result includes `structured_evaluation_path` and `structured_evaluation_repaired`.
+
+### Runtime middleware
+
+Register optional middleware classes under `ai-agent-kit.runtime.middleware` (ordered list of class names). Each class must implement `CreativeCrafts\LaravelAiAgentKit\Contracts\Core\RuntimeMiddleware` and is resolved from the container. When the list is non-empty, the package wraps `SdkAiRuntime` so **every** `AiRuntime::execute` call (direct, blueprint, orchestration) passes through the stack.
+
+Implement `CreativeCrafts\LaravelAiAgentKit\Contracts\Core\TerminatingRuntimeMiddleware` when you need a hook that runs **after** a successful execution, in reverse order relative to the `handle` chain.
+
+### Runtime streaming
+
+Inject `CreativeCrafts\LaravelAiAgentKit\Contracts\Core\StreamingAiRuntime` (same concrete instance family as `AiRuntime`, including the middleware wrapper when configured). Call `executeStream(ExecutionRequest $request)` and consume the generator: zero or more `StreamChunk` (`text_delta`), then exactly one terminal `StreamComplete` or `StreamFailure`. Do not set `ExecutionRequest::$schema` for streaming.
+
+Optional Laravel Echo integration: configure `ai-agent-kit.runtime.streaming.broadcast_channel` or set request metadata `streaming_broadcast_channel` to a public channel string. Broadcast event names are `runtime.stream.chunk`, `runtime.stream.completed`, and `runtime.stream.failed`; payloads omit prompt content and mirror the redacted Laravel events the package dispatches on the default event bus.
+
 ### Attachments scope
 
 Attachments attached via `PromptBlueprint::withAttachment()` / `withAttachments()` are scoped to the **current call only**. The conversation memory bridge does not persist attachments across turns in this phase. Continuing a stored conversation will not replay prior attachments.

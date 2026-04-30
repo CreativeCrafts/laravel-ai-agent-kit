@@ -59,6 +59,10 @@ Pipeline execution now enforces both `budgets.max_steps` and `budgets.max_total_
 
 Runtime execution now enforces `budgets.max_tokens` and `budgets.max_tool_calls` using SDK usage/tool-call telemetry.
 
+Optional **runtime middleware** wraps every `AiRuntime::execute` call (including blueprints and orchestration): register ordered class names under `runtime.middleware` in `config/ai-agent-kit.php`. Each class must implement `CreativeCrafts\LaravelAiAgentKit\Contracts\Core\RuntimeMiddleware`. Implement `TerminatingRuntimeMiddleware` when you need a reverse-order hook after a successful response.
+
+**Streaming text** uses the Laravel AI SDK stream path for non-schema requests. Inject `CreativeCrafts\LaravelAiAgentKit\Contracts\Core\StreamingAiRuntime` and iterate `executeStream($request)` to receive `StreamChunk` values (ordered `text_delta` segments) followed by a single terminal `StreamComplete` or `StreamFailure`. Structured-output requests (`ExecutionRequest::$schema` set) are not supported for streaming; use `execute()` instead. Optional Echo broadcast: set `runtime.streaming.broadcast_channel` (or per-request metadata `streaming_broadcast_channel`) to a **public** channel name; the package dispatches `RuntimeStreamChunkEmitted`, `RuntimeStreamCompleted`, and `RuntimeStreamFailed` with **redacted** payloads (lengths, keys, identifiers — no prompt text).
+
 **Modality runtimes** (transcription, embeddings, image generation, reranking) use contracts under `CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\`. The default driver is `sdk`, which bridges to Laravel AI (`Transcription`, `Embeddings`, `Image`, `Reranking`). Override per modality with `modalities.<name>.default_driver` in `config/ai-agent-kit.php` (`sdk` or a class implementing the contract). The `AudioToTextToEvaluation` blueprint calls the transcription runtime when `audio_reference` is raw base64 or a `data:*;base64,...` URI; opaque references (for example `s3://...`) still use the registered prompt plus `AiRuntime`.
 
 `budgets.max_cost_usd` is enforced in fail-closed mode: when configured, each runtime request must provide numeric `metadata.cost_usd` (or `metadata.estimated_cost_usd`) so cost ceilings can be
@@ -120,6 +124,15 @@ return [
             'failure_threshold' => 3,
             'reset_timeout_seconds' => 60,
             'half_open_success_threshold' => 1,
+        ],
+    ],
+
+    'runtime' => [
+        'middleware' => [
+            // \App\Runtime\LogAiRuntimeRequest::class,
+        ],
+        'streaming' => [
+            'broadcast_channel' => env('AI_AGENT_KIT_STREAMING_BROADCAST_CHANNEL'),
         ],
     ],
 
@@ -335,10 +348,13 @@ The blueprint returns a fixed package-owned result schema with:
 - `dimensions` keyed by dimension name, each with `score`, `summary`, and `evidence`
 - `orchestrationSummary`, `finalAgent`, `promptName`, and `promptVersion`
 
+- `structuredEvaluationPath` (`structured_output` when the runtime returned typed structured output, or `text_normalization` when the kit fell back to parsing model text)
+- `structuredEvaluationRepaired` (true when the text fallback path repaired wrapped or embedded JSON)
+
 The enabled dimensions are caller-configurable, but the top-level result contract remains package-owned and stable.
 
-Before running the blueprint, register the prompt template referenced by `promptName` and `promptVersion`. The specialist stage expects the model output to be valid JSON matching the fixed package
-schema.
+Before running the blueprint, register the prompt template referenced by `promptName` and `promptVersion`. The specialist stage requests structured output from the runtime using a package-owned JSON
+schema; if the provider does not populate structured output, the kit falls back to the same bounded text normalization used previously.
 
 Run the package-owned `AudioToTextToEvaluation` blueprint when you want one orchestration call to transcribe audio first and then evaluate the resulting transcript through the same structured
 evaluation pipeline:
@@ -379,8 +395,8 @@ Provider profiles for the audio blueprint must be compatible with both stages:
 - the transcription stage requires a provider profile that supports `audio_transcription`
 - the evaluation stage requires a provider profile that supports `structured_output`
 
-Register both prompt templates before execution. The transcription stage returns one transcript string, and the evaluation stage returns valid JSON matching the package-owned structured
-evaluation schema.
+Register both prompt templates before execution. The transcription stage returns one transcript string (plain text from the runtime, not a separate structured-output schema). The evaluation
+stage uses the same structured evaluation path as `TextToStructuredEvaluation` (runtime schema plus bounded text fallback).
 
 Build and run a synchronous pipeline with typed steps through dependency injection:
 

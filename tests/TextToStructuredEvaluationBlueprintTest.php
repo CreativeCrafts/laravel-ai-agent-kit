@@ -23,9 +23,11 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StructuredEvaluationJsonSchema;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\InMemoryPromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptExecutionMapper;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAiRuntime;
+use Laravel\Ai\ObjectSchema;
 
 beforeEach(function (): void {
     bootTextToStructuredEvaluationBlueprintTestbed(
@@ -34,28 +36,31 @@ beforeEach(function (): void {
 });
 
 it('returns one final structured result from a single blueprint call over the orchestrator', function (): void {
+    $structuredPayload = [
+      'summary' => 'The text is clear and action-oriented.',
+      'recommended_action' => 'Approve the response with minor edits.',
+      'confidence' => 0.92,
+      'dimensions' => [
+        'clarity' => [
+          'score' => 5,
+          'summary' => 'The core message is easy to follow.',
+          'evidence' => ['Direct request is stated in the opening sentence.'],
+        ],
+        'accuracy' => [
+          'score' => 4,
+          'summary' => 'Claims are mostly supported by the provided text.',
+          'evidence' => ['No unsupported product promises were detected.'],
+        ],
+      ],
+    ];
+
     $fakeRuntime = new FakeAiRuntime([
       new ExecutionResult(
           runId: 'runtime-run-001',
-          output: json_encode([
-          'summary' => 'The text is clear and action-oriented.',
-          'recommended_action' => 'Approve the response with minor edits.',
-          'confidence' => 0.92,
-          'dimensions' => [
-            'clarity' => [
-              'score' => 5,
-              'summary' => 'The core message is easy to follow.',
-              'evidence' => ['Direct request is stated in the opening sentence.'],
-            ],
-            'accuracy' => [
-              'score' => 4,
-              'summary' => 'Claims are mostly supported by the provided text.',
-              'evidence' => ['No unsupported product promises were detected.'],
-            ],
-          ],
-        ], JSON_THROW_ON_ERROR),
+          output: json_encode($structuredPayload, JSON_THROW_ON_ERROR),
           provider: 'openai-structured',
           model: 'gpt-test-structured',
+          structuredOutput: $structuredPayload,
       ),
     ]);
 
@@ -88,6 +93,8 @@ it('returns one final structured result from a single blueprint call over the or
       ->and($result->trace[1]->agentKey)->toBe(TextToStructuredEvaluationSpecialistAgent::KEY)
       ->and($result->trace[1]->providerProfile)->toBe('openai-structured')
       ->and($result->trace[2]->agentKey)->toBe(TextToStructuredEvaluationCoordinatorAgent::KEY)
+      ->and($result->structuredEvaluationPath)->toBe('structured_output')
+      ->and($result->structuredEvaluationRepaired)->toBeFalse()
       ->and($fakeRuntime)->toHaveRuntimeExecutions(1);
 
     $runtimeRequest = $fakeRuntime->lastRequest();
@@ -98,27 +105,32 @@ it('returns one final structured result from a single blueprint call over the or
       ->and($runtimeRequest?->prompt)->toContain('Evaluate the following text for customer support reply.')
       ->and($runtimeRequest?->prompt)->toContain('Enabled dimensions: clarity, accuracy')
       ->and($runtimeRequest?->metadata['prompt_name'])->toBe('text-to-structured-evaluation.specialist')
-      ->and($runtimeRequest?->metadata['prompt_version'])->toBe('1.0.0');
+      ->and($runtimeRequest?->metadata['prompt_version'])->toBe('1.0.0')
+      ->and($runtimeRequest?->schema)->toBeInstanceOf(ObjectSchema::class)
+      ->and($runtimeRequest?->schema->name())->toBe(StructuredEvaluationJsonSchema::OBJECT_SCHEMA_NAME);
 });
 
 it('keeps the result schema fixed while allowing callers to enable a subset of dimensions', function (): void {
+    $structuredPayload = [
+      'summary' => 'The text is concise but misses supporting context.',
+      'recommended_action' => 'Request one factual citation before publishing.',
+      'confidence' => 0.81,
+      'dimensions' => [
+        'completeness' => [
+          'score' => 2,
+          'summary' => 'The text omits key implementation detail.',
+          'evidence' => ['No source or policy reference is included.'],
+        ],
+      ],
+    ];
+
     $fakeRuntime = new FakeAiRuntime([
       new ExecutionResult(
           runId: 'runtime-run-002',
-          output: json_encode([
-          'summary' => 'The text is concise but misses supporting context.',
-          'recommended_action' => 'Request one factual citation before publishing.',
-          'confidence' => 0.81,
-          'dimensions' => [
-            'completeness' => [
-              'score' => 2,
-              'summary' => 'The text omits key implementation detail.',
-              'evidence' => ['No source or policy reference is included.'],
-            ],
-          ],
-        ], JSON_THROW_ON_ERROR),
+          output: json_encode($structuredPayload, JSON_THROW_ON_ERROR),
           provider: 'openai-structured',
           model: 'gpt-test-structured',
+          structuredOutput: $structuredPayload,
       ),
     ]);
 
@@ -138,7 +150,8 @@ it('keeps the result schema fixed while allowing callers to enable a subset of d
       ->toBe(['completeness'])
       ->and($result->enabledDimensions)->toBe(['completeness'])
       ->and($result->toArray()['dimensions']['completeness']['score'])->toBe(2)
-      ->and($fakeRuntime->lastRequest()?->prompt)->toContain('Enabled dimensions: completeness');
+      ->and($fakeRuntime->lastRequest()?->prompt)->toContain('Enabled dimensions: completeness')
+      ->and($result->structuredEvaluationPath)->toBe('structured_output');
 });
 
 it('preserves the same package-owned result semantics across matrix-valid provider profiles', function (): void {
@@ -184,6 +197,7 @@ it('preserves the same package-owned result semantics across matrix-valid provid
               output: $output,
               provider: $providerProfile,
               model: 'gpt-test-structured',
+              structuredOutput: textToStructuredEvaluationParityPayload(),
           ),
         ]);
 
@@ -203,6 +217,33 @@ it('preserves the same package-owned result semantics across matrix-valid provid
           ->and($result->trace[1]->providerProfile)->toBe($providerProfile)
           ->and($fakeRuntime->lastRequest()?->provider)->toBe($providerProfile);
     }
+});
+
+it('falls back to text normalization when structured output is present but invalid', function (): void {
+    $fakeRuntime = new FakeAiRuntime([
+      new ExecutionResult(
+          runId: 'runtime-run-invalid-structured',
+          output: json_encode(textToStructuredEvaluationParityPayload(), JSON_THROW_ON_ERROR),
+          provider: 'openai-structured',
+          model: 'gpt-test-structured',
+          structuredOutput: ['summary' => 'incomplete'],
+      ),
+    ]);
+
+    app()->instance(AiRuntime::class, $fakeRuntime);
+
+    $result = app(TextToStructuredEvaluation::class)->evaluate(
+        new TextToStructuredEvaluationRequest(
+            subject: 'fallback from bad structured',
+            text: 'Please confirm whether the refund can be processed today.',
+            enabledDimensions: ['clarity'],
+            promptVersion: '1.0.0',
+        ),
+    );
+
+    expect($result->structuredEvaluationPath)->toBe('text_normalization')
+      ->and($result->structuredEvaluationRepaired)->toBeFalse()
+      ->and($result->summary)->toBe('The response is specific and easy to action.');
 });
 
 it('repairs wrapped structured output returned by the specialist runtime response', function (): void {
@@ -247,7 +288,9 @@ it('repairs wrapped structured output returned by the specialist runtime respons
       ->toBe('The response is specific and easy to action.')
       ->and($result->recommendedAction)->toBe('Send the response as drafted.')
       ->and($result->confidence)->toBe(0.88)
-      ->and($result->dimension('clarity')?->score)->toBe(5);
+      ->and($result->dimension('clarity')?->score)->toBe(5)
+      ->and($result->structuredEvaluationPath)->toBe('text_normalization')
+      ->and($result->structuredEvaluationRepaired)->toBeTrue();
 });
 
 it('routes to the next compatible provider profile when the first compatible specialist profile is disabled', function (): void {
@@ -266,6 +309,7 @@ it('routes to the next compatible provider profile when the first compatible spe
           output: json_encode(textToStructuredEvaluationParityPayload(), JSON_THROW_ON_ERROR),
           provider: 'anthropic-structured',
           model: 'gpt-test-structured',
+          structuredOutput: textToStructuredEvaluationParityPayload(),
       ),
     ]);
 
@@ -549,7 +593,9 @@ function textToStructuredEvaluationParityPayload(): array
  *   orchestration_summary:string,
  *   final_agent:string,
  *   prompt_name:string,
- *   prompt_version:?string
+ *   prompt_version:?string,
+ *   structured_evaluation_path:?string,
+ *   structured_evaluation_repaired:bool
  * }
  */
 function textToStructuredEvaluationExpectedParitySnapshot(string $subject): array
@@ -572,6 +618,8 @@ function textToStructuredEvaluationExpectedParitySnapshot(string $subject): arra
       'final_agent' => TextToStructuredEvaluationCoordinatorAgent::KEY,
       'prompt_name' => 'text-to-structured-evaluation.specialist',
       'prompt_version' => '1.0.0',
+      'structured_evaluation_path' => 'structured_output',
+      'structured_evaluation_repaired' => false,
     ];
 }
 
@@ -586,7 +634,9 @@ function textToStructuredEvaluationExpectedParitySnapshot(string $subject): arra
  *   orchestration_summary:string,
  *   final_agent:string,
  *   prompt_name:string,
- *   prompt_version:?string
+ *   prompt_version:?string,
+ *   structured_evaluation_path:?string,
+ *   structured_evaluation_repaired:bool
  * }
  */
 function textToStructuredEvaluationParitySnapshot(TextToStructuredEvaluationResult $result): array
@@ -605,5 +655,7 @@ function textToStructuredEvaluationParitySnapshot(TextToStructuredEvaluationResu
       'final_agent' => $result->finalAgent,
       'prompt_name' => $result->promptName,
       'prompt_version' => $result->promptVersion,
+      'structured_evaluation_path' => $result->structuredEvaluationPath,
+      'structured_evaluation_repaired' => $result->structuredEvaluationRepaired,
     ];
 }

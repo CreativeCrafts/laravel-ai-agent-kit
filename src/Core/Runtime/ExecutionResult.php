@@ -21,4 +21,20 @@ final readonly class ExecutionResult
         public ?array $structuredOutput = null,
     ) {
     }
+
+    /**
+     * @param array<string, mixed> $additional
+     */
+    public function withMetadata(array $additional): self
+    {
+        return new self(
+            runId: $this->runId,
+            output: $this->output,
+            provider: $this->provider,
+            model: $this->model,
+            usage: $this->usage,
+            metadata: array_merge($this->metadata, $additional),
+            structuredOutput: $this->structuredOutput,
+        );
+    }
 }

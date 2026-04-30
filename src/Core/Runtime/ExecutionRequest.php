@@ -71,6 +71,31 @@ final readonly class ExecutionRequest
     }
 
     /**
+     * @param array<string, mixed> $additional
+     */
+    public function withMetadata(array $additional): self
+    {
+        return new self(
+            runId: $this->runId,
+            prompt: $this->prompt,
+            instructions: $this->instructions,
+            provider: $this->provider,
+            model: $this->model,
+            toolNames: $this->toolNames,
+            input: $this->input,
+            metadata: array_merge($this->metadata, $additional),
+            timeout: $this->timeout,
+            conversationId: $this->conversationId,
+            storeConversation: $this->storeConversation,
+            continueConversation: $this->continueConversation,
+            generationOptions: $this->generationOptions,
+            schema: $this->schema,
+            attachments: $this->attachments,
+            providerToolNames: $this->providerToolNames,
+        );
+    }
+
+    /**
      * @param array<int, mixed> $attachments
      */
     private function validateAttachments(array $attachments): void

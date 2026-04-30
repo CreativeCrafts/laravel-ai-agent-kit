@@ -11,30 +11,30 @@ Documentation, messaging, and testability gaps that do not depend on runtime pha
 
 Satisfies `specs/structured-evaluation-migration/spec.md` and unblocks normalizer retirement.
 
-- [ ] 1.1 Define the evaluation JSON schema for `TextToStructuredEvaluation` as `ObjectSchema`, `HasStructuredOutput`, or closure; thread `schema` (and optional `generationOptions`) through `PromptExecutionMapper` / specialist agent `ExecutionRequest` construction.
-- [ ] 1.2 Primary path: build specialist `AgentExecutionResult` / blueprint mapping from `ExecutionResult->structuredOutput` when present and valid; validate required keys before returning.
-- [ ] 1.3 Fallback path: when `structuredOutput` is null or fails validation, run existing `StructuredEvaluationOutputNormalizer` on `output`; set explicit observability (`metadata` flag and/or new redacted package event) per spec.
-- [ ] 1.4 Extend `tests/TextToStructuredEvaluationBlueprintTest.php` (or add focused tests) for: structured primary success, fallback when `structuredOutput` null, refusal/invalid still typed.
-- [ ] 1.5 Evaluate `AudioToTextToEvaluationTranscriptionAgent`: document interim behavior or add schema/structured path if SDK supports structured transcript object in-kit.
+- [x] 1.1 Define the evaluation JSON schema for `TextToStructuredEvaluation` as `ObjectSchema`, `HasStructuredOutput`, or closure; thread `schema` (and optional `generationOptions`) through `PromptExecutionMapper` / specialist agent `ExecutionRequest` construction.
+- [x] 1.2 Primary path: build specialist `AgentExecutionResult` / blueprint mapping from `ExecutionResult->structuredOutput` when present and valid; validate required keys before returning.
+- [x] 1.3 Fallback path: when `structuredOutput` is null or fails validation, run existing `StructuredEvaluationOutputNormalizer` on `output`; set explicit observability (`metadata` flag and/or new redacted package event) per spec.
+- [x] 1.4 Extend `tests/TextToStructuredEvaluationBlueprintTest.php` (or add focused tests) for: structured primary success, fallback when `structuredOutput` null, refusal/invalid still typed.
+- [x] 1.5 Evaluate `AudioToTextToEvaluationTranscriptionAgent`: document interim behavior or add schema/structured path if SDK supports structured transcript object in-kit.
 
 ## Phase 2 — Runtime middleware
 
 Satisfies `specs/runtime-middleware/spec.md`.
 
-- [ ] 2.1 Add middleware contract(s), registration (service provider + config for ordered class names or tagged middleware), and pipeline executor.
-- [ ] 2.2 Integrate pipeline into `SdkAiRuntime::execute` inner dispatch.
-- [ ] 2.3 Integrate same pipeline into `CompiledBlueprintRunner` / `BlueprintRunner` so blueprints cannot bypass middleware.
-- [ ] 2.4 Ensure orchestration-invoked runtime calls use the same middleware stack (audit all `AiRuntime` resolution sites).
-- [ ] 2.5 Pest tests: deterministic order, failure propagation, blueprint vs direct parity.
+- [x] 2.1 Add middleware contract(s), registration (service provider + config for ordered class names or tagged middleware), and pipeline executor.
+- [x] 2.2 Integrate pipeline into `SdkAiRuntime::execute` inner dispatch.
+- [x] 2.3 Integrate same pipeline into `CompiledBlueprintRunner` / `BlueprintRunner` so blueprints cannot bypass middleware.
+- [x] 2.4 Ensure orchestration-invoked runtime calls use the same middleware stack (audit all `AiRuntime` resolution sites).
+- [x] 2.5 Pest tests: deterministic order, failure propagation, blueprint vs direct parity.
 
 ## Phase 3 — Streaming runtime
 
 Satisfies `specs/runtime-streaming/spec.md`.
 
-- [ ] 3.1 Add stream-oriented API on `AiRuntime` or parallel interface (per design D4); define chunk/complete/fail value objects.
-- [ ] 3.2 Implement SDK-backed streaming for at least one mainstream text path; normalize provider events into package events.
-- [ ] 3.3 Optional broadcast/event forwarding behind config; document channel naming and payload redaction rules.
-- [ ] 3.4 Pest tests: chunk ordering, terminal completion, terminal failure stops further chunks, optional broadcast assertion using `Event::fake`.
+- [x] 3.1 Add stream-oriented API on `AiRuntime` or parallel interface (per design D4); define chunk/complete/fail value objects.
+- [x] 3.2 Implement SDK-backed streaming for at least one mainstream text path; normalize provider events into package events.
+- [x] 3.3 Optional broadcast/event forwarding behind config; document channel naming and payload redaction rules.
+- [x] 3.4 Pest tests: chunk ordering, terminal completion, terminal failure stops further chunks, optional broadcast assertion using `Event::fake`.
 
 ## Phase 4 — Modality runtimes
 

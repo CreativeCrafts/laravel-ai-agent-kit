@@ -51,6 +51,20 @@ final class StructuredEvaluationOutputNormalizer
     }
 
     /**
+     * @param array<mixed> $decoded
+     */
+    public function normalizeFromDecodedArray(array $decoded): StructuredEvaluationOutputNormalizationResult
+    {
+        $raw = json_encode($decoded, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+
+        return $this->normalizationResultFromDecoded(
+            decoded: $decoded,
+            rawOutput: $raw,
+            assumeRepaired: false,
+        );
+    }
+
+    /**
      * @return array<int|string, mixed>|null
      */
     private function tryDecodeObject(string $candidate): ?array
