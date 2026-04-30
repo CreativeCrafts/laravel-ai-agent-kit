@@ -40,11 +40,11 @@ Satisfies `specs/runtime-streaming/spec.md`.
 
 Satisfies `specs/modality-runtimes/spec.md`.
 
-- [ ] 4.1 Add contracts + request/result DTOs for transcription, embeddings, image generation, reranking.
-- [ ] 4.2 Implement baseline SDK-backed adapters per modality (spike against installed `laravel/ai` to confirm entry points).
-- [ ] 4.3 Register adapters in service provider with config-driven selection where multiple backends exist.
-- [ ] 4.4 Pest tests: transcription happy path, embeddings batch order preservation, image/rerank smoke tests behind fakes if live SDK calls are not CI-safe.
-- [ ] 4.5 Refactor audio blueprint transcription stage to modality runtime when feasible (tie-back to 1.5).
+- [x] 4.1 Add contracts + request/result DTOs for transcription, embeddings, image generation, reranking.
+- [x] 4.2 Implement baseline SDK-backed adapters per modality (spike against installed `laravel/ai` to confirm entry points).
+- [x] 4.3 Register adapters in service provider with config-driven selection where multiple backends exist.
+- [x] 4.4 Pest tests: transcription happy path, embeddings batch order preservation, image/rerank smoke tests behind fakes if live SDK calls are not CI-safe.
+- [x] 4.5 Refactor audio blueprint transcription stage to modality runtime when feasible (tie-back to 1.5).
 
 ## Phase 5 — Conversation store convergence
 

@@ -59,6 +59,8 @@ Pipeline execution now enforces both `budgets.max_steps` and `budgets.max_total_
 
 Runtime execution now enforces `budgets.max_tokens` and `budgets.max_tool_calls` using SDK usage/tool-call telemetry.
 
+**Modality runtimes** (transcription, embeddings, image generation, reranking) use contracts under `CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\`. The default driver is `sdk`, which bridges to Laravel AI (`Transcription`, `Embeddings`, `Image`, `Reranking`). Override per modality with `modalities.<name>.default_driver` in `config/ai-agent-kit.php` (`sdk` or a class implementing the contract). The `AudioToTextToEvaluation` blueprint calls the transcription runtime when `audio_reference` is raw base64 or a `data:*;base64,...` URI; opaque references (for example `s3://...`) still use the registered prompt plus `AiRuntime`.
+
 `budgets.max_cost_usd` is enforced in fail-closed mode: when configured, each runtime request must provide numeric `metadata.cost_usd` (or `metadata.estimated_cost_usd`) so cost ceilings can be
 validated deterministically.
 
@@ -119,6 +121,13 @@ return [
             'reset_timeout_seconds' => 60,
             'half_open_success_threshold' => 1,
         ],
+    ],
+
+    'modalities' => [
+        'transcription' => ['default_driver' => 'sdk'],
+        'embeddings' => ['default_driver' => 'sdk'],
+        'image_generation' => ['default_driver' => 'sdk'],
+        'reranking' => ['default_driver' => 'sdk'],
     ],
 
     'prompts' => [

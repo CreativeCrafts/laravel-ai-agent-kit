@@ -21,6 +21,10 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationRetentionPurger;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationSummarizer;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\EmbeddingsRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\ImageGenerationRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\RerankingRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\TranscriptionRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\DelegationPolicyEngine;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Prompts\PromptRepository;
@@ -49,6 +53,10 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\CompiledBlueprintRunner;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\PromptBlueprintCompiler;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\RuntimeConversationMemoryBridge;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkEmbeddingsRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkImageGenerationRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkRerankingRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkTranscriptionRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\SdkAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationRetentionPurger;
 use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationStore;
@@ -496,6 +504,47 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             );
         });
 
+        $this->app->singleton(SdkEmbeddingsRuntime::class, static fn (): SdkEmbeddingsRuntime => new SdkEmbeddingsRuntime());
+        $this->app->singleton(SdkImageGenerationRuntime::class, static fn (): SdkImageGenerationRuntime => new SdkImageGenerationRuntime());
+        $this->app->singleton(SdkRerankingRuntime::class, static fn (): SdkRerankingRuntime => new SdkRerankingRuntime());
+        $this->app->singleton(SdkTranscriptionRuntime::class, static fn (): SdkTranscriptionRuntime => new SdkTranscriptionRuntime());
+
+        $this->app->singleton(TranscriptionRuntime::class, function (Application $app): TranscriptionRuntime {
+            return $this->resolveModalityRuntime(
+                $app,
+                configKey: 'ai-agent-kit.modalities.transcription',
+                sdk: $app->make(SdkTranscriptionRuntime::class),
+                contract: TranscriptionRuntime::class,
+            );
+        });
+
+        $this->app->singleton(EmbeddingsRuntime::class, function (Application $app): EmbeddingsRuntime {
+            return $this->resolveModalityRuntime(
+                $app,
+                configKey: 'ai-agent-kit.modalities.embeddings',
+                sdk: $app->make(SdkEmbeddingsRuntime::class),
+                contract: EmbeddingsRuntime::class,
+            );
+        });
+
+        $this->app->singleton(ImageGenerationRuntime::class, function (Application $app): ImageGenerationRuntime {
+            return $this->resolveModalityRuntime(
+                $app,
+                configKey: 'ai-agent-kit.modalities.image_generation',
+                sdk: $app->make(SdkImageGenerationRuntime::class),
+                contract: ImageGenerationRuntime::class,
+            );
+        });
+
+        $this->app->singleton(RerankingRuntime::class, function (Application $app): RerankingRuntime {
+            return $this->resolveModalityRuntime(
+                $app,
+                configKey: 'ai-agent-kit.modalities.reranking',
+                sdk: $app->make(SdkRerankingRuntime::class),
+                contract: RerankingRuntime::class,
+            );
+        });
+
         $this->app->singleton(SdkAiRuntime::class, function (Application $app): SdkAiRuntime {
             return new SdkAiRuntime(
                 toolMaterializer: $app->make(SdkToolMaterializer::class),
@@ -877,5 +926,39 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         $filters = is_array($definition['filters'] ?? null) ? $definition['filters'] : null;
 
         return static fn (): FileSearch => new FileSearch(stores: $stores, where: $filters);
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param  T  $sdk
+     * @param  class-string<T>  $contract
+     * @return T
+     */
+    private function resolveModalityRuntime(Application $app, string $configKey, object $sdk, string $contract)
+    {
+        /** @var ConfigRepository $config */
+        $config = $app->make(ConfigRepository::class);
+        $block = $config->get($configKey, []);
+
+        if (!is_array($block)) {
+            return $sdk;
+        }
+
+        $driver = $block['default_driver'] ?? 'sdk';
+
+        if (!is_string($driver) || $driver === '' || $driver === 'sdk') {
+            return $sdk;
+        }
+
+        $resolved = $app->make($driver);
+
+        if (!$resolved instanceof $contract) {
+            throw new RuntimeException(
+                sprintf('Modality driver [%s] must resolve to an object implementing %s.', $driver, $contract),
+            );
+        }
+
+        return $resolved;
     }
 }

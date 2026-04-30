@@ -246,6 +246,31 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Modality runtimes (transcription, embeddings, images, reranking)
+    |--------------------------------------------------------------------------
+    |
+    | Each modality resolves a runtime contract from the container. Use
+    | `default_driver` => `sdk` for the package Laravel AI bridge, or a
+    | fully-qualified class name implementing the modality contract.
+    |
+    */
+  'modalities' => [
+    'transcription' => [
+      'default_driver' => 'sdk',
+    ],
+    'embeddings' => [
+      'default_driver' => 'sdk',
+    ],
+    'image_generation' => [
+      'default_driver' => 'sdk',
+    ],
+    'reranking' => [
+      'default_driver' => 'sdk',
+    ],
+  ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Conversation Summarization
     |--------------------------------------------------------------------------
     |
