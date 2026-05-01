@@ -139,6 +139,23 @@ Inject **`LaravelAiFilesService`** for provider file upload/fetch/delete (`put`,
 
 Optional defaults when the provider argument is null: **`laravel_ai_files.default_provider`** and **`laravel_ai_stores.default_provider`** in `config/ai-agent-kit.php` (or `AI_AGENT_KIT_LARAVEL_AI_FILES_PROVIDER` / `AI_AGENT_KIT_LARAVEL_AI_STORES_PROVIDER`). These are distinct from **`VectorStoreInterface`** (application embedding store with `database` / `in_memory` drivers).
 
+### Similarity search custom tool (Phase 4, `sdk-surface-parity`)
+
+The package can register a **`similarity_search`** custom tool that:
+
+1. Embeds the user’s `query` string via **`EmbeddingsRuntime`** (same modality stack as `SdkEmbeddingsRuntime`).
+2. Runs **`VectorStoreInterface::search()`** in a configurable default namespace (or per-call `namespace` on the tool input).
+
+**Registration is opt-in.** In `config/ai-agent-kit.php`, set both `tools.similarity_search.enabled` and `tools.similarity_search.register` to `true` (or use env `AI_AGENT_KIT_SIMILARITY_SEARCH_ENABLED` / `AI_AGENT_KIT_SIMILARITY_SEARCH_REGISTER`). Defaults are `false` so existing apps keep the previous tool registry contents.
+
+**Authorization:** execution still goes through `InMemoryToolRegistry` and **`tools.authorizer`**. You must allow the custom tool (for example only when `similarity_search` is in an allowlist) or every call will throw `ToolUnauthorizedException`.
+
+**Configuration:** `tools.similarity_search.name` (tool name, default `similarity_search`), `default_namespace`, `default_limit`, and optional `embedding_dimensions`, `embedding_timeout_seconds`, `embedding_provider`, `embedding_model` to align embedding vectors with stored documents.
+
+**Optional filter:** pass `filter_json` on the tool input as a JSON object string; keys are matched for equality against each hit’s metadata (same semantics as `VectorSearchQuery::$filter`).
+
+For **Eloquent / database-native** vector similarity (`whereVectorSimilarTo`), continue using Laravel AI’s **`Laravel\Ai\Tools\SimilaritySearch::usingModel(...)`** and register it yourself if you expose it to agents.
+
 ### Vector store: database driver (Phase 2, `sdk-surface-parity`)
 
 The package can persist `VectorDocument` embeddings in SQL via **`ai-agent-kit.vector.default_driver` = `database`**.

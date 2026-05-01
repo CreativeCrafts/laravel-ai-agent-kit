@@ -301,6 +301,32 @@ return [
   'tools' => [
     'authorizer' => DenyAllToolAuthorizer::class,
 
+    /*
+    |--------------------------------------------------------------------------
+    | Similarity search (VectorStoreInterface + embeddings)
+    |--------------------------------------------------------------------------
+    |
+    | Registers the package `similarity_search` custom tool when enabled.
+    | Embeds the query via `EmbeddingsRuntime`, then searches `VectorStoreInterface`.
+    | Authorization still flows through `tools.authorizer` (default: deny all).
+    |
+    */
+    'similarity_search' => [
+      'enabled' => (bool)env('AI_AGENT_KIT_SIMILARITY_SEARCH_ENABLED', false),
+      'register' => (bool)env('AI_AGENT_KIT_SIMILARITY_SEARCH_REGISTER', false),
+      'name' => env('AI_AGENT_KIT_SIMILARITY_SEARCH_NAME', 'similarity_search'),
+      'default_namespace' => (string)env('AI_AGENT_KIT_SIMILARITY_SEARCH_NAMESPACE', 'default'),
+      'default_limit' => (int)env('AI_AGENT_KIT_SIMILARITY_SEARCH_LIMIT', 10),
+      'embedding_dimensions' => env('AI_AGENT_KIT_SIMILARITY_SEARCH_EMBEDDING_DIMENSIONS') !== null
+        ? (int)env('AI_AGENT_KIT_SIMILARITY_SEARCH_EMBEDDING_DIMENSIONS')
+        : null,
+      'embedding_timeout_seconds' => env('AI_AGENT_KIT_SIMILARITY_SEARCH_EMBEDDING_TIMEOUT') !== null
+        ? (int)env('AI_AGENT_KIT_SIMILARITY_SEARCH_EMBEDDING_TIMEOUT')
+        : null,
+      'embedding_provider' => env('AI_AGENT_KIT_SIMILARITY_SEARCH_EMBEDDING_PROVIDER'),
+      'embedding_model' => env('AI_AGENT_KIT_SIMILARITY_SEARCH_EMBEDDING_MODEL'),
+    ],
+
     'provider_tools' => [
         // 'web.search' => [
         //     'type' => 'web_search',

@@ -43,8 +43,7 @@ The package already exposes text runtime (`AiRuntime`, streaming), four modality
 
 ### D5 — SimilaritySearch
 
-- **If ship:** Tool implements package `Tool` contract (or thin wrapper delegating to SDK `SimilaritySearch` where Laravel version matches), gated by `tools.custom` or explicit registration, `ToolAuthorizer` integration, tests with SQLite or fake.
-- **If not ship:** ADR-style paragraph in matrix + `docs/` recipe for registering SDK `SimilaritySearch` as a custom tool—tasks must record the decision.
+- **Shipped:** **`SimilaritySearchTool`** — package `Tool` that embeds the query via **`EmbeddingsRuntime`**, then searches **`VectorStoreInterface`**. Optional registration via `tools.similarity_search.enabled` / `register` (default **false**); name and embedding defaults are configurable. This complements Laravel AI’s Eloquent **`Laravel\Ai\Tools\SimilaritySearch`** (DB `whereVectorSimilarTo`) for apps using the kit vector store instead.
 
 ### D6 — AgentKit facade
 

@@ -90,6 +90,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ProviderToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryProviderToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Tools\ProviderToolMaterializer;
+use CreativeCrafts\LaravelAiAgentKit\Tools\SimilaritySearchTool;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
 use CreativeCrafts\LaravelAiAgentKit\Vector\DatabaseVectorStore;
 use CreativeCrafts\LaravelAiAgentKit\Vector\InMemoryVectorStore;
@@ -462,9 +463,13 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         });
 
         $this->app->singleton(InMemoryToolRegistry::class, function (Application $app): InMemoryToolRegistry {
-            return new InMemoryToolRegistry(
+            $registry = new InMemoryToolRegistry(
                 authorizer: $app->make(ToolAuthorizer::class),
             );
+
+            $this->registerSimilaritySearchToolIfConfigured($app, $registry);
+
+            return $registry;
         });
 
         $this->app->singleton(ToolRegistry::class, function (Application $app): ToolRegistry {
@@ -1067,6 +1072,32 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             : $database->connection();
 
         return new DatabaseVectorStore($connection, $table);
+    }
+
+    private function registerSimilaritySearchToolIfConfigured(Application $app, InMemoryToolRegistry $registry): void
+    {
+        /** @var ConfigRepository $config */
+        $config = $app->make(ConfigRepository::class);
+        $section = $config->get('ai-agent-kit.tools.similarity_search', []);
+
+        if (!is_array($section)) {
+            return;
+        }
+
+        $enabled = $section['enabled'] ?? true;
+        $register = $section['register'] ?? true;
+
+        if ($enabled !== true || $register !== true) {
+            return;
+        }
+
+        $registry->register(
+            new SimilaritySearchTool(
+                embeddingsRuntime: $app->make(EmbeddingsRuntime::class),
+                vectorStore: $app->make(VectorStoreInterface::class),
+                config: $config,
+            ),
+        );
     }
 
     /**
