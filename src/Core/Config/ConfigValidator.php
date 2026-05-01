@@ -171,6 +171,8 @@ final readonly class ConfigValidator
         $this->validateResilience($config);
         $this->validatePrompts($config);
         $this->validateMemory($config);
+
+        $this->validateMemoryAttachmentsReplay($config);
         $this->validateVector($config);
         $this->validateTools($config);
         $this->validateSummarization($config);
@@ -657,6 +659,81 @@ final readonly class ConfigValidator
 
                 if ($retentionDays !== null && (!is_int($retentionDays) || $retentionDays < 1)) {
                     throw InvalidConfigurationException::invalidValue('memory.redis.retention_days', 'Must be null or an integer >= 1.');
+                }
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function validateMemoryAttachmentsReplay(array $config): void
+    {
+        if (!isset($config['memory']) || !is_array($config['memory'])) {
+            return;
+        }
+
+        $memory = $config['memory'];
+
+        if (!array_key_exists('attachments_replay', $memory)) {
+            return;
+        }
+
+        if (!is_array($memory['attachments_replay'])) {
+            throw InvalidConfigurationException::invalidType('memory.attachments_replay', 'array');
+        }
+
+        $replay = $memory['attachments_replay'];
+
+        if (array_key_exists('enabled', $replay) && !is_bool($replay['enabled'])) {
+            throw InvalidConfigurationException::invalidType('memory.attachments_replay.enabled', 'bool');
+        }
+
+        foreach (['max_per_turn', 'max_age_seconds'] as $key) {
+            if (!array_key_exists($key, $replay)) {
+                continue;
+            }
+
+            $value = $replay[$key];
+
+            if ($value !== null && (!is_int($value) || $value < 1)) {
+                throw InvalidConfigurationException::invalidValue(
+                    "memory.attachments_replay.{$key}",
+                    'Must be null or an integer >= 1.',
+                );
+            }
+        }
+
+        if (array_key_exists('allow_provider_references', $replay) && !is_bool($replay['allow_provider_references'])) {
+            throw InvalidConfigurationException::invalidType('memory.attachments_replay.allow_provider_references', 'bool');
+        }
+
+        if (array_key_exists('deny_types', $replay)) {
+            if (!is_array($replay['deny_types'])) {
+                throw InvalidConfigurationException::invalidType('memory.attachments_replay.deny_types', 'array');
+            }
+
+            foreach ($replay['deny_types'] as $i => $type) {
+                if (!is_string($type) || $type === '') {
+                    throw InvalidConfigurationException::invalidValue(
+                        "memory.attachments_replay.deny_types.{$i}",
+                        'Must be a non-empty string.',
+                    );
+                }
+            }
+        }
+
+        if (array_key_exists('deny_url_substrings', $replay)) {
+            if (!is_array($replay['deny_url_substrings'])) {
+                throw InvalidConfigurationException::invalidType('memory.attachments_replay.deny_url_substrings', 'array');
+            }
+
+            foreach ($replay['deny_url_substrings'] as $i => $fragment) {
+                if (!is_string($fragment) || $fragment === '') {
+                    throw InvalidConfigurationException::invalidValue(
+                        "memory.attachments_replay.deny_url_substrings.{$i}",
+                        'Must be a non-empty string.',
+                    );
                 }
             }
         }

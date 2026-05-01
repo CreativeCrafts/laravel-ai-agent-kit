@@ -12,8 +12,15 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessage;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessageRole;
 use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\RuntimeAttachmentsReplayed;
 use DateTimeImmutable;
+use Illuminate\Contracts\Config\Repository as ConfigRepository;
+use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
+use JsonException;
+use Laravel\Ai\Files\File;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -24,6 +31,8 @@ final readonly class RuntimeConversationMemoryBridge
 {
     public function __construct(
         private ConversationContextManager $conversationContextManager,
+        private ConfigRepository $config,
+        private ?Dispatcher $events = null,
     ) {
     }
 
@@ -70,6 +79,48 @@ final readonly class RuntimeConversationMemoryBridge
 
         [$messages, $systemInstructions] = $this->projectConversation($conversation);
 
+        $mergeMode = 'none';
+        $priorIncluded = 0;
+        $priorExcluded = 0;
+        $priorExclusions = [];
+
+        if ($request->continueConversation) {
+            $replay = RuntimeAttachmentReplayResolver::resolveLastUserTurn($conversation, $this->attachmentReplayPolicy());
+            $priorIncluded = count($replay->files);
+            $priorExcluded = count($replay->exclusions);
+            $priorExclusions = $replay->exclusions;
+
+            if ($priorExcluded > 0 && $this->events instanceof Dispatcher) {
+                $this->events->dispatch(new RuntimeAttachmentsReplayed(
+                    runId: $request->runId,
+                    excludedCount: $priorExcluded,
+                    includedCount: $priorIncluded,
+                    exclusions: $replay->exclusions,
+                ));
+            }
+
+            $mode = $request->metadata['attachment_replay'] ?? 'none';
+            $modeString = is_string($mode) ? $mode : 'none';
+
+            if ($modeString === 'merge' && $replay->files !== []) {
+                $mergeMode = 'merged';
+            } elseif ($modeString === 'replay_only' && $replay->files !== []) {
+                $mergeMode = 'replay_only';
+            }
+
+            return new ProjectedConversationContext(
+                context: $context,
+                messages: $messages,
+                systemInstructions: $systemInstructions,
+                attachmentReplayMerge: $mergeMode,
+                priorAttachmentReplayCount: $priorIncluded,
+                priorAttachmentExcludedCount: $priorExcluded,
+                priorAttachmentExclusions: $priorExclusions,
+                priorReplayAttachments: $replay->files,
+                attachmentReplayRequestMode: $modeString,
+            );
+        }
+
         return new ProjectedConversationContext(
             context: $context,
             messages: $messages,
@@ -77,10 +128,14 @@ final readonly class RuntimeConversationMemoryBridge
         );
     }
 
+    /**
+     * @param list<File> $userTurnAttachments Files actually sent on this user turn (merged replay + request when applicable).
+     */
     public function reconcile(
         ProjectedConversationContext $projected,
         ExecutionRequest $request,
         AgentResponse $response,
+        array $userTurnAttachments = [],
     ): ?Conversation {
         $context = $projected->context;
 
@@ -97,10 +152,15 @@ final readonly class RuntimeConversationMemoryBridge
         $timestamp = new DateTimeImmutable();
 
         $conversation = $conversation
-          ->withAppendedMessage($this->createUserMessage($request, $timestamp), $timestamp)
+          ->withAppendedMessage($this->createUserMessage($request, $timestamp, $userTurnAttachments), $timestamp)
           ->withAppendedMessage($this->createAssistantMessage($request, $response, $timestamp), $timestamp)
           ->withMetadata(
-              metadata: $this->mergeConversationMetadata($conversation, $request, $response),
+              metadata: $this->mergeConversationMetadata(
+                  $conversation,
+                  $request,
+                  $response,
+                  $projected,
+              ),
               updatedAt: $timestamp,
           );
 
@@ -144,7 +204,7 @@ final readonly class RuntimeConversationMemoryBridge
     private function projectMessage(ConversationMessage $message): Message
     {
         return match ($message->role) {
-            ConversationMessageRole::User => new UserMessage($message->content),
+            ConversationMessageRole::User => $this->projectUserMessage($message),
             ConversationMessageRole::Assistant => new AssistantMessage($message->content),
             ConversationMessageRole::Tool => new ToolResultMessage(collect([
               [
@@ -156,19 +216,88 @@ final readonly class RuntimeConversationMemoryBridge
         };
     }
 
-    private function createUserMessage(ExecutionRequest $request, DateTimeImmutable $timestamp): ConversationMessage
+    private function projectUserMessage(ConversationMessage $message): UserMessage
     {
+        $attachments = $this->attachmentsFromMessageMetadata($message);
+
+        return new UserMessage($message->content, new Collection($attachments));
+    }
+
+    /**
+     * @return list<File>
+     */
+    private function attachmentsFromMessageMetadata(ConversationMessage $message): array
+    {
+        $raw = $message->metadata['attachments'] ?? null;
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+
+        if (is_array($raw)) {
+            $rows = array_values($raw);
+        } elseif (is_string($raw)) {
+            try {
+                $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+            } catch (JsonException) {
+                return [];
+            }
+
+            $rows = is_array($decoded) ? array_values($decoded) : [];
+        } else {
+            return [];
+        }
+
+        $files = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            /** @var array<string, mixed> $assoc */
+            $assoc = [];
+            foreach ($row as $key => $value) {
+                $assoc[(string) $key] = $value;
+            }
+
+            try {
+                $files[] = PersistedLaravelAiFileSerializer::fromArray($assoc);
+            } catch (InvalidArgumentException) {
+                continue;
+            }
+        }
+
+        return $files;
+    }
+
+    /**
+     * @param list<File> $userTurnAttachments
+     */
+    private function createUserMessage(ExecutionRequest $request, DateTimeImmutable $timestamp, array $userTurnAttachments = []): ConversationMessage
+    {
+        $metadata = [
+            'run_id' => $request->runId,
+            'provider' => $request->provider,
+            'model' => $request->model,
+            'tool_names' => $request->toolNames,
+        ];
+
+        $toSerialize = $userTurnAttachments !== [] ? $userTurnAttachments : $request->attachments;
+
+        if ($toSerialize !== []) {
+            $serialized = [];
+            foreach ($toSerialize as $file) {
+                $serialized[] = PersistedLaravelAiFileSerializer::toArray($file);
+            }
+
+            $metadata['attachments'] = $serialized;
+        }
+
         return new ConversationMessage(
             id: new MessageId((string)Str::uuid()),
             role: ConversationMessageRole::User,
             content: $request->prompt,
             createdAt: $timestamp,
-            metadata: [
-            'run_id' => $request->runId,
-            'provider' => $request->provider,
-            'model' => $request->model,
-            'tool_names' => $request->toolNames,
-          ],
+            metadata: $metadata,
         );
     }
 
@@ -204,6 +333,7 @@ final readonly class RuntimeConversationMemoryBridge
         Conversation $conversation,
         ExecutionRequest $request,
         AgentResponse $response,
+        ProjectedConversationContext $projected,
     ): array {
         $metadata = $conversation->metadata;
         $metadata['last_run_id'] = $request->runId;
@@ -211,7 +341,50 @@ final readonly class RuntimeConversationMemoryBridge
         $metadata['last_model'] = $response->meta->model;
         $metadata['last_invocation_id'] = $response->invocationId;
         $metadata['last_sdk_conversation_id'] = $response->conversationId;
+        $metadata['last_attachment_replay_merge'] = $projected->attachmentReplayMerge;
+        $metadata['last_prior_attachment_replay_count'] = $projected->priorAttachmentReplayCount;
+        $metadata['last_prior_attachment_excluded_count'] = $projected->priorAttachmentExcludedCount;
 
         return $metadata;
+    }
+
+    private function attachmentReplayPolicy(): AttachmentReplayPolicy
+    {
+        $replay = $this->config->get('ai-agent-kit.memory.attachments_replay', []);
+
+        if (!is_array($replay)) {
+            return AttachmentReplayPolicy::disabled();
+        }
+
+        $denyTypes = $replay['deny_types'] ?? null;
+        if (!is_array($denyTypes)) {
+            $denyTypes = [
+                'base64-image',
+                'base64-document',
+                'base64-audio',
+                'local-image',
+                'local-document',
+                'local-audio',
+            ];
+        }
+
+        $denyUrlSubstrings = $replay['deny_url_substrings'] ?? [];
+        if (!is_array($denyUrlSubstrings)) {
+            $denyUrlSubstrings = [];
+        }
+
+        /** @var list<string> $denyTypesList */
+        $denyTypesList = array_values(array_filter($denyTypes, static fn (mixed $t): bool => is_string($t) && $t !== ''));
+        /** @var list<string> $denyUrlList */
+        $denyUrlList = array_values(array_filter($denyUrlSubstrings, static fn (mixed $s): bool => is_string($s) && $s !== ''));
+
+        return new AttachmentReplayPolicy(
+            enabled: (bool)($replay['enabled'] ?? false),
+            maxPerTurn: isset($replay['max_per_turn']) && is_int($replay['max_per_turn']) ? $replay['max_per_turn'] : null,
+            maxAgeSeconds: isset($replay['max_age_seconds']) && is_int($replay['max_age_seconds']) ? $replay['max_age_seconds'] : null,
+            denyTypes: $denyTypesList,
+            allowProviderReferences: (bool)($replay['allow_provider_references'] ?? true),
+            denyUrlSubstrings: $denyUrlList,
+        );
     }
 }

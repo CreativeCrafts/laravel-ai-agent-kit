@@ -21,6 +21,7 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 - Redacted streaming observability events `RuntimeStreamChunkEmitted`, `RuntimeStreamCompleted`, and `RuntimeStreamFailed`; optional `ShouldBroadcast` when `runtime.streaming.broadcast_channel` or request metadata `streaming_broadcast_channel` is set.
 - `RequestObservabilityKeys` helper for metadata key extraction shared with streaming completion events.
 - Optional Laravel AI legacy conversation read bridge: `memory.laravel_ai_legacy` config, `LegacyLaravelAiDatabaseConversationReader`, and `FallingBackToLegacyLaravelAiConversationStore` so `ConversationStore::find()` can load `agent_conversations` / `agent_conversation_messages` when the package store has no row (database driver only).
+- Conversation attachment persistence: `ai_agent_conversation_messages.attachments_ciphertext` (see migration stub), Redis message `attachments` field, `AttachmentReplayPolicy`, `RuntimeAttachmentReplayResolver`, and `RuntimeAttachmentsReplayed` when policy excludes replayed attachments.
 
 ### Changed
 
@@ -29,4 +30,6 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 - README documents the new observability fields and clarifies that the audio transcription stage remains plain text from the runtime.
 - Runtime now includes `estimated_cost_usd` metadata in `ExecutionResult` when provided in request metadata.
 - Governance catalog IDs for multi-agent roadmap items were aligned from `P10-I*` to `P1X-I*`, and flagship blueprint statuses were aligned to `status:ready` in roadmap/catalog metadata.
-- README now documents enforced runtime budget behavior and the exact in-memory tool-schema validation subset.
+- `RuntimeConversationMemoryBridge` persists serialized attachment payloads on stored user messages; `SdkAiRuntime` merges prior-turn replay with `ExecutionRequest::$attachments` when `metadata['attachment_replay']` is `merge` or `replay_only` and `memory.attachments_replay.enabled` is true.
+
+### Changed

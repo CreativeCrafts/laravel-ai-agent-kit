@@ -29,6 +29,7 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use InvalidArgumentException;
 use Laravel\Ai\AnonymousAgent;
 use Laravel\Ai\Contracts\HasStructuredOutput;
+use Laravel\Ai\Files\File;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\StreamedAgentResponse;
@@ -122,9 +123,11 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
         }
 
         try {
+            $effectiveAttachments = $this->effectivePromptAttachments($request, $projectedConversation);
+
             $response = $agent->prompt(
                 prompt: $request->prompt,
-                attachments: $request->attachments,
+                attachments: $effectiveAttachments,
                 provider: $request->provider,
                 model: $request->model,
                 timeout: $request->timeout,
@@ -166,6 +169,7 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
                 projected: $projectedConversation,
                 request: $request,
                 response: $response,
+                userTurnAttachments: $this->effectivePromptAttachments($request, $projectedConversation),
             );
         } catch (Throwable $throwable) {
             throw $this->wrapAndReportRuntimeFailure(
@@ -202,6 +206,9 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
             'package_conversation_id' => $conversation?->id->toString(),
             'package_conversation_message_count' => $conversation?->messageCount(),
             'estimated_cost_usd' => $estimatedCostUsd,
+            'attachment_replay_merge' => $projectedConversation->attachmentReplayMerge,
+            'attachment_replay_prior_included' => $projectedConversation->priorAttachmentReplayCount,
+            'attachment_replay_prior_excluded' => $projectedConversation->priorAttachmentExcludedCount,
           ],
             structuredOutput: StructuredAgentResponseMapper::mapStructuredPayload($response),
         );
@@ -282,7 +289,7 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
 
         $stream = $agent->stream(
             prompt: $request->prompt,
-            attachments: $request->attachments,
+            attachments: $this->effectivePromptAttachments($request, $projectedConversation),
             provider: $request->provider,
             model: $request->model,
             timeout: $request->timeout,
@@ -413,6 +420,7 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
                 projected: $projectedConversation,
                 request: $request,
                 response: $streamedResponse,
+                userTurnAttachments: $this->effectivePromptAttachments($request, $projectedConversation),
             );
         } catch (Throwable $throwable) {
             $wrapped = $this->wrapStreamFailure(
@@ -526,6 +534,29 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
         }
 
         return fn (JsonSchema $js): array => $instance->schema($js);
+    }
+
+    /**
+     * @return list<File>
+     */
+    private function effectivePromptAttachments(ExecutionRequest $request, ProjectedConversationContext $projected): array
+    {
+        $prior = $projected->priorReplayAttachments;
+        $mode = $projected->attachmentReplayRequestMode ?? 'none';
+
+        if ($prior === [] || $mode === 'none') {
+            return $request->attachments;
+        }
+
+        if ($mode === 'replay_only') {
+            return $prior;
+        }
+
+        if ($mode === 'merge') {
+            return [...$prior, ...$request->attachments];
+        }
+
+        return $request->attachments;
     }
 
     private function estimatedCostUsd(ExecutionRequest $request): ?float
