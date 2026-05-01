@@ -91,9 +91,3 @@ it('the in-memory adapter complies with vector store contract semantics', functi
       ->and(array_map(static fn (VectorSearchResult $result): string => $result->id, $afterDelete))
       ->toBe(['doc-2', 'doc-3']);
 });
-
-function forgetResolvedVectorStore(): void
-{
-    app()->forgetInstance(VectorStoreInterface::class);
-    app()->forgetInstance(InMemoryVectorStore::class);
-}

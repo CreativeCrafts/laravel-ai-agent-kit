@@ -5,6 +5,7 @@ declare(strict_types=1);
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationResult;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\GenerationOptions;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreInterface;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Assertions\PackageAssertions;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAiRuntime;
@@ -12,10 +13,19 @@ use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeProviderPolicy;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeToolRunner;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeVectorStore;
+use CreativeCrafts\LaravelAiAgentKit\Vector\DatabaseVectorStore;
+use CreativeCrafts\LaravelAiAgentKit\Vector\InMemoryVectorStore;
 use CreativeCrafts\LaravelAiAgentKit\Tests\TestCase;
 use PHPUnit\Framework\Assert;
 
 uses(TestCase::class)->in(__DIR__);
+
+function forgetResolvedVectorStore(): void
+{
+    app()->forgetInstance(VectorStoreInterface::class);
+    app()->forgetInstance(InMemoryVectorStore::class);
+    app()->forgetInstance(DatabaseVectorStore::class);
+}
 
 expect()->extend('toHaveRuntimeExecutions', function (int $expectedCount) {
     if (!$this->value instanceof FakeAiRuntime) {

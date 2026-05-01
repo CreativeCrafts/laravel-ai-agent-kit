@@ -89,6 +89,7 @@ use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryProviderToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Tools\ProviderToolMaterializer;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
+use CreativeCrafts\LaravelAiAgentKit\Vector\DatabaseVectorStore;
 use CreativeCrafts\LaravelAiAgentKit\Vector\InMemoryVectorStore;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Container\BindingResolutionException;
@@ -118,6 +119,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
           ->hasViews()
           ->hasMigration('create_ai_agent_conversations_table')
           ->hasMigration('create_ai_agent_conversation_messages_table')
+          ->hasMigration('create_ai_agent_vector_documents_table')
           ->hasCommands([
             MakeAgentCommand::class,
             MakePipelineCommand::class,
@@ -486,12 +488,17 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return new InMemoryVectorStore();
         });
 
+        $this->app->singleton(DatabaseVectorStore::class, function (Application $app): DatabaseVectorStore {
+            return $this->resolveDatabaseVectorStore($app);
+        });
+
         $this->app->singleton(VectorStoreInterface::class, function (Application $app): VectorStoreInterface {
             /** @var ConfigRepository $config */
             $config = $app->make(ConfigRepository::class);
 
             return match ($this->stringConfig($config, 'ai-agent-kit.vector.default_driver')) {
                 'in_memory' => $app->make(InMemoryVectorStore::class),
+                'database' => $app->make(DatabaseVectorStore::class),
                 default => throw new RuntimeException('Unsupported vector driver.'),
             };
         });
@@ -1021,6 +1028,31 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         $filters = is_array($definition['filters'] ?? null) ? $definition['filters'] : null;
 
         return static fn (): FileSearch => new FileSearch(stores: $stores, where: $filters);
+    }
+
+    private function resolveDatabaseVectorStore(Application $app): DatabaseVectorStore
+    {
+        /** @var ConfigRepository $config */
+        $config = $app->make(ConfigRepository::class);
+        $block = $config->get('ai-agent-kit.vector.database', []);
+
+        if (!is_array($block)) {
+            throw new RuntimeException('Configuration key [ai-agent-kit.vector.database] must be an array.');
+        }
+
+        $table = $block['table'] ?? 'ai_agent_vector_documents';
+        if (!is_string($table) || $table === '') {
+            throw new RuntimeException('Configuration key [ai-agent-kit.vector.database.table] must be a non-empty string.');
+        }
+
+        /** @var DatabaseManager $database */
+        $database = $app->make(DatabaseManager::class);
+        $connectionName = $block['connection'] ?? null;
+        $connection = is_string($connectionName) && $connectionName !== ''
+            ? $database->connection($connectionName)
+            : $database->connection();
+
+        return new DatabaseVectorStore($connection, $table);
     }
 
     /**

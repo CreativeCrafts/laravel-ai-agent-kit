@@ -762,8 +762,11 @@ final readonly class ConfigValidator
                 throw InvalidConfigurationException::invalidValue('vector.default_driver', 'Must be a non-empty string.');
             }
 
-            if ($defaultDriver !== 'in_memory') {
-                throw InvalidConfigurationException::invalidValue('vector.default_driver', 'Must be one of: in_memory.');
+            if (!in_array($defaultDriver, ['in_memory', 'database'], true)) {
+                throw InvalidConfigurationException::invalidValue(
+                    'vector.default_driver',
+                    'Must be one of: in_memory, database.',
+                );
             }
         }
 
@@ -776,6 +779,32 @@ final readonly class ConfigValidator
 
             if (array_key_exists('enabled', $inMemory) && !is_bool($inMemory['enabled'])) {
                 throw InvalidConfigurationException::invalidType('vector.in_memory.enabled', 'bool');
+            }
+        }
+
+        if (array_key_exists('database', $vector)) {
+            if (!is_array($vector['database'])) {
+                throw InvalidConfigurationException::invalidType('vector.database', 'array');
+            }
+
+            $database = $vector['database'];
+
+            if (array_key_exists('connection', $database) && $database['connection'] !== null
+                && (!is_string($database['connection']) || $database['connection'] === '')) {
+                throw InvalidConfigurationException::invalidValue(
+                    'vector.database.connection',
+                    'Must be null or a non-empty string.',
+                );
+            }
+
+            if (array_key_exists('table', $database)) {
+                $table = $database['table'];
+                if (!is_string($table) || $table === '') {
+                    throw InvalidConfigurationException::invalidValue(
+                        'vector.database.table',
+                        'Must be a non-empty string.',
+                    );
+                }
             }
         }
     }

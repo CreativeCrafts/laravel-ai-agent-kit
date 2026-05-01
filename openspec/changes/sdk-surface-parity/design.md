@@ -38,6 +38,7 @@ The package already exposes text runtime (`AiRuntime`, streaming), four modality
 ### D4 — Vector parity
 
 - **Minimum bar:** `ai-agent-kit.vector.default_driver` accepts at least **`in_memory`** and **one production-oriented driver** (e.g. **`sdk_store`** bridging provider store search/list, or **`database`** / pgvector-style if in-tree—**spike in implementation**). Validator + container binding must not throw for documented drivers.
+- **Shipped (Phase 2):** **`database`** — `DatabaseVectorStore` persists `VectorDocument` embeddings in SQL (`ai_agent_vector_documents`); search uses the same in-process cosine similarity as `InMemoryVectorStore`. Optional SDK **`Stores`** bridge remains future work (Phase 3).
 - **Alignment:** `SdkBackedVectorAdapterStrategy` boundary rules remain: `VectorStoreInterface` is authoritative; adapters map SDK/store results to `VectorDocument` / `VectorSearchResult`.
 
 ### D5 — SimilaritySearch

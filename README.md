@@ -199,6 +199,17 @@ return [
         //     'deny_url_substrings' => [],
         // ],
     ],
+
+    'vector' => [
+        'default_driver' => 'in_memory',
+        'in_memory' => [
+            'enabled' => true,
+        ],
+        // 'database' => [
+        //     'connection' => null,
+        //     'table' => 'ai_agent_vector_documents',
+        // ],
+    ],
 ];
 ~~~
 
@@ -619,7 +630,7 @@ Delegation semantics are explicit:
 - `delegate_and_resume` sends work to a child agent and then resumes the parent agent after the child finishes
 - `transfer_control` hands ownership to the child agent, making the delegated agent the final owner if it completes the workflow
 
-Use vector storage through the injected package contract to keep embeddings and semantic search behind a stable boundary. The default `VectorStoreInterface` binding is **in-memory only**; ship a custom binding (for example Pinecone, pgvector, or an SDK-backed adapter) when you need persistent or shared vector storage.
+Use vector storage through the injected package contract to keep embeddings and semantic search behind a stable boundary. Set `vector.default_driver` to `in_memory` (default, ephemeral), **`database`** for SQLite/MySQL/PostgreSQL persistence via `ai_agent_vector_documents` (publish migrations), or bind a custom `VectorStoreInterface` implementation (for example Pinecone or pgvector).
 
 ~~~php
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreInterface;
