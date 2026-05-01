@@ -1,4 +1,6 @@
 > **Superseded:** The deferred roadmap was implemented and documented under the archived change `openspec/changes/archive/2026-05-01-close-agent-kit-gaps/`. Prefer that archive and the package `CHANGELOG.md` / `UPGRADE.md` for the shipped program.
+>
+> **Archive (2026-05-01):** This folder was the duplicate planning change; it is kept only as historical context. Task checkboxes were never updated because execution tracked `close-agent-kit-gaps` instead.
 
 ## Why
 
