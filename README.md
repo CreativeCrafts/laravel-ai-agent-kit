@@ -67,6 +67,8 @@ Optional **runtime middleware** wraps every `AiRuntime::execute` call (including
 
 **Modality runtimes** (transcription, embeddings, image generation, reranking, **audio generation**) use contracts under `CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\`. The default driver is `sdk`, which bridges to Laravel AI (`Transcription`, `Embeddings`, `Image`, `Reranking`, `Audio`). Override per modality with `modalities.<name>.default_driver` in `config/ai-agent-kit.php` (`sdk` or a class implementing the contract). The `AudioToTextToEvaluation` blueprint calls the transcription runtime when `audio_reference` is raw base64 or a `data:*;base64,...` URI; opaque references (for example `s3://...`) still use the registered prompt plus `AiRuntime`.
 
+**Laravel AI provider Files and Stores** — For provider-hosted uploads and vector stores (RAG with `FileSearch`), inject `CreativeCrafts\LaravelAiAgentKit\Core\LaravelAi\LaravelAiFilesService` and `LaravelAiStoresService`. They wrap `Laravel\Ai\Files` and `Laravel\Ai\Stores` and return package DTOs. Optional `laravel_ai_files.default_provider` and `laravel_ai_stores.default_provider` apply when you omit the provider argument. This is separate from **`VectorStoreInterface`** (application embedding storage with `in_memory` / `database` drivers).
+
 `budgets.max_cost_usd` is enforced in fail-closed mode: when configured, each runtime request must provide numeric `metadata.cost_usd` (or `metadata.estimated_cost_usd`) so cost ceilings can be
 validated deterministically.
 

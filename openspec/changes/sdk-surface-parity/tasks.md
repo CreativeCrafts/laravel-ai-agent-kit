@@ -23,13 +23,13 @@ Satisfies `specs/vector-retrieval-parity/spec.md`.
 
 Satisfies `specs/laravel-ai-files-stores/spec.md`.
 
-- [ ] 3.1 Define package DTOs for file references and store handles (ids, optional metadata, counts) under `Core/LaravelAi/` or `Core/ProviderStorage/` (name finalized in implementation).
-- [ ] 3.2 Implement `LaravelAiFilesService` (or equivalent) wrapping `Laravel\Ai\Files` for put/get/delete (and documented variants: `putFromPath`, `putFromStorage` if in scope).
-- [ ] 3.3 Implement `LaravelAiStoresService` (or equivalent) wrapping `Laravel\Ai\Stores` and `Laravel\Ai\Store` for create/get/add/remove/refresh/delete.
-- [ ] 3.4 Register singletons in service provider; add `laravel_ai_files` / `laravel_ai_stores` config section if needed for defaults (or document pure delegation to SDK config).
-- [ ] 3.5 Pest tests using `Files::fake()` / `Stores::fake()` (or SDK fake gateways) for deterministic store lifecycle.
-- [ ] 3.6 Optional: redacted domain events for store/file operations (follow existing observability patterns).
-- [ ] 3.7 Update `UPGRADE.md`, `CHANGELOG.md`, and capability matrix (Files / Stores rows).
+- [x] 3.1 Define package DTOs for file references and store handles (ids, optional metadata, counts) under `Core/LaravelAi/` or `Core/ProviderStorage/` (name finalized in implementation).
+- [x] 3.2 Implement `LaravelAiFilesService` (or equivalent) wrapping `Laravel\Ai\Files` for put/get/delete (and documented variants: `putFromPath`, `putFromStorage` if in scope).
+- [x] 3.3 Implement `LaravelAiStoresService` (or equivalent) wrapping `Laravel\Ai\Stores` and `Laravel\Ai\Store` for create/get/add/remove/refresh/delete.
+- [x] 3.4 Register singletons in service provider; add `laravel_ai_files` / `laravel_ai_stores` config section if needed for defaults (or document pure delegation to SDK config).
+- [x] 3.5 Pest tests using `Files::fake()` / `Stores::fake()` (or SDK fake gateways) for deterministic store lifecycle.
+- [x] 3.6 Optional: redacted domain events for store/file operations (follow existing observability patterns).
+- [x] 3.7 Update `UPGRADE.md`, `CHANGELOG.md`, and capability matrix (Files / Stores rows).
 
 ## Phase 4 — SimilaritySearch-style tool
 

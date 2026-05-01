@@ -1025,3 +1025,64 @@ it('rejects invalid memory.laravel_ai_legacy.enabled type', function () {
         ],
     ]);
 })->throws(InvalidConfigurationException::class, 'memory.laravel_ai_legacy.enabled');
+
+it('accepts laravel_ai_files and laravel_ai_stores default_provider', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+        'providers' => [
+            'null' => [
+                'driver' => 'null',
+                'enabled' => true,
+                'options' => [],
+            ],
+        ],
+        'default_provider' => 'null',
+        'failover_order' => ['null'],
+        'budgets' => [
+            'max_steps' => 1,
+            'max_tool_calls' => 1,
+            'max_retries_per_step' => 1,
+            'max_total_timeout_seconds' => 1,
+            'max_tokens' => null,
+            'max_cost_usd' => null,
+        ],
+        'laravel_ai_files' => [
+            'default_provider' => 'openai',
+        ],
+        'laravel_ai_stores' => [
+            'default_provider' => null,
+        ],
+    ]);
+
+    expect(true)->toBeTrue();
+});
+
+it('rejects invalid laravel_ai_stores.default_provider type', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+        'providers' => [
+            'null' => [
+                'driver' => 'null',
+                'enabled' => true,
+                'options' => [],
+            ],
+        ],
+        'default_provider' => 'null',
+        'failover_order' => ['null'],
+        'budgets' => [
+            'max_steps' => 1,
+            'max_tool_calls' => 1,
+            'max_retries_per_step' => 1,
+            'max_total_timeout_seconds' => 1,
+            'max_tokens' => null,
+            'max_cost_usd' => null,
+        ],
+        'laravel_ai_stores' => [
+            'default_provider' => 1,
+        ],
+    ]);
+})->throws(InvalidConfigurationException::class, 'laravel_ai_stores.default_provider');

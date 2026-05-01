@@ -57,6 +57,8 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\CompiledBlueprintRunner;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\MiddlewareExecutingAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\PromptBlueprintCompiler;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\RuntimeConversationMemoryBridge;
+use CreativeCrafts\LaravelAiAgentKit\Core\LaravelAi\LaravelAiFilesService;
+use CreativeCrafts\LaravelAiAgentKit\Core\LaravelAi\LaravelAiStoresService;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkAudioGenerationRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkEmbeddingsRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkImageGenerationRuntime;
@@ -501,6 +503,18 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
                 'database' => $app->make(DatabaseVectorStore::class),
                 default => throw new RuntimeException('Unsupported vector driver.'),
             };
+        });
+
+        $this->app->singleton(LaravelAiFilesService::class, function (Application $app): LaravelAiFilesService {
+            return new LaravelAiFilesService(
+                config: $app->make(ConfigRepository::class),
+            );
+        });
+
+        $this->app->singleton(LaravelAiStoresService::class, function (Application $app): LaravelAiStoresService {
+            return new LaravelAiStoresService(
+                config: $app->make(ConfigRepository::class),
+            );
         });
 
         $this->app->singleton(SdkToolMaterializer::class, function (Application $app): SdkToolMaterializer {

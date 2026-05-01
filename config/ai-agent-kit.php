@@ -272,6 +272,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Laravel AI Files / Stores (provider APIs)
+    |--------------------------------------------------------------------------
+    |
+    | Optional default Laravel AI provider keys for package facades over
+    | `Laravel\Ai\Files` and `Laravel\Ai\Stores`. Null defers to Laravel AI's
+    | per-call behavior. See UPGRADE.md.
+    |
+    */
+  'laravel_ai_files' => [
+    'default_provider' => env('AI_AGENT_KIT_LARAVEL_AI_FILES_PROVIDER'),
+  ],
+
+  'laravel_ai_stores' => [
+    'default_provider' => env('AI_AGENT_KIT_LARAVEL_AI_STORES_PROVIDER'),
+  ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Tool Materialization
     |--------------------------------------------------------------------------
     |

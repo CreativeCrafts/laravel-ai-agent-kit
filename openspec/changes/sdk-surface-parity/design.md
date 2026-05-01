@@ -31,14 +31,14 @@ The package already exposes text runtime (`AiRuntime`, streaming), four modality
 
 ### D3 — Files and Stores
 
-- **Choice A (preferred):** Introduce **`LaravelAiFilesClient`** and **`LaravelAiStoresClient`** (or a single **`LaravelAiProviderFilesAndStores`**) as **package services** with methods mapping to `Files::get/put/delete` and `Stores::create/get/delete` + `Store::add/remove/refresh`. Return **package DTOs** (file id, store id, counts) not raw SDK response objects in public APIs.
+- **Choice A (shipped):** **`LaravelAiFilesService`** and **`LaravelAiStoresService`** as package singletons mapping to `Files::get/put/putFromPath/putFromStorage/delete` and `Stores::create/get/delete` + `Store::add/remove/refresh`. Public APIs return **package DTOs** only.
 - **Choice B:** Pipeline **step** types or **blueprint helpers** only—rejected as primary because the matrix calls for developer-facing coverage without forcing pipelines for CRUD.
 - **Security:** No secrets in logs; redacted events optional (file id length, store id), consistent with observability rules.
 
 ### D4 — Vector parity
 
 - **Minimum bar:** `ai-agent-kit.vector.default_driver` accepts at least **`in_memory`** and **one production-oriented driver** (e.g. **`sdk_store`** bridging provider store search/list, or **`database`** / pgvector-style if in-tree—**spike in implementation**). Validator + container binding must not throw for documented drivers.
-- **Shipped (Phase 2):** **`database`** — `DatabaseVectorStore` persists `VectorDocument` embeddings in SQL (`ai_agent_vector_documents`); search uses the same in-process cosine similarity as `InMemoryVectorStore`. Optional SDK **`Stores`** bridge remains future work (Phase 3).
+- **Shipped (Phase 2):** **`database`** — `DatabaseVectorStore` persists `VectorDocument` embeddings in SQL (`ai_agent_vector_documents`); search uses the same in-process cosine similarity as `InMemoryVectorStore`. **Shipped (Phase 3):** **`LaravelAiStoresService`** wraps Laravel AI **`Stores`** for provider-hosted vector stores (distinct from `VectorStoreInterface`).
 - **Alignment:** `SdkBackedVectorAdapterStrategy` boundary rules remain: `VectorStoreInterface` is authoritative; adapters map SDK/store results to `VectorDocument` / `VectorSearchResult`.
 
 ### D5 — SimilaritySearch
