@@ -209,10 +209,41 @@ return [
           'AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_CONVERSATIONS_TABLE',
           'agent_conversations',
       ),
-      'messages_table' => (string)env(
-          'AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_MESSAGES_TABLE',
-          'agent_conversation_messages',
-      ),
+            'messages_table' => (string)env(
+                'AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_MESSAGES_TABLE',
+                'agent_conversation_messages',
+            ),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Conversation attachment replay (Phase 6)
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, continuing a conversation can rehydrate persisted attachment
+    | payloads from the previous user turn according to policy. Opt in per
+    | request with ExecutionRequest metadata `attachment_replay` = `merge` or
+    | `replay_only` (default `none`).
+    |
+    */
+    'attachments_replay' => [
+      'enabled' => (bool)env('AI_AGENT_KIT_MEMORY_ATTACHMENTS_REPLAY_ENABLED', false),
+      'max_per_turn' => env('AI_AGENT_KIT_MEMORY_ATTACHMENTS_REPLAY_MAX_PER_TURN') === null
+        ? null
+        : (int)env('AI_AGENT_KIT_MEMORY_ATTACHMENTS_REPLAY_MAX_PER_TURN'),
+      'max_age_seconds' => env('AI_AGENT_KIT_MEMORY_ATTACHMENTS_REPLAY_MAX_AGE_SECONDS') === null
+        ? null
+        : (int)env('AI_AGENT_KIT_MEMORY_ATTACHMENTS_REPLAY_MAX_AGE_SECONDS'),
+      'allow_provider_references' => (bool)env('AI_AGENT_KIT_MEMORY_ATTACHMENTS_REPLAY_ALLOW_PROVIDER_REFERENCES', true),
+      'deny_types' => [
+        'base64-image',
+        'base64-document',
+        'base64-audio',
+        'local-image',
+        'local-document',
+        'local-audio',
+      ],
+      'deny_url_substrings' => [],
     ],
   ],
 

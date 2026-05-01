@@ -60,6 +60,43 @@ final readonly class DatabaseConversationStore implements ConversationStore
             $contentCiphertext = $this->requireStringValue($messageRecord, 'content_ciphertext');
             $createdAt = $this->requireStringValue($messageRecord, 'created_at');
 
+            $metadata = $this->decodeArrayPayload(
+                field: 'messages.metadata_ciphertext',
+                payload: $messageRecord->metadata_ciphertext,
+                isEncrypted: (bool)$record->is_encrypted,
+            );
+
+            $attachmentsPayload = $messageRecord->attachments_ciphertext ?? null;
+            if (is_string($attachmentsPayload) && $attachmentsPayload !== '') {
+                $decoded = $this->decodeArrayPayload(
+                    field: 'messages.attachments_ciphertext',
+                    payload: $attachmentsPayload,
+                    isEncrypted: (bool)$record->is_encrypted,
+                );
+                $attachmentRows = $decoded['attachments'] ?? null;
+                if (is_array($attachmentRows) && $attachmentRows !== []) {
+                    /** @var list<array<string, mixed>> $normalizedRows */
+                    $normalizedRows = [];
+                    foreach ($attachmentRows as $row) {
+                        if (!is_array($row)) {
+                            continue;
+                        }
+
+                        /** @var array<string, mixed> $assoc */
+                        $assoc = [];
+                        foreach ($row as $key => $value) {
+                            $assoc[(string) $key] = $value;
+                        }
+
+                        $normalizedRows[] = $assoc;
+                    }
+
+                    if ($normalizedRows !== []) {
+                        $metadata['attachments'] = $normalizedRows;
+                    }
+                }
+            }
+
             $conversationMessages[] = new ConversationMessage(
                 id: new MessageId($messageId),
                 role: ConversationMessageRole::from($role),
@@ -69,11 +106,7 @@ final readonly class DatabaseConversationStore implements ConversationStore
                     isEncrypted: (bool)$record->is_encrypted,
                 ),
                 createdAt: new DateTimeImmutable($createdAt),
-                metadata: $this->decodeArrayPayload(
-                    field: 'messages.metadata_ciphertext',
-                    payload: $messageRecord->metadata_ciphertext,
-                    isEncrypted: (bool)$record->is_encrypted,
-                ),
+                metadata: $metadata,
             );
         }
 
@@ -156,7 +189,12 @@ final readonly class DatabaseConversationStore implements ConversationStore
                 $incomingMessageIds[] = $messageId;
                 $sequence = $index + 1;
                 $contentCiphertext = $this->encodeStringPayload('messages.content_ciphertext', $message->content);
-                $metadataCiphertext = $this->encodeArrayPayload('messages.metadata_ciphertext', $message->metadata);
+                [$metadataForStorage, $attachmentsList] = $this->splitMessageMetadataAndAttachments($message->metadata);
+                $metadataCiphertext = $this->encodeArrayPayload('messages.metadata_ciphertext', $metadataForStorage);
+                $attachmentsCiphertext = $this->encodeArrayPayload(
+                    'messages.attachments_ciphertext',
+                    $attachmentsList === [] ? [] : ['attachments' => $attachmentsList],
+                );
 
                 $existing = $existingMessages->get($messageId);
 
@@ -172,10 +210,19 @@ final readonly class DatabaseConversationStore implements ConversationStore
                         );
                     }
 
+                    $existingAttachmentsCiphertext = $existing->attachments_ciphertext ?? null;
+                    if ($existingAttachmentsCiphertext !== null && !is_string($existingAttachmentsCiphertext)) {
+                        throw ConversationStoreException::payloadDecodingFailed(
+                            'messages.attachments_ciphertext',
+                            new RuntimeException('Record field [messages.attachments_ciphertext] must be a string or null.'),
+                        );
+                    }
+
                     $shouldUpdate = $existingSequence !== $sequence
                       || $existingRole !== $message->role->value
                       || $existingContentCiphertext !== $contentCiphertext
-                      || ($existingMetadataCiphertext ?? '') !== ($metadataCiphertext ?? '');
+                      || ($existingMetadataCiphertext ?? '') !== ($metadataCiphertext ?? '')
+                      || ($existingAttachmentsCiphertext ?? '') !== ($attachmentsCiphertext ?? '');
 
                     if ($shouldUpdate) {
                         $updates[] = [
@@ -185,6 +232,7 @@ final readonly class DatabaseConversationStore implements ConversationStore
                             'role' => $message->role->value,
                             'content_ciphertext' => $contentCiphertext,
                             'metadata_ciphertext' => $metadataCiphertext,
+                            'attachments_ciphertext' => $attachmentsCiphertext,
                             'token_count' => null,
                             'updated_at' => $message->createdAt->format('Y-m-d H:i:s'),
                           ],
@@ -201,6 +249,7 @@ final readonly class DatabaseConversationStore implements ConversationStore
                   'role' => $message->role->value,
                   'content_ciphertext' => $contentCiphertext,
                   'metadata_ciphertext' => $metadataCiphertext,
+                  'attachments_ciphertext' => $attachmentsCiphertext,
                   'token_count' => null,
                   'created_at' => $message->createdAt->format('Y-m-d H:i:s'),
                   'updated_at' => null,
@@ -367,6 +416,43 @@ final readonly class DatabaseConversationStore implements ConversationStore
         } catch (Throwable $exception) {
             throw ConversationStoreException::payloadEncryptionFailed($field, $exception);
         }
+    }
+
+    /**
+     * @param array<string, mixed> $metadata
+     * @return array{0: array<string, mixed>, 1: array<int, array<string, mixed>>}
+     */
+    private function splitMessageMetadataAndAttachments(array $metadata): array
+    {
+        if (!array_key_exists('attachments', $metadata)) {
+            return [$metadata, []];
+        }
+
+        $attachments = $metadata['attachments'];
+        unset($metadata['attachments']);
+
+        if (!is_array($attachments) || $attachments === []) {
+            return [$metadata, []];
+        }
+
+        /** @var array<int, array<string, mixed>> $normalized */
+        $normalized = [];
+
+        foreach ($attachments as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            /** @var array<string, mixed> $assoc */
+            $assoc = [];
+            foreach ($row as $key => $value) {
+                $assoc[(string) $key] = $value;
+            }
+
+            $normalized[] = $assoc;
+        }
+
+        return [$metadata, $normalized];
     }
 
     private function encodeStringPayload(string $field, string $payload): string

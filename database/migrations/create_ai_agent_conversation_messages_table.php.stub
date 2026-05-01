@@ -18,6 +18,7 @@ return new class () extends Migration {
             $table->unsignedInteger('sequence');
             $table->string('role', 32)->index();
             $table->longText('content_ciphertext');
+            $table->longText('attachments_ciphertext')->nullable();
             $table->longText('metadata_ciphertext')->nullable();
             $table->unsignedInteger('token_count')->nullable();
             $table->timestamp('created_at');

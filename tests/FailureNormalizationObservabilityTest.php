@@ -301,7 +301,17 @@ function runtimeForFailureTests(ConversationContextManager $conversationContextM
     return new SdkAiRuntime(
         toolMaterializer: app(SdkToolMaterializer::class),
         providerToolMaterializer: app(ProviderToolMaterializer::class),
-        runtimeConversationMemoryBridge: new RuntimeConversationMemoryBridge($conversationContextManager),
+        runtimeConversationMemoryBridge: new RuntimeConversationMemoryBridge(
+            $conversationContextManager,
+            new Repository([
+                'ai-agent-kit' => [
+                    'memory' => [
+                        'attachments_replay' => ['enabled' => false],
+                    ],
+                ],
+            ]),
+            null,
+        ),
         runtimeBudgetEnforcer: new RuntimeBudgetEnforcer(
             new Repository([
           'ai-agent-kit' => [

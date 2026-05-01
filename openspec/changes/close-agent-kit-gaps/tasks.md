@@ -58,10 +58,10 @@ Satisfies `specs/conversation-store-convergence/spec.md`.
 
 Satisfies `specs/attachment-persistence/spec.md`; depends on Phase 5 foundations.
 
-- [ ] 6.1 Extend persistence model (migration + encryption policy if storing sensitive references) to store attachment metadata per message.
-- [ ] 6.2 Implement replay policy module (retention, expiry, authorization); integrate with `RuntimeConversationMemoryBridge` so replay is explicit and testable.
-- [ ] 6.3 Observability events or metadata when attachments excluded by policy.
-- [ ] 6.4 Pest tests: inclusion, exclusion, authorization deny, observability signal.
+- [x] 6.1 Extend persistence model (migration + encryption policy if storing sensitive references) to store attachment metadata per message.
+- [x] 6.2 Implement replay policy module (retention, expiry, authorization); integrate with `RuntimeConversationMemoryBridge` so replay is explicit and testable.
+- [x] 6.3 Observability events or metadata when attachments excluded by policy.
+- [x] 6.4 Pest tests: inclusion, exclusion, authorization deny, observability signal.
 
 ## Phase 7 — Documentation and rollout
 

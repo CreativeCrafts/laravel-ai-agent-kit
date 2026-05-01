@@ -111,9 +111,19 @@ Inject `CreativeCrafts\LaravelAiAgentKit\Contracts\Core\StreamingAiRuntime` (sam
 
 Optional Laravel Echo integration: configure `ai-agent-kit.runtime.streaming.broadcast_channel` or set request metadata `streaming_broadcast_channel` to a public channel string. Broadcast event names are `runtime.stream.chunk`, `runtime.stream.completed`, and `runtime.stream.failed`; payloads omit prompt content and mirror the redacted Laravel events the package dispatches on the default event bus.
 
-### Attachments scope
+### Attachment persistence and replay (Phase 6)
 
-Attachments attached via `PromptBlueprint::withAttachment()` / `withAttachments()` are scoped to the **current call only**. The conversation memory bridge does not persist attachments across turns in this phase. Continuing a stored conversation will not replay prior attachments.
+When `store_conversation` is true, the memory bridge serializes each turn’s `ExecutionRequest::$attachments` into the user `ConversationMessage` metadata as JSON-safe rows (`PersistedLaravelAiFileSerializer`). Database stores persist these in `ai_agent_conversation_messages.attachments_ciphertext` (encrypted when `memory.database.encrypt_payloads` is true); Redis stores them in a sibling `attachments` array on each message payload.
+
+**Replay is opt-in per request.** Set `ExecutionRequest` metadata `attachment_replay` to:
+
+- `none` (default) — prior attachments are not merged into the current prompt.
+- `merge` — replay allowed attachments from the **previous user turn**, then append the current request’s attachments (what the agent receives).
+- `replay_only` — only replay allowed prior attachments (current request attachments are ignored for the prompt).
+
+Enable policy evaluation with `ai-agent-kit.memory.attachments_replay.enabled`. The policy can deny types (default denies base64 and local paths), cap count per turn, enforce max age from the stored message timestamp, block provider file references, and deny remote URLs containing configured substrings (`authorization_denied`). When exclusions occur, the package dispatches `RuntimeAttachmentsReplayed` (types and reasons only; no URLs or payloads).
+
+Publish or merge the updated migration stub if your app already created `ai_agent_conversation_messages` without `attachments_ciphertext` — add the nullable column in a follow-up migration.
 
 ### AudioToTextToEvaluation transcription path
 

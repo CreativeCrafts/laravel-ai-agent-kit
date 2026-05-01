@@ -181,6 +181,16 @@ return [
         //     'conversations_table' => 'agent_conversations',
         //     'messages_table' => 'agent_conversation_messages',
         // ],
+
+        // Optional: attachment replay policy when continuing conversations (see UPGRADE.md).
+        // 'attachments_replay' => [
+        //     'enabled' => false,
+        //     'max_per_turn' => null,
+        //     'max_age_seconds' => null,
+        //     'allow_provider_references' => true,
+        //     'deny_types' => ['base64-image', 'base64-document', 'base64-audio', 'local-image', 'local-document', 'local-audio'],
+        //     'deny_url_substrings' => [],
+        // ],
     ],
 ];
 ~~~

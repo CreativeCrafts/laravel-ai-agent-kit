@@ -520,6 +520,8 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         $this->app->singleton(RuntimeConversationMemoryBridge::class, function (Application $app): RuntimeConversationMemoryBridge {
             return new RuntimeConversationMemoryBridge(
                 conversationContextManager: $app->make(ConversationContextManager::class),
+                config: $app->make(ConfigRepository::class),
+                events: $app->make(Dispatcher::class),
             );
         });
 

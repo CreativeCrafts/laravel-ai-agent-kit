@@ -28,7 +28,7 @@ use DateTimeInterface;
  *   for assistant rows optional `tool_calls`, `tool_results`, `usage`, `response_meta` (decoded JSON objects).
  *
  * Tool rounds are not expanded into multiple package messages (unlike SDK reload); data is preserved in metadata
- * for observability and future Phase 6 attachment replay work.
+ * for observability. User `attachments` are copied to {@see ConversationMessage::$metadata} `attachments` for replay.
  */
 final readonly class LegacyLaravelAiDatabaseConversationReader
 {
@@ -96,7 +96,7 @@ final readonly class LegacyLaravelAiDatabaseConversationReader
             if ($role === ConversationMessageRole::User) {
                 $attachments = $this->jsonArrayField($row, 'attachments');
                 if ($attachments !== []) {
-                    $metadata['laravel_ai']['attachments'] = $attachments;
+                    $metadata['attachments'] = array_values($attachments);
                 }
             }
 

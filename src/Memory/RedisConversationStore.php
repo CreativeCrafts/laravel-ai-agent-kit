@@ -81,14 +81,18 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
           'updated_at' => $conversation->updatedAt->format(DATE_ATOM),
           'metadata' => $conversation->metadata,
           'messages' => array_map(
-              static fn (ConversationMessage $message): array
-                => [
-              'id' => $message->id->toString(),
-              'role' => $message->role->value,
-              'content' => $message->content,
-              'created_at' => $message->createdAt->format(DATE_ATOM),
-              'metadata' => $message->metadata,
-            ],
+              function (ConversationMessage $message): array {
+                  [$meta, $attachments] = $this->splitAttachmentsFromMetadata($message->metadata);
+
+                  return [
+                      'id' => $message->id->toString(),
+                      'role' => $message->role->value,
+                      'content' => $message->content,
+                      'created_at' => $message->createdAt->format(DATE_ATOM),
+                      'metadata' => $meta,
+                      'attachments' => $attachments,
+                  ];
+              },
               $conversation->messages,
           ),
         ];
@@ -241,6 +245,11 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
             }
 
             /** @var array<string, mixed> $metadata */
+            $attachments = $messagePayload['attachments'] ?? [];
+            if (is_array($attachments) && $attachments !== []) {
+                $metadata['attachments'] = array_values($attachments);
+            }
+
             $messages[] = new ConversationMessage(
                 id: new MessageId($messageId),
                 role: ConversationMessageRole::from($role),
@@ -358,5 +367,25 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
     private function pattern(): string
     {
         return "{$this->keyPrefix}*";
+    }
+
+    /**
+     * @param array<string, mixed> $metadata
+     * @return array{0: array<string, mixed>, 1: array<int, mixed>}
+     */
+    private function splitAttachmentsFromMetadata(array $metadata): array
+    {
+        if (!array_key_exists('attachments', $metadata)) {
+            return [$metadata, []];
+        }
+
+        $attachments = $metadata['attachments'];
+        unset($metadata['attachments']);
+
+        if (!is_array($attachments)) {
+            return [$metadata, []];
+        }
+
+        return [$metadata, array_values($attachments)];
     }
 }

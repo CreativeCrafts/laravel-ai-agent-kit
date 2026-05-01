@@ -11,6 +11,7 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessage;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessageRole;
 use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
+use Illuminate\Config\Repository;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -61,6 +62,14 @@ it('projects package-owned conversation memory into runtime context', function (
 
     $bridge = new RuntimeConversationMemoryBridge(
         app(ConversationContextManager::class),
+        new Repository([
+            'ai-agent-kit' => [
+                'memory' => [
+                    'attachments_replay' => ['enabled' => false],
+                ],
+            ],
+        ]),
+        null,
     );
 
     $projected = $bridge->project(
@@ -88,6 +97,14 @@ it('projects package-owned conversation memory into runtime context', function (
 it('reconciles runtime output back into package-owned memory deterministically', function () {
     $bridge = new RuntimeConversationMemoryBridge(
         app(ConversationContextManager::class),
+        new Repository([
+            'ai-agent-kit' => [
+                'memory' => [
+                    'attachments_replay' => ['enabled' => false],
+                ],
+            ],
+        ]),
+        null,
     );
 
     $request = new ExecutionRequest(
