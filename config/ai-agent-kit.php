@@ -323,7 +323,7 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Modality runtimes (transcription, embeddings, images, reranking)
+    | Modality runtimes (transcription, embeddings, images, reranking, audio generation)
     |--------------------------------------------------------------------------
     |
     | Each modality resolves a runtime contract from the container. Use
@@ -342,6 +342,9 @@ return [
       'default_driver' => 'sdk',
     ],
     'reranking' => [
+      'default_driver' => 'sdk',
+    ],
+    'audio_generation' => [
       'default_driver' => 'sdk',
     ],
   ],

@@ -135,7 +135,9 @@ When `audio_reference` is **raw base64** or a `data:*;base64,...` data URI, the 
 
 ### Modality runtimes
 
-The package registers `TranscriptionRuntime`, `EmbeddingsRuntime`, `ImageGenerationRuntime`, and `RerankingRuntime` in the container. Defaults use `ai-agent-kit.modalities.*.default_driver` = `sdk`. Set `default_driver` to a class-string that implements the corresponding contract to swap implementations.
+The package registers `TranscriptionRuntime`, `EmbeddingsRuntime`, `ImageGenerationRuntime`, `RerankingRuntime`, and `AudioGenerationRuntime` in the container. Defaults use `ai-agent-kit.modalities.*.default_driver` = `sdk`. Set `default_driver` to a class-string that implements the corresponding contract to swap implementations.
+
+**Audio generation (TTS):** inject `AudioGenerationRuntime` and call `generate(AudioGenerationRequest)` with the text to synthesize. Optional: `voice`, `maleVoice`, `instructions`, `timeout`, `provider`, `model` (see `AudioGenerationRequest`). The SDK default audio provider is `config('ai.default_for_audio')` when `provider` is null on the request.
 
 ### Laravel AI legacy conversation read bridge (Phase 5)
 

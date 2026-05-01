@@ -2,10 +2,13 @@
 
 declare(strict_types=1);
 
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\AudioGenerationRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\EmbeddingsRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\ImageGenerationRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\RerankingRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\TranscriptionRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\AudioGenerationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\AudioGenerationResult;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\EmbeddingsRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\ImageGenerationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\RerankingRequest;
@@ -13,6 +16,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionResult;
 use Illuminate\Support\Facades\Config;
 use Laravel\Ai\AiServiceProvider;
+use Laravel\Ai\Audio;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Image;
 use Laravel\Ai\Reranking;
@@ -30,6 +34,7 @@ beforeEach(function (): void {
     Config::set('ai.default_for_embeddings', 'openai');
     Config::set('ai.default_for_images', 'openai');
     Config::set('ai.default_for_reranking', 'cohere');
+    Config::set('ai.default_for_audio', 'openai');
     Config::set('ai.providers', [
         'openai' => [
             'driver' => 'openai',
@@ -147,6 +152,63 @@ it('reranks documents through the sdk reranking runtime', function (): void {
         ->and($result->documents[1]->originalIndex)->toBe(0);
 });
 
+it('generates audio through the sdk audio generation runtime', function (): void {
+    Audio::fake([base64_encode('fake-tts-bytes')])->preventStrayAudio();
+
+    app()->forgetInstance(AudioGenerationRuntime::class);
+
+    /** @var AudioGenerationRuntime $runtime */
+    $runtime = app(AudioGenerationRuntime::class);
+
+    $result = $runtime->generate(
+        new AudioGenerationRequest(
+            runId: 'mod-audio-1',
+            text: 'Hello from the test.',
+            provider: 'openai',
+            model: 'gpt-4o-mini-tts',
+        ),
+    );
+
+    expect($result->runId)->toBe('mod-audio-1')
+        ->and(base64_decode($result->audioBase64, true))->toBe('fake-tts-bytes')
+        ->and($result->provider)->not->toBe('');
+});
+
+it('propagates audio generation failures when fakes require responses', function (): void {
+    Audio::fake([])->preventStrayAudio();
+
+    app()->forgetInstance(AudioGenerationRuntime::class);
+
+    /** @var AudioGenerationRuntime $runtime */
+    $runtime = app(AudioGenerationRuntime::class);
+
+    $runtime->generate(
+        new AudioGenerationRequest(
+            runId: 'mod-audio-fail',
+            text: 'This will fail under preventStrayAudio.',
+            provider: 'openai',
+            model: 'gpt-4o-mini-tts',
+        ),
+    );
+})->throws(RuntimeException::class);
+
+it('resolves a custom audio generation driver from config', function (): void {
+    Config::set('ai-agent-kit.modalities.audio_generation.default_driver', TestStubAudioGenerationRuntime::class);
+
+    app()->forgetInstance(AudioGenerationRuntime::class);
+
+    $runtime = app(AudioGenerationRuntime::class);
+
+    expect($runtime)->toBeInstanceOf(TestStubAudioGenerationRuntime::class);
+
+    $result = $runtime->generate(
+        new AudioGenerationRequest(runId: 'stub-audio-1', text: 'Hi'),
+    );
+
+    expect($result->audioBase64)->toBe('c3R1Yi1hdWRpbw==')
+        ->and(base64_decode($result->audioBase64, true))->toBe('stub-audio');
+});
+
 it('resolves a custom transcription driver from config', function (): void {
     Config::set('ai-agent-kit.modalities.transcription.default_driver', TestStubTranscriptionRuntime::class);
 
@@ -174,6 +236,21 @@ final class TestStubTranscriptionRuntime implements TranscriptionRuntime
             model: 'stub',
             promptTokens: 0,
             completionTokens: 0,
+        );
+    }
+}
+
+final class TestStubAudioGenerationRuntime implements AudioGenerationRuntime
+{
+    public function generate(AudioGenerationRequest $request): AudioGenerationResult
+    {
+        return new AudioGenerationResult(
+            runId: $request->runId,
+            audioBase64: base64_encode('stub-audio'),
+            mimeType: 'audio/mpeg',
+            provider: 'stub',
+            model: 'stub',
+            metadata: $request->metadata,
         );
     }
 }

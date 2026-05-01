@@ -2,12 +2,12 @@
 
 Satisfies `specs/audio-generation-runtime/spec.md`.
 
-- [ ] 1.1 Add `Contracts/Modality/AudioGenerationRuntime.php` and request/result DTOs under `Core/Modality/` (align naming with existing modality files).
-- [ ] 1.2 Implement `SdkAudioGenerationRuntime` delegating to Laravel AI audio generation (`laravel/ai` `Audio` / `PendingAudioGeneration` / `AudioResponse` as appropriate).
-- [ ] 1.3 Register binding in `LaravelAiAgentKitServiceProvider`; add `modalities.audio_generation` to `config/ai-agent-kit.php` with `default_driver` (`sdk` | class-string).
-- [ ] 1.4 Extend `ConfigValidator::validateModalities()` (or equivalent) for `audio_generation`.
-- [ ] 1.5 Pest tests: success path with fake/test double, failure propagation, invalid config rejection.
-- [ ] 1.6 Update `UPGRADE.md`, `CHANGELOG.md`, and `docs/laravel-ai-sdk-capability-matrix.md` (modalities table row for `Audio::`).
+- [x] 1.1 Add `Contracts/Modality/AudioGenerationRuntime.php` and request/result DTOs under `Core/Modality/` (align naming with existing modality files).
+- [x] 1.2 Implement `SdkAudioGenerationRuntime` delegating to Laravel AI audio generation (`laravel/ai` `Audio` / `PendingAudioGeneration` / `AudioResponse` as appropriate).
+- [x] 1.3 Register binding in `LaravelAiAgentKitServiceProvider`; add `modalities.audio_generation` to `config/ai-agent-kit.php` with `default_driver` (`sdk` | class-string).
+- [x] 1.4 Extend `ConfigValidator::validateModalities()` (or equivalent) for `audio_generation`.
+- [x] 1.5 Pest tests: success path with fake/test double, failure propagation, invalid config rejection.
+- [x] 1.6 Update `UPGRADE.md`, `CHANGELOG.md`, and `docs/laravel-ai-sdk-capability-matrix.md` (modalities table row for `Audio::`).
 
 ## Phase 2 — Vector retrieval parity
 

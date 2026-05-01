@@ -38,7 +38,7 @@ This document maps **Laravel AI SDK** (`laravel/ai`) capabilities to **Laravel A
 | `Image::` | `ImageGenerationRuntime` (`SdkImageGenerationRuntime`) | **Covered** | Config: `modalities.image_generation`. |
 | `Transcription::` | `TranscriptionRuntime` (`SdkTranscriptionRuntime`) | **Covered** | Used by audio blueprint paths; config: `modalities.transcription`. |
 | `Reranking::` | `RerankingRuntime` (`SdkRerankingRuntime`) | **Covered** | Config: `modalities.reranking`; provider must support reranking (e.g. Cohere). |
-| `Audio::` (TTS / **audio generation**) | — | **Planned** | No `AudioGenerationRuntime` yet; SDK `Audio::of()` is the escape hatch. |
+| `Audio::` (TTS / **audio generation**) | `AudioGenerationRuntime` (`SdkAudioGenerationRuntime`) | **Covered** | Config: `modalities.audio_generation`. |
 
 ---
 
