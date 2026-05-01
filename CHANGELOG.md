@@ -4,6 +4,10 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- `AudioGenerationRuntime` contract, `AudioGenerationRequest` / `AudioGenerationResult`, and `SdkAudioGenerationRuntime` (Laravel AI `Audio::of()`); config `modalities.audio_generation.default_driver`, container binding, and `ConfigValidator` support.
+
 ### Documentation
 
 - [docs/laravel-ai-sdk-capability-matrix.md](docs/laravel-ai-sdk-capability-matrix.md): maps Laravel AI SDK surfaces to Agent Kit entry points and lists roadmap gaps (audio generation, Files/Stores façade, vector driver parity).

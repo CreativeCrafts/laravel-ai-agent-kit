@@ -23,6 +23,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationRetentionPurger;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationSummarizer;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\AudioGenerationRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\EmbeddingsRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\ImageGenerationRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\RerankingRuntime;
@@ -56,6 +57,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\CompiledBlueprintRunner;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\MiddlewareExecutingAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\PromptBlueprintCompiler;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\RuntimeConversationMemoryBridge;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkAudioGenerationRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkEmbeddingsRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkImageGenerationRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkRerankingRuntime;
@@ -532,6 +534,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             );
         });
 
+        $this->app->singleton(SdkAudioGenerationRuntime::class, static fn (): SdkAudioGenerationRuntime => new SdkAudioGenerationRuntime());
         $this->app->singleton(SdkEmbeddingsRuntime::class, static fn (): SdkEmbeddingsRuntime => new SdkEmbeddingsRuntime());
         $this->app->singleton(SdkImageGenerationRuntime::class, static fn (): SdkImageGenerationRuntime => new SdkImageGenerationRuntime());
         $this->app->singleton(SdkRerankingRuntime::class, static fn (): SdkRerankingRuntime => new SdkRerankingRuntime());
@@ -570,6 +573,15 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
                 configKey: 'ai-agent-kit.modalities.reranking',
                 sdk: $app->make(SdkRerankingRuntime::class),
                 contract: RerankingRuntime::class,
+            );
+        });
+
+        $this->app->singleton(AudioGenerationRuntime::class, function (Application $app): AudioGenerationRuntime {
+            return $this->resolveModalityRuntime(
+                $app,
+                configKey: 'ai-agent-kit.modalities.audio_generation',
+                sdk: $app->make(SdkAudioGenerationRuntime::class),
+                contract: AudioGenerationRuntime::class,
             );
         });
 

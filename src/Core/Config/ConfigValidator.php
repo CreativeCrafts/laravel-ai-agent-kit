@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Config;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\RuntimeMiddleware;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\AudioGenerationRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\EmbeddingsRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\ImageGenerationRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\RerankingRuntime;
@@ -1109,6 +1110,7 @@ final readonly class ConfigValidator
             'embeddings' => EmbeddingsRuntime::class,
             'image_generation' => ImageGenerationRuntime::class,
             'reranking' => RerankingRuntime::class,
+            'audio_generation' => AudioGenerationRuntime::class,
         ];
 
         foreach ($sections as $section => $contract) {
