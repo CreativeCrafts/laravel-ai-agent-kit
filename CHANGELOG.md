@@ -4,6 +4,19 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ## [Unreleased]
 
+### Rollout: `close-agent-kit-gaps` program (Phases 0–6)
+
+These phases shipped together in development; adopt them in dependency order (see `openspec/changes/close-agent-kit-gaps/design.md`, decision D1):
+
+1. **Phase 1 — Structured evaluation** — Prefer `ExecutionResult::$structuredOutput` for `TextToStructuredEvaluation`; fall back to text normalization when needed (`UPGRADE.md`).
+2. **Phase 2 — Runtime middleware** — Register `ai-agent-kit.runtime.middleware` before relying on cross-cutting logging, tenancy, or policy around `AiRuntime::execute()`.
+3. **Phase 3 — Streaming** — Inject `StreamingAiRuntime` for `executeStream()`; optional `runtime.streaming.broadcast_channel` or request metadata for Echo.
+4. **Phase 4 — Modality runtimes** — Configure `ai-agent-kit.modalities.*.default_driver`; audio blueprint uses `TranscriptionRuntime` for decodable base64/data-URI audio.
+5. **Phase 5 — Laravel AI legacy conversations** — When using the database memory driver, optionally enable `memory.laravel_ai_legacy` so `ConversationStore::find()` reads legacy `agent_*` rows.
+6. **Phase 6 — Attachment persistence** — Run migrations (add `attachments_ciphertext` if you created tables before the stub update); enable `memory.attachments_replay` and opt in per request with `metadata['attachment_replay']` (`merge` / `replay_only` / `none`).
+
+**Phase 0 (package hardening)** — README/composer/vector messaging and CI-aligned docs; safe to apply alongside Phase 1.
+
 ### Added
 
 - `TextToStructuredEvaluationResult` exposes `structuredEvaluationPath` and `structuredEvaluationRepaired` (and `toArray()` includes them) so callers can see whether the specialist used runtime `structuredOutput` or text normalization.
@@ -25,11 +38,11 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Changed
 
+- Documentation: `README.md` (rollout subsection, CI links, memory options, corrected `ConversationStore` example), `UPGRADE.md` (Phase 7 index), and `CHANGELOG.md` (phased adoption order). OpenSpec change `close-agent-kit-gaps` archived as `openspec/changes/archive/2026-05-01-close-agent-kit-gaps/`; `implement-deferred-runtime-phases` proposal notes supersession.
+
 - `AiRuntime` resolves to `MiddlewareExecutingAiRuntime` around `SdkAiRuntime` when `runtime.middleware` lists one or more middleware classes (blueprints and orchestration use the same binding); the same wrapper now implements `StreamingAiRuntime` and delegates streaming to the inner SDK runtime.
 - `TextToStructuredEvaluation` specialist now requests structured output via `ExecutionRequest::$schema`, prefers `ExecutionResult::$structuredOutput` when valid, and falls back to the existing text normalizer when structured output is missing or invalid; coordinator forwards path flags into the final blueprint result.
 - README documents the new observability fields and clarifies that the audio transcription stage remains plain text from the runtime.
 - Runtime now includes `estimated_cost_usd` metadata in `ExecutionResult` when provided in request metadata.
 - Governance catalog IDs for multi-agent roadmap items were aligned from `P10-I*` to `P1X-I*`, and flagship blueprint statuses were aligned to `status:ready` in roadmap/catalog metadata.
 - `RuntimeConversationMemoryBridge` persists serialized attachment payloads on stored user messages; `SdkAiRuntime` merges prior-turn replay with `ExecutionRequest::$attachments` when `metadata['attachment_replay']` is `merge` or `replay_only` and `memory.attachments_replay.enabled` is true.
-
-### Changed

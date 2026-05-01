@@ -1,5 +1,9 @@
 # Upgrade Guide
 
+## Documentation rollout (2026-05-01)
+
+Phase 7 finalizes consumer-facing documentation for the `close-agent-kit-gaps` program. No new runtime APIs: use **`UPGRADE.md`** for migration steps per phase (1–6) and **`CHANGELOG.md`** under *Rollout* for the recommended adoption order. **`README.md`** is the canonical index for config keys (`runtime`, `modalities`, `memory.laravel_ai_legacy`, `memory.attachments_replay`), contracts (`AiRuntime`, `StreamingAiRuntime`, modality interfaces), and vector defaults (`in_memory` only unless you bind a custom `VectorStoreInterface`).
+
 ## Evolving the text-execution surface (Phase 1+2)
 
 This release reshapes the request/result value objects in a single breaking-change window so consumers migrate once. New capabilities: typed `GenerationOptions`, structured-output schemas, multimodal attachments, and SDK-native provider tools.

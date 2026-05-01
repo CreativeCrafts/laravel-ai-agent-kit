@@ -50,7 +50,7 @@ The package validates its configuration during boot by default.
 At least one enabled provider must exist, `default_provider` must reference an enabled configured provider, and `failover_order` must include the default provider.
 
 The default memory driver is `in_memory`. That default is explicit, non-persistent, and safe for tests, local development, and ephemeral runs. Switch `memory.default_driver` to `database` when you
-want encrypted persistent storage and retention-based purging, or to `redis` when you need shared ephemeral memory across workers.
+want encrypted persistent storage and retention-based purging, or to `redis` when you need shared ephemeral memory across workers. Optional **`memory.laravel_ai_legacy`** reads Laravel AI’s default `agent_*` tables when your package store has no row (database driver only; see `UPGRADE.md`). Optional **`memory.attachments_replay`** gates replay of persisted attachment references on continued conversations (opt-in per request via `metadata['attachment_replay']`; see `UPGRADE.md`).
 
 Retry and circuit breaker resilience settings are configured explicitly under `resilience`. Retry policy evaluation is bounded by `budgets.max_retries_per_step` and is now enforced by the synchronous
 pipeline runner at execution time.
@@ -77,6 +77,10 @@ Prompt repositories support two drivers via `prompts.default_driver`:
 
 Pipeline lifecycle and failover telemetry are emitted through Laravel events with redacted defaults. Event payloads expose safe metadata such as run identifiers, provider names, step classes, counts,
 and key lists rather than raw prompt, input, metadata, or provider option values by default.
+
+### Adopting features from the roadmap
+
+The package ships several optional subsystems (structured evaluation, middleware, streaming, modalities, legacy conversation read bridge, attachment replay). **`CHANGELOG.md`** lists them under *Rollout* with the recommended order (Phases 1–6, plus Phase 0 hardening in parallel). **`UPGRADE.md`** has migration notes per phase. GitHub Actions workflows live under [`.github/workflows/`](https://github.com/creativecrafts/laravel-ai-agent-kit/tree/main/.github/workflows); the README CI badge targets [`ci.yml`](https://github.com/creativecrafts/laravel-ai-agent-kit/actions/workflows/ci.yml) on `main`.
 
 Example configuration:
 
@@ -530,10 +534,13 @@ Use conversation memory through injected package-owned context manager and store
 ~~~php
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
+use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\RunContext;
+use CreativeCrafts\LaravelAiAgentKit\Memory\Conversation;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessage;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessageRole;
 use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
+use DateTimeImmutable;
 
 final class SupportConversationService
 {
@@ -543,27 +550,43 @@ final class SupportConversationService
     ) {
     }
 
-    public function appendAndBuildContext(): array
+    public function appendUserMessage(): void
     {
-        $conversation = $this->store->appendMessage(
-            new ConversationId('conv-001'),
+        $conversationId = new ConversationId('conv-001');
+        $timestamp = new DateTimeImmutable();
+
+        $conversation = $this->store->find($conversationId);
+
+        if ($conversation === null) {
+            $conversation = new Conversation(
+                id: $conversationId,
+                createdAt: $timestamp,
+                updatedAt: $timestamp,
+            );
+        }
+
+        $conversation = $conversation->withAppendedMessage(
             new ConversationMessage(
                 id: new MessageId('msg-001'),
                 role: ConversationMessageRole::User,
                 content: 'Please summarize my refund options.',
+                createdAt: $timestamp,
                 metadata: ['channel' => 'support'],
             ),
+            $timestamp,
         );
 
-        $context = $this->contextManager->buildContext($conversation->id);
+        $this->store->save($conversation);
+    }
 
-        return [
-            'conversation' => $conversation,
-            'context' => $context,
-        ];
+    public function initializeRunContext(RunContext $context): RunContext
+    {
+        return $this->contextManager->initialize($context);
     }
 }
 ~~~
+
+For runtime-integrated memory (blueprints, `AiRuntime` with `store_conversation` / `continue_conversation`), use `ConversationContextManager` and the `RunContext` pipeline — see `UPGRADE.md` and the in-tree blueprint tests.
 
 Run orchestrated multi-agent flows through the package agent orchestrator:
 
