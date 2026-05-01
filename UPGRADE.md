@@ -2,7 +2,7 @@
 
 ## Documentation rollout (2026-05-01)
 
-Phase 7 finalizes consumer-facing documentation for the `close-agent-kit-gaps` program. No new runtime APIs: use **`UPGRADE.md`** for migration steps per phase (1–6) and **`CHANGELOG.md`** under *Rollout* for the recommended adoption order. **`README.md`** is the canonical index for config keys (`runtime`, `modalities`, `memory.laravel_ai_legacy`, `memory.attachments_replay`), contracts (`AiRuntime`, `StreamingAiRuntime`, modality interfaces), and vector defaults (`in_memory` only unless you bind a custom `VectorStoreInterface`).
+Phase 7 finalizes consumer-facing documentation for the `close-agent-kit-gaps` program. No new runtime APIs: use **`UPGRADE.md`** for migration steps per phase (1–6) and **`CHANGELOG.md`** under *Rollout* for the recommended adoption order. **`README.md`** is the canonical index for config keys (`runtime`, `modalities`, `memory.laravel_ai_legacy`, `memory.attachments_replay`, **`vector`**), contracts (`AiRuntime`, `StreamingAiRuntime`, modality interfaces), and vector drivers (`in_memory`, **`database`**, or a custom `VectorStoreInterface` binding).
 
 ## Evolving the text-execution surface (Phase 1+2)
 
@@ -132,6 +132,16 @@ Publish or merge the updated migration stub if your app already created `ai_agen
 ### AudioToTextToEvaluation transcription path
 
 When `audio_reference` is **raw base64** or a `data:*;base64,...` data URI, the transcription stage calls `TranscriptionRuntime` (default: Laravel AI via `SdkTranscriptionRuntime`) using the orchestration provider profile name as the Laravel AI provider key. **Opaque references** (for example `s3://...`) are unchanged: the kit still builds the registered transcription prompt and runs `AiRuntime::execute()`.
+
+### Vector store: database driver (Phase 2, `sdk-surface-parity`)
+
+The package can persist `VectorDocument` embeddings in SQL via **`ai-agent-kit.vector.default_driver` = `database`**.
+
+1. Publish migrations (includes `create_ai_agent_vector_documents_table`) and run `php artisan migrate`.
+2. Set `vector.database.connection` when the table should not use the default DB connection (otherwise omit or null).
+3. Override `vector.database.table` only if you renamed the table.
+
+Namespaces remain isolated per `VectorStoreInterface::upsert($namespace, …)` row prefix.
 
 ### Modality runtimes
 

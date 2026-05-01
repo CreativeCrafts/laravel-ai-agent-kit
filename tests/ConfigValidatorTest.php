@@ -254,6 +254,40 @@ it('validates vector configuration', function () {
     expect(true)->toBeTrue();
 });
 
+it('validates database vector driver configuration', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'null' => [
+          'driver' => 'null',
+          'enabled' => true,
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'null',
+      'failover_order' => ['null'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 1,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+      'vector' => [
+        'default_driver' => 'database',
+        'database' => [
+          'connection' => null,
+          'table' => 'ai_agent_vector_documents',
+        ],
+      ],
+    ]);
+
+    expect(true)->toBeTrue();
+});
+
 it('rejects an unsupported vector driver', function () {
     /** @var ConfigValidator $validator */
     $validator = app(ConfigValidator::class);

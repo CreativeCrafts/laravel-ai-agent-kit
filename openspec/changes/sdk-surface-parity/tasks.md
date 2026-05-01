@@ -13,11 +13,11 @@ Satisfies `specs/audio-generation-runtime/spec.md`.
 
 Satisfies `specs/vector-retrieval-parity/spec.md`.
 
-- [ ] 2.1 Spike: choose second driver (`sdk_store` bridge vs database/pgvector-style) per `design.md` D4; document choice in `design.md` if updated.
-- [ ] 2.2 Implement second `VectorStoreInterface` driver class(es); keep `SdkBackedVectorAdapterStrategy` rules (no SDK types on the contract).
-- [ ] 2.3 Extend `config/ai-agent-kit.php` `vector` section with driver block(s); wire `VectorStoreInterface` resolution from `default_driver`.
-- [ ] 2.4 `ConfigValidator` rules for new driver keys; Pest tests for resolution and invalid driver.
-- [ ] 2.5 Update README vector section and capability matrix (**Partial** → **Covered** for parity story).
+- [x] 2.1 Spike: choose second driver (`sdk_store` bridge vs database/pgvector-style) per `design.md` D4; document choice in `design.md` if updated.
+- [x] 2.2 Implement second `VectorStoreInterface` driver class(es); keep `SdkBackedVectorAdapterStrategy` rules (no SDK types on the contract).
+- [x] 2.3 Extend `config/ai-agent-kit.php` `vector` section with driver block(s); wire `VectorStoreInterface` resolution from `default_driver`.
+- [x] 2.4 `ConfigValidator` rules for new driver keys; Pest tests for resolution and invalid driver.
+- [x] 2.5 Update README vector section and capability matrix (**Partial** → **Covered** for parity story).
 
 ## Phase 3 — Laravel AI Files and Stores façade
 
