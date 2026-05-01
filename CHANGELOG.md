@@ -4,6 +4,10 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ## [Unreleased]
 
+### Documentation
+
+- [docs/laravel-ai-sdk-capability-matrix.md](docs/laravel-ai-sdk-capability-matrix.md): maps Laravel AI SDK surfaces to Agent Kit entry points and lists roadmap gaps (audio generation, Files/Stores façade, vector driver parity).
+
 ### Rollout: `close-agent-kit-gaps` program (Phases 0–6)
 
 These phases shipped together in development; adopt them in dependency order (see `openspec/changes/close-agent-kit-gaps/design.md`, decision D1):
