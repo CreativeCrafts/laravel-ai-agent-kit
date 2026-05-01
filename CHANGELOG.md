@@ -9,10 +9,11 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 - `LaravelAiFilesService` and `LaravelAiStoresService` wrapping Laravel AI `Files` / `Stores` with package DTOs; config `laravel_ai_files.default_provider`, `laravel_ai_stores.default_provider`.
 - `DatabaseVectorStore` and `ai-agent-kit.vector.default_driver` = `database`: SQL persistence for `VectorDocument` rows (`ai_agent_vector_documents` migration stub). Config: `vector.database.connection`, `vector.database.table`.
 - `AudioGenerationRuntime` contract, `AudioGenerationRequest` / `AudioGenerationResult`, and `SdkAudioGenerationRuntime` (Laravel AI `Audio::of()`); config `modalities.audio_generation.default_driver`, container binding, and `ConfigValidator` support.
+- `SimilaritySearchTool` (package `Tool`): embeds the query with `EmbeddingsRuntime`, searches `VectorStoreInterface`. Opt-in via `tools.similarity_search.enabled` and `tools.similarity_search.register` (defaults `false`); optional `name`, `default_namespace`, `default_limit`, and embedding overrides. Still subject to `tools.authorizer`.
 
 ### Documentation
 
-- [docs/laravel-ai-sdk-capability-matrix.md](docs/laravel-ai-sdk-capability-matrix.md): maps Laravel AI SDK surfaces to Agent Kit entry points and lists roadmap gaps (audio generation, Files/Stores façade, vector driver parity).
+- [docs/laravel-ai-sdk-capability-matrix.md](docs/laravel-ai-sdk-capability-matrix.md): maps Laravel AI SDK surfaces to Agent Kit entry points; documents shipped Files/Stores façade, database vector driver, and similarity search tool vs Laravel AI `SimilaritySearch`.
 - OpenSpec change [openspec/changes/sdk-surface-parity](openspec/changes/sdk-surface-parity/proposal.md): proposal, design, tasks, and specs for full roadmap-priority coverage (audio generation, Files/Stores, vector parity, SimilaritySearch decision, AgentKit facade).
 
 ### Rollout: `close-agent-kit-gaps` program (Phases 0–6)

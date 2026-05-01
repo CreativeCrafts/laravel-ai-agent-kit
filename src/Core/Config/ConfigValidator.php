@@ -886,6 +886,10 @@ final readonly class ConfigValidator
             }
         }
 
+        if (array_key_exists('similarity_search', $tools)) {
+            $this->validateSimilaritySearchConfig($tools['similarity_search']);
+        }
+
         if (!array_key_exists('provider_tools', $tools)) {
             return;
         }
@@ -940,6 +944,66 @@ final readonly class ConfigValidator
             }
 
             $this->validateFileSearchTool($name, $tool);
+        }
+    }
+
+    /**
+     * @param mixed $section
+     */
+    private function validateSimilaritySearchConfig(mixed $section): void
+    {
+        if ($section === null) {
+            return;
+        }
+
+        if (!is_array($section)) {
+            throw InvalidConfigurationException::invalidType('tools.similarity_search', 'array');
+        }
+
+        if (array_key_exists('enabled', $section) && !is_bool($section['enabled'])) {
+            throw InvalidConfigurationException::invalidType('tools.similarity_search.enabled', 'bool');
+        }
+
+        if (array_key_exists('register', $section) && !is_bool($section['register'])) {
+            throw InvalidConfigurationException::invalidType('tools.similarity_search.register', 'bool');
+        }
+
+        if (array_key_exists('name', $section) && $section['name'] !== null
+            && (!is_string($section['name']) || $section['name'] === '')) {
+            throw InvalidConfigurationException::invalidValue('tools.similarity_search.name', 'Must be null or a non-empty string.');
+        }
+
+        if (array_key_exists('default_namespace', $section) && $section['default_namespace'] !== null
+            && (!is_string($section['default_namespace']) || $section['default_namespace'] === '')) {
+            throw InvalidConfigurationException::invalidValue('tools.similarity_search.default_namespace', 'Must be null or a non-empty string.');
+        }
+
+        if (array_key_exists('default_limit', $section) && $section['default_limit'] !== null) {
+            if (!is_int($section['default_limit']) || $section['default_limit'] < 1) {
+                throw InvalidConfigurationException::invalidValue('tools.similarity_search.default_limit', 'Must be null or an integer >= 1.');
+            }
+        }
+
+        if (array_key_exists('embedding_dimensions', $section) && $section['embedding_dimensions'] !== null) {
+            if (!is_int($section['embedding_dimensions']) || $section['embedding_dimensions'] < 1) {
+                throw InvalidConfigurationException::invalidValue('tools.similarity_search.embedding_dimensions', 'Must be null or an integer >= 1.');
+            }
+        }
+
+        if (array_key_exists('embedding_timeout_seconds', $section) && $section['embedding_timeout_seconds'] !== null) {
+            if (!is_int($section['embedding_timeout_seconds']) || $section['embedding_timeout_seconds'] < 1) {
+                throw InvalidConfigurationException::invalidValue('tools.similarity_search.embedding_timeout_seconds', 'Must be null or an integer >= 1.');
+            }
+        }
+
+        if (array_key_exists('embedding_provider', $section) && $section['embedding_provider'] !== null
+            && (!is_string($section['embedding_provider']) || $section['embedding_provider'] === '')) {
+            throw InvalidConfigurationException::invalidValue('tools.similarity_search.embedding_provider', 'Must be null or a non-empty string.');
+        }
+
+        if (array_key_exists('embedding_model', $section) && $section['embedding_model'] !== null
+            && (!is_string($section['embedding_model']) || $section['embedding_model'] === '')) {
+            throw InvalidConfigurationException::invalidValue('tools.similarity_search.embedding_model', 'Must be null or a non-empty string.');
         }
     }
 

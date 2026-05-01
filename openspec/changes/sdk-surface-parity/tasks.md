@@ -35,10 +35,10 @@ Satisfies `specs/laravel-ai-files-stores/spec.md`.
 
 Satisfies `specs/similarity-search-tool/spec.md`.
 
-- [ ] 4.1 Decision: **ship** package tool vs **document recipe only** — record outcome in `design.md` and matrix.
-- [ ] 4.2 If ship: implement tool + registration path + `ToolAuthorizer` tests (deny/allow), Pest coverage per spec scenarios.
-- [ ] 4.3 If document-only: add `docs/recipes/similarity-search-or-vector-retrieval.md` (or similar) and update matrix with explicit **Won’t ship** / escape-hatch guidance.
-- [ ] 4.4 Update `CHANGELOG.md`.
+- [x] 4.1 Decision: **ship** package tool vs **document recipe only** — record outcome in `design.md` and matrix.
+- [x] 4.2 If ship: implement tool + registration path + `ToolAuthorizer` tests (deny/allow), Pest coverage per spec scenarios.
+- [x] 4.3 If document-only: (skipped — shipped `SimilaritySearchTool`; Laravel AI `SimilaritySearch` remains an alternative for Eloquent/pgvector).
+- [x] 4.4 Update `CHANGELOG.md`.
 
 ## Phase 5 — AgentKit facade ergonomics
 

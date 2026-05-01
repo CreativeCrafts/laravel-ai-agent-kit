@@ -69,6 +69,8 @@ Optional **runtime middleware** wraps every `AiRuntime::execute` call (including
 
 **Laravel AI provider Files and Stores** — For provider-hosted uploads and vector stores (RAG with `FileSearch`), inject `CreativeCrafts\LaravelAiAgentKit\Core\LaravelAi\LaravelAiFilesService` and `LaravelAiStoresService`. They wrap `Laravel\Ai\Files` and `Laravel\Ai\Stores` and return package DTOs. Optional `laravel_ai_files.default_provider` and `laravel_ai_stores.default_provider` apply when you omit the provider argument. This is separate from **`VectorStoreInterface`** (application embedding storage with `in_memory` / `database` drivers).
 
+**Similarity search custom tool** — Optional package tool `similarity_search` (class `CreativeCrafts\LaravelAiAgentKit\Tools\SimilaritySearchTool`) searches documents in `VectorStoreInterface` using query embeddings from `EmbeddingsRuntime`. Enable with `tools.similarity_search.enabled` and `tools.similarity_search.register` in `config/ai-agent-kit.php`, then list `similarity_search` in `ExecutionRequest::$toolNames` and implement `ToolAuthorizer` so custom tools are allowed (the default authorizer denies all). This targets the kit vector store; for Eloquent `whereVectorSimilarTo` flows, Laravel AI’s `Laravel\Ai\Tools\SimilaritySearch` remains the right choice. See `UPGRADE.md`.
+
 `budgets.max_cost_usd` is enforced in fail-closed mode: when configured, each runtime request must provide numeric `metadata.cost_usd` (or `metadata.estimated_cost_usd`) so cost ceilings can be
 validated deterministically.
 

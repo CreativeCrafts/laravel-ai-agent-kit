@@ -56,7 +56,7 @@ This document maps **Laravel AI SDK** (`laravel/ai`) capabilities to **Laravel A
 
 | Laravel AI SDK | Agent Kit | Status | Notes |
 |----------------|-------------|--------|--------|
-| `Laravel\Ai\Tools\SimilaritySearch` (Eloquent / DB vector similarity) | — | **Planned** | Not exposed as a packaged tool; apps can register custom tools or use `VectorStoreInterface`. |
+| `Laravel\Ai\Tools\SimilaritySearch` (Eloquent / DB vector similarity) | Same SDK class for `whereVectorSimilarTo` models | **Escape hatch** | Kit ships **`SimilaritySearchTool`** for **`VectorStoreInterface`** (`tools.similarity_search.*`, `ToolAuthorizer`). Use Laravel AI’s **`SimilaritySearch::usingModel(...)`** when you search Eloquent/pgvector directly. |
 
 ---
 
@@ -86,7 +86,7 @@ Ordered for **coverage without breaking** the single runtime story:
 1. **`Audio` generation** — Add an `AudioGenerationRuntime` (or equivalent) and config under `modalities`, aligned with `SdkTranscriptionRuntime` patterns.
 2. **Provider `Files` + `Stores`** — **`LaravelAiFilesService`** / **`LaravelAiStoresService`** with config `laravel_ai_files.default_provider` and `laravel_ai_stores.default_provider` (Phase 3 shipped).
 3. **Vector / retrieval parity** — `ai-agent-kit.vector.default_driver` supports `in_memory` and **`database`** (publish `create_ai_agent_vector_documents_table` migration). Distinct from Laravel AI **Stores** (provider-hosted file stores for RAG).
-4. **Optional packaged `SimilaritySearch`-style tool** — Only if it fits the tool authorizer model; otherwise document custom-tool registration.
+4. **Packaged similarity search** — **`SimilaritySearchTool`** + `tools.similarity_search` (Phase 4 shipped; opt-in registration). Laravel AI **`SimilaritySearch`** remains for Eloquent-native vector columns.
 5. **Facade ergonomics** — e.g. `AgentKit` helpers for streaming and modalities once contracts are stable (optional product decision).
 
 ---
