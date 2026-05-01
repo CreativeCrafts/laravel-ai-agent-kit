@@ -1,3 +1,5 @@
+> **Superseded:** The deferred roadmap was implemented and documented under the archived change `openspec/changes/archive/2026-05-01-close-agent-kit-gaps/`. Prefer that archive and the package `CHANGELOG.md` / `UPGRADE.md` for the shipped program.
+
 ## Why
 
 `evolve-text-execution-surface` intentionally deferred several high-impact capabilities to keep the text-surface breaking window focused and low-risk. Before archiving that change, we need a dedicated follow-up proposal that captures all deferred work in one roadmap so implementation order can be decided explicitly instead of ad hoc.

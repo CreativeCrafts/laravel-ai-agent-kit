@@ -67,9 +67,9 @@ Satisfies `specs/attachment-persistence/spec.md`; depends on Phase 5 foundations
 
 Satisfies `specs/documentation-rollout/spec.md` and closes the program.
 
-- [ ] 7.1 Update `UPGRADE.md` after each phase that affects consumers; final pass for consistency.
-- [ ] 7.2 Update README for streaming, middleware, modality entry points, attachment replay, vector drivers, and corrected CI badges.
-- [ ] 7.3 Update `CHANGELOG.md` with phased release notes and recommended adoption order (reference `design.md` sequencing).
+- [x] 7.1 Update `UPGRADE.md` after each phase that affects consumers; final pass for consistency.
+- [x] 7.2 Update README for streaming, middleware, modality entry points, attachment replay, vector drivers, and corrected CI badges.
+- [x] 7.3 Update `CHANGELOG.md` with phased release notes and recommended adoption order (reference `design.md` sequencing).
 
 ## Archival note
 
