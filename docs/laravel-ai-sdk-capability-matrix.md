@@ -79,6 +79,8 @@ This document maps **Laravel AI SDK** (`laravel/ai`) capabilities to **Laravel A
 
 ## Roadmap priorities
 
+**OpenSpec program:** [openspec/changes/sdk-surface-parity](../openspec/changes/sdk-surface-parity/proposal.md) — `proposal.md`, `design.md`, `tasks.md`, and delta specs under `specs/` track implementation of the items below.
+
 Ordered for **coverage without breaking** the single runtime story:
 
 1. **`Audio` generation** — Add an `AudioGenerationRuntime` (or equivalent) and config under `modalities`, aligned with `SdkTranscriptionRuntime` patterns.
