@@ -7,6 +7,8 @@
 Laravel AI Agent Kit is a Laravel package that delivers a structured agent-workflow toolkit built on top of the official Laravel AI SDK. It provides provider abstraction, pipeline orchestration,
 queued execution, and package foundations for building AI-powered application flows safely and predictably.
 
+Maintainers track **SDK ↔ package coverage** in [docs/laravel-ai-sdk-capability-matrix.md](docs/laravel-ai-sdk-capability-matrix.md) so Laravel AI capabilities map to runtime, pipelines, orchestration, budgets, and memory in one place.
+
 ## Installation
 
 Install the package with Composer:
