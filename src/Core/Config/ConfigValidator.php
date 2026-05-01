@@ -175,6 +175,7 @@ final readonly class ConfigValidator
 
         $this->validateMemoryAttachmentsReplay($config);
         $this->validateVector($config);
+        $this->validateLaravelAiSdkFacades($config);
         $this->validateTools($config);
         $this->validateSummarization($config);
         $this->validateRuntime($config);
@@ -805,6 +806,44 @@ final readonly class ConfigValidator
                         'Must be a non-empty string.',
                     );
                 }
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function validateLaravelAiSdkFacades(array $config): void
+    {
+        if (array_key_exists('laravel_ai_files', $config)) {
+            if (!is_array($config['laravel_ai_files'])) {
+                throw InvalidConfigurationException::invalidType('laravel_ai_files', 'array');
+            }
+
+            $files = $config['laravel_ai_files'];
+
+            if (array_key_exists('default_provider', $files) && $files['default_provider'] !== null
+                && (!is_string($files['default_provider']) || $files['default_provider'] === '')) {
+                throw InvalidConfigurationException::invalidValue(
+                    'laravel_ai_files.default_provider',
+                    'Must be null or a non-empty string.',
+                );
+            }
+        }
+
+        if (array_key_exists('laravel_ai_stores', $config)) {
+            if (!is_array($config['laravel_ai_stores'])) {
+                throw InvalidConfigurationException::invalidType('laravel_ai_stores', 'array');
+            }
+
+            $stores = $config['laravel_ai_stores'];
+
+            if (array_key_exists('default_provider', $stores) && $stores['default_provider'] !== null
+                && (!is_string($stores['default_provider']) || $stores['default_provider'] === '')) {
+                throw InvalidConfigurationException::invalidValue(
+                    'laravel_ai_stores.default_provider',
+                    'Must be null or a non-empty string.',
+                );
             }
         }
     }

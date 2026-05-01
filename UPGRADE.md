@@ -133,6 +133,12 @@ Publish or merge the updated migration stub if your app already created `ai_agen
 
 When `audio_reference` is **raw base64** or a `data:*;base64,...` data URI, the transcription stage calls `TranscriptionRuntime` (default: Laravel AI via `SdkTranscriptionRuntime`) using the orchestration provider profile name as the Laravel AI provider key. **Opaque references** (for example `s3://...`) are unchanged: the kit still builds the registered transcription prompt and runs `AiRuntime::execute()`.
 
+### Laravel AI Files and Stores facades (Phase 3, `sdk-surface-parity`)
+
+Inject **`LaravelAiFilesService`** for provider file upload/fetch/delete (`put`, `putFromPath`, `putFromStorage`, `get`, `delete`) and **`LaravelAiStoresService`** for provider vector stores (`create`, `get` via internal fetch, `addToStore`, `removeFromStore`, `refreshStore`, `deleteStore`). Responses use package DTOs (`StoredProviderFile`, `ProviderFileContents`, `ProviderVectorStoreState`, `AddedStoreDocument`).
+
+Optional defaults when the provider argument is null: **`laravel_ai_files.default_provider`** and **`laravel_ai_stores.default_provider`** in `config/ai-agent-kit.php` (or `AI_AGENT_KIT_LARAVEL_AI_FILES_PROVIDER` / `AI_AGENT_KIT_LARAVEL_AI_STORES_PROVIDER`). These are distinct from **`VectorStoreInterface`** (application embedding store with `database` / `in_memory` drivers).
+
 ### Vector store: database driver (Phase 2, `sdk-surface-parity`)
 
 The package can persist `VectorDocument` embeddings in SQL via **`ai-agent-kit.vector.default_driver` = `database`**.

@@ -46,8 +46,8 @@ This document maps **Laravel AI SDK** (`laravel/ai`) capabilities to **Laravel A
 
 | Laravel AI SDK | Agent Kit | Status | Notes |
 |----------------|-------------|--------|--------|
-| `Files::get`, `Files::put`, `Files::delete`, … | — | **Planned** | No façade for provider file CRUD; apps use SDK `Files` or kit `File` attachments on prompts. |
-| `Stores::create`, `Stores::get`, `Store::add`, … (provider **vector stores** for RAG) | `VectorStoreInterface` (`in_memory`, **`database`** SQL persistence) | **Partial** | Package retrieval is namespace-scoped with in-process cosine similarity. **`database`** driver stores embeddings in `ai_agent_vector_documents`. Laravel AI **`Stores` / provider file-store RAG** is still **Planned** (Phase 3 of `sdk-surface-parity`). |
+| `Files::get`, `Files::put`, `Files::delete`, … | `LaravelAiFilesService` | **Covered** | DTOs: `StoredProviderFile`, `ProviderFileContents`. Optional `laravel_ai_files.default_provider`. |
+| `Stores::create`, `Stores::get`, `Store::add`, … (provider **vector stores** for RAG) | `LaravelAiStoresService` + `VectorStoreInterface` (`in_memory`, **`database`**) | **Partial** | **Stores API** wrapped for provider RAG workflows. **`VectorStoreInterface`** is app-owned embeddings + cosine search (distinct from OpenAI vector stores). |
 | `FileSearch` provider tool | Wired via provider tool factories + `provider_tool_names` | **Covered** | Requires store IDs / provider configuration in Laravel AI config. |
 
 ---
@@ -84,8 +84,8 @@ This document maps **Laravel AI SDK** (`laravel/ai`) capabilities to **Laravel A
 Ordered for **coverage without breaking** the single runtime story:
 
 1. **`Audio` generation** — Add an `AudioGenerationRuntime` (or equivalent) and config under `modalities`, aligned with `SdkTranscriptionRuntime` patterns.
-2. **Provider `Files` + `Stores`** — Thin façade or pipeline steps for “upload file → id”, “create store → add documents”, optionally backed by `SdkBackedVectorAdapterStrategy` for retrieval that feeds prompts or `VectorStoreInterface`.
-3. **Vector / retrieval parity** — `ai-agent-kit.vector.default_driver` supports `in_memory` and **`database`** (publish `create_ai_agent_vector_documents_table` migration). Optional SDK **Stores** bridge remains a later phase.
+2. **Provider `Files` + `Stores`** — **`LaravelAiFilesService`** / **`LaravelAiStoresService`** with config `laravel_ai_files.default_provider` and `laravel_ai_stores.default_provider` (Phase 3 shipped).
+3. **Vector / retrieval parity** — `ai-agent-kit.vector.default_driver` supports `in_memory` and **`database`** (publish `create_ai_agent_vector_documents_table` migration). Distinct from Laravel AI **Stores** (provider-hosted file stores for RAG).
 4. **Optional packaged `SimilaritySearch`-style tool** — Only if it fits the tool authorizer model; otherwise document custom-tool registration.
 5. **Facade ergonomics** — e.g. `AgentKit` helpers for streaming and modalities once contracts are stable (optional product decision).
 
