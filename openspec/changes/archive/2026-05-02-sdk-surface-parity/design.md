@@ -1,6 +1,6 @@
 ## Context
 
-The package already exposes text runtime (`AiRuntime`, streaming), four modality runtimes (embeddings, image, transcription, reranking), memory, pipelines, orchestration, and `VectorStoreInterface` with an in-memory default. [docs/laravel-ai-sdk-capability-matrix.md](../../../docs/laravel-ai-sdk-capability-matrix.md) lists remaining gaps versus `laravel/ai` facades: **`Audio::`** (generation), **`Files::` / `Stores::`**, a **second vector driver**, optional **SimilaritySearch**, and **AgentKit** helpers.
+The package already exposes text runtime (`AiRuntime`, streaming), four modality runtimes (embeddings, image, transcription, reranking), memory, pipelines, orchestration, and `VectorStoreInterface` with an in-memory default. [docs/laravel-ai-sdk-capability-matrix.md](../../../docs/laravel-ai-sdk-capability-matrix.md) listed remaining gaps versus `laravel/ai` facades; **`sdk-surface-parity`** closed them (audio generation, Files/Stores, database vector driver, `SimilaritySearchTool`, AgentKit delegates). **Deferred** items (e.g. optional Stores→`VectorStoreInterface` bridge) are documented in the matrix *Deferred follow-ups* section.
 
 ## Goals
 

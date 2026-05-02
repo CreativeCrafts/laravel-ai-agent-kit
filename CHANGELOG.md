@@ -14,8 +14,8 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Documentation
 
-- [docs/laravel-ai-sdk-capability-matrix.md](docs/laravel-ai-sdk-capability-matrix.md): maps Laravel AI SDK surfaces to Agent Kit entry points; documents shipped Files/Stores façade, database vector driver, and similarity search tool vs Laravel AI `SimilaritySearch`.
-- OpenSpec change [openspec/changes/sdk-surface-parity](openspec/changes/sdk-surface-parity/proposal.md): proposal, design, tasks, and specs for full roadmap-priority coverage (audio generation, Files/Stores, vector parity, SimilaritySearch decision, AgentKit facade).
+- [docs/laravel-ai-sdk-capability-matrix.md](docs/laravel-ai-sdk-capability-matrix.md): maps Laravel AI SDK surfaces to Agent Kit entry points; **roadmap priorities** section marks **`sdk-surface-parity`** complete and lists **deferred follow-ups** (Stores↔vector bridge, optional Files/Stores observability).
+- OpenSpec **`sdk-surface-parity`** archived to [openspec/changes/archive/2026-05-02-sdk-surface-parity](openspec/changes/archive/2026-05-02-sdk-surface-parity/proposal.md) (historical proposal, design, tasks, delta specs).
 
 ### Rollout: `close-agent-kit-gaps` program (Phases 0–6)
 

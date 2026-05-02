@@ -156,6 +156,10 @@ The package can register a **`similarity_search`** custom tool that:
 
 For **Eloquent / database-native** vector similarity (`whereVectorSimilarTo`), continue using Laravel AI’s **`Laravel\Ai\Tools\SimilaritySearch::usingModel(...)`** and register it yourself if you expose it to agents.
 
+### Capability matrix and `sdk-surface-parity` closure (Phase 6)
+
+[docs/laravel-ai-sdk-capability-matrix.md](docs/laravel-ai-sdk-capability-matrix.md) now marks the **`sdk-surface-parity`** roadmap as **complete** and lists **deferred follow-ups** explicitly. The OpenSpec change is **archived** at [openspec/changes/archive/2026-05-02-sdk-surface-parity](openspec/changes/archive/2026-05-02-sdk-surface-parity/proposal.md) for historical design and task tracking.
+
 ### AgentKit facade helpers (Phase 5, `sdk-surface-parity`)
 
 `CreativeCrafts\LaravelAiAgentKit\Facades\AgentKit` / **`AgentKitManager`** now expose convenience methods that resolve the same singletons as the container: **`executeStream(ExecutionRequest)`**, **`embed`**, **`transcribe`**, **`generateImage`**, **`rerank`**, **`generateAudio`**, **`laravelAiFiles()`**, and **`laravelAiStores()`**. Prefer injecting the underlying contracts in long-lived services; see `README.md`.

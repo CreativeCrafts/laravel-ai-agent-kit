@@ -1,8 +1,10 @@
+> **Status (2026-05-02):** Implementation complete (Phases 1–6). This change is **archived**; use the matrix and `CHANGELOG.md` as the living summary.
+
 ## Why
 
-[docs/laravel-ai-sdk-capability-matrix.md](../../../docs/laravel-ai-sdk-capability-matrix.md) inventories Laravel AI SDK capabilities against Agent Kit. Several high-value surfaces remain **planned** or **partial**: audio **generation** (TTS), provider **`Files` / `Stores`** (uploads and provider vector stores), **vector driver parity** beyond `in_memory`, an optional **SimilaritySearch-style** retrieval tool, and **facade ergonomics** so developers can stay on package patterns instead of calling `Laravel\Ai\*` directly.
+[docs/laravel-ai-sdk-capability-matrix.md](../../../docs/laravel-ai-sdk-capability-matrix.md) inventories Laravel AI SDK capabilities against Agent Kit. This change **shipped** the roadmap items previously marked planned or partial: audio **generation** (TTS), provider **`Files` / `Stores`**, **`database`** vector driver parity, packaged **`SimilaritySearchTool`**, and **`AgentKit`** facade delegates. Deferred follow-ups are listed in the matrix.
 
-This change tracks **full implementation** of those roadmap priorities in dependency order, with explicit specs and acceptance tests.
+This change tracked **full implementation** of those roadmap priorities in dependency order, with explicit specs and acceptance tests.
 
 ## What Changes
 

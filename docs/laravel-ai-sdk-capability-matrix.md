@@ -2,6 +2,8 @@
 
 This document maps **Laravel AI SDK** (`laravel/ai`) capabilities to **Laravel AI Agent Kit** entry points. It is the working inventory for the goal: *everything the SDK can do should be reachable through this package’s patterns* (runtime, pipelines, orchestration, budgets, memory) without re‑implementing wiring for each app.
 
+The **`sdk-surface-parity`** roadmap (Phases 1–6) is **complete** as of the package release that ships this matrix revision. Historical design and tasks live under [openspec/changes/archive/2026-05-02-sdk-surface-parity](../openspec/changes/archive/2026-05-02-sdk-surface-parity/proposal.md). **Deferred** follow-ups (not part of that program) are listed under [Deferred follow-ups](#deferred-follow-ups) below.
+
 **SDK version pinned by this package:** `laravel/ai` `^0.6` (see `composer.json`). When the SDK adds gateways or tools, extend this matrix and the roadmap below.
 
 ## Legend
@@ -78,17 +80,23 @@ This document maps **Laravel AI SDK** (`laravel/ai`) capabilities to **Laravel A
 
 ---
 
-## Roadmap priorities
+## Roadmap priorities (completed: `sdk-surface-parity`)
 
-**OpenSpec program:** [openspec/changes/sdk-surface-parity](../openspec/changes/sdk-surface-parity/proposal.md) — `proposal.md`, `design.md`, `tasks.md`, and delta specs under `specs/` track implementation of the items below.
+The following items shipped in dependency order as OpenSpec change **`sdk-surface-parity`** (archived under [openspec/changes/archive/2026-05-02-sdk-surface-parity](../openspec/changes/archive/2026-05-02-sdk-surface-parity/proposal.md)):
 
-Ordered for **coverage without breaking** the single runtime story:
+1. **`Audio` generation** — `AudioGenerationRuntime` + `SdkAudioGenerationRuntime`; `modalities.audio_generation`.
+2. **Provider `Files` + `Stores`** — `LaravelAiFilesService` / `LaravelAiStoresService`; `laravel_ai_files.default_provider`, `laravel_ai_stores.default_provider`.
+3. **Vector / retrieval parity** — `vector.default_driver` = `in_memory` | **`database`** (`DatabaseVectorStore`, `create_ai_agent_vector_documents_table` migration stub). Distinct from Laravel AI **Stores** (provider-hosted RAG file stores).
+4. **Packaged similarity search** — **`SimilaritySearchTool`** + `tools.similarity_search` (opt-in). Laravel AI **`SimilaritySearch`** remains for Eloquent `whereVectorSimilarTo` flows.
+5. **Facade ergonomics** — **`AgentKit` / `AgentKitManager`**: `executeStream`, modality delegates, `laravelAiFiles()`, `laravelAiStores()`.
 
-1. **`Audio` generation** — Add an `AudioGenerationRuntime` (or equivalent) and config under `modalities`, aligned with `SdkTranscriptionRuntime` patterns.
-2. **Provider `Files` + `Stores`** — **`LaravelAiFilesService`** / **`LaravelAiStoresService`** with config `laravel_ai_files.default_provider` and `laravel_ai_stores.default_provider` (Phase 3 shipped).
-3. **Vector / retrieval parity** — `ai-agent-kit.vector.default_driver` supports `in_memory` and **`database`** (publish `create_ai_agent_vector_documents_table` migration). Distinct from Laravel AI **Stores** (provider-hosted file stores for RAG).
-4. **Packaged similarity search** — **`SimilaritySearchTool`** + `tools.similarity_search` (Phase 4 shipped; opt-in registration). Laravel AI **`SimilaritySearch`** remains for Eloquent-native vector columns.
-5. **Facade ergonomics** — **`AgentKit` / `AgentKitManager`** expose `executeStream`, modality delegates, and `laravelAiFiles()` / `laravelAiStores()` (Phase 5 shipped).
+## Deferred follow-ups
+
+These are **not** closed by `sdk-surface-parity`; track them separately when product priorities warrant:
+
+- **`VectorStoreInterface` ↔ Laravel AI Stores bridge** — Optional driver or adapter that maps provider store search/list into `VectorDocument` / `VectorSearchResult` (see `SdkBackedVectorAdapterStrategy` in codebase).
+- **Redacted observability for Files/Stores** — Optional domain events for provider file/store operations (Phase 3 optional task was skipped).
+- **SDK drift** — Re-scan `vendor/laravel/ai` on upgrades; extend matrix rows for new facades, jobs, and provider tools.
 
 ---
 

@@ -51,6 +51,6 @@ Satisfies `specs/agentkit-facade-ergonomics/spec.md`.
 
 ## Phase 6 — Documentation and matrix closure
 
-- [ ] 6.1 Final pass on `docs/laravel-ai-sdk-capability-matrix.md`: roadmap section marked complete or updated with deferred items explicitly listed.
-- [ ] 6.2 Run `vendor/bin/pint`, `vendor/bin/phpstan`, `vendor/bin/pest`; fix regressions.
-- [ ] 6.3 Archive or link this change in release notes when merging.
+- [x] 6.1 Final pass on `docs/laravel-ai-sdk-capability-matrix.md`: roadmap section marked complete or updated with deferred items explicitly listed.
+- [x] 6.2 Run `vendor/bin/pint`, `vendor/bin/phpstan`, `vendor/bin/pest`; fix regressions.
+- [x] 6.3 Archive or link this change in release notes when merging.
