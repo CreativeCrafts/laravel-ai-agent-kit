@@ -5,16 +5,34 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Vector;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreInterface;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreReferenceEmbedding;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\Date;
 use JsonException;
 
-final readonly class DatabaseVectorStore implements VectorStoreInterface
+final readonly class DatabaseVectorStore implements VectorStoreInterface, VectorStoreReferenceEmbedding
 {
     public function __construct(
         private Connection $connection,
         private string $table,
+        private ?int $maxScanRows = null,
     ) {
+    }
+
+    public function referenceEmbeddingDimensions(string $namespace): ?int
+    {
+        $row = $this->connection->table($this->table)
+            ->where('namespace', $namespace)
+            ->orderBy('document_id')
+            ->first(['embedding']);
+
+        if ($row === null) {
+            return null;
+        }
+
+        $decoded = $this->decodeEmbedding($row->embedding ?? null);
+
+        return $decoded === null ? null : count($decoded);
     }
 
     public function upsert(string $namespace, array $documents): void
@@ -53,9 +71,17 @@ final readonly class DatabaseVectorStore implements VectorStoreInterface
 
     public function search(string $namespace, VectorSearchQuery $query): array
     {
-        $rows = $this->connection->table($this->table)
+        // When maxScanRows is set, read at most N rows ordered by document_id for stable,
+        // deterministic partial scans (top-K is approximate if N < total namespace size).
+        $queryBuilder = $this->connection->table($this->table)
             ->where('namespace', $namespace)
-            ->get(['document_id', 'embedding', 'metadata']);
+            ->orderBy('document_id');
+
+        if ($this->maxScanRows !== null && $this->maxScanRows >= 1) {
+            $queryBuilder->limit($this->maxScanRows);
+        }
+
+        $rows = $queryBuilder->get(['document_id', 'embedding', 'metadata']);
 
         $matches = [];
 

@@ -152,9 +152,31 @@ The package can register a **`similarity_search`** custom tool that:
 
 **Configuration:** `tools.similarity_search.name` (tool name, default `similarity_search`), `default_namespace`, `default_limit`, and optional `embedding_dimensions`, `embedding_timeout_seconds`, `embedding_provider`, `embedding_model` to align embedding vectors with stored documents.
 
+**Embedding dimension mismatch:** After the query is embedded, the tool compares the vector length to `tools.similarity_search.embedding_dimensions` when set, and otherwise to a **reference** vector sampled from the namespace when the store implements `VectorStoreReferenceEmbedding` (built-in `in_memory` and `database` stores). On mismatch, `execute()` returns a structured payload with `error` = `embedding_dimension_mismatch`, `empty` = `true`, and `results` = `[]` (it does not throw).
+
 **Optional filter:** pass `filter_json` on the tool input as a JSON object string; keys are matched for equality against each hit’s metadata (same semantics as `VectorSearchQuery::$filter`).
 
 For **Eloquent / database-native** vector similarity (`whereVectorSimilarTo`), continue using Laravel AI’s **`Laravel\Ai\Tools\SimilaritySearch::usingModel(...)`** and register it yourself if you expose it to agents.
+
+### Queued pipelines and `RunContext` serialization
+
+`RunQueuedPipelineJob` serializes the entire `RunContext` with PHP’s serializer (via Laravel’s queue job serialization). **Keep payloads small and JSON-serializable in spirit:** prefer identifiers in `input` / `state` / `metadata` and load heavy objects inside the worker.
+
+`RunContext` fields:
+
+| Field | Notes |
+|-------|--------|
+| `runId` | Correlation id for the run. |
+| `input` | Associative map; avoid non-serializable objects. |
+| `state` | Pipeline step state; same caution as `input`. |
+| `metadata` | Small key/value bag for cross-cutting data. |
+| `stepCount`, `toolCallCount` | Integers. |
+| `selectedProvider` | Nullable provider key string. |
+| `conversationId` | Nullable `ConversationId` value object (serializable). |
+| `conversation` | Optional full `Conversation` graph — **large** if populated; prefer `conversationId` + load in the worker when possible. |
+| `storeConversation`, `continueConversation` | Booleans. |
+
+Optional dev guard: `ai-agent-kit.pipeline.queued.debug_payload_guard` with `app.debug` true fails dispatch when `serialize(RunQueuedPipelineJob)` exceeds `pipeline.queued.max_serialized_job_bytes` (default 512 KiB). See `README.md` production checklist.
 
 ### Capability matrix and `sdk-surface-parity` closure (Phase 6)
 
@@ -171,6 +193,7 @@ The package can persist `VectorDocument` embeddings in SQL via **`ai-agent-kit.v
 1. Publish migrations (includes `create_ai_agent_vector_documents_table`) and run `php artisan migrate`.
 2. Set `vector.database.connection` when the table should not use the default DB connection (otherwise omit or null).
 3. Override `vector.database.table` only if you renamed the table.
+4. Optional: `vector.database.max_scan_rows` caps how many rows are read per namespace per search (ordered by `document_id` for stable partial scans). When the cap is below the namespace size, similarity results are **approximate** (top-K over the first N rows only).
 
 Namespaces remain isolated per `VectorStoreInterface::upsert($namespace, …)` row prefix.
 

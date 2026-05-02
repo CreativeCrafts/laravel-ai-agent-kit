@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Vector;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreInterface;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreReferenceEmbedding;
 
-final class InMemoryVectorStore implements VectorStoreInterface
+final class InMemoryVectorStore implements VectorStoreInterface, VectorStoreReferenceEmbedding
 {
     /** @var array<string, array<string, VectorDocument>> */
     private array $documents = [];
@@ -16,6 +17,19 @@ final class InMemoryVectorStore implements VectorStoreInterface
         foreach ($documents as $document) {
             $this->documents[$namespace][$document->id] = $document;
         }
+    }
+
+    public function referenceEmbeddingDimensions(string $namespace): ?int
+    {
+        $docs = $this->documents[$namespace] ?? [];
+        if ($docs === []) {
+            return null;
+        }
+
+        ksort($docs);
+        $first = reset($docs);
+
+        return count($first->embedding);
     }
 
     public function search(string $namespace, VectorSearchQuery $query): array

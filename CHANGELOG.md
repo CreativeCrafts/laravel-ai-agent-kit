@@ -6,11 +6,20 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Added
 
+- `VectorStoreReferenceEmbedding` optional contract; `InMemoryVectorStore` and `DatabaseVectorStore` report reference embedding width for `SimilaritySearchTool` dimension checks.
+- `ai-agent-kit.ephemeral_driver_warnings` (default off): optional one-time-per-process log when in-memory memory or vector drivers are used in configured environments (e.g. production).
+- `ai-agent-kit.vector.database.max_scan_rows`: optional cap on rows read per `DatabaseVectorStore::search` (stable `document_id` order; approximate top-K when cap &lt; namespace size).
+- `ai-agent-kit.pipeline.queued.debug_payload_guard` and `max_serialized_job_bytes`: when `app.debug` is true, fail queued pipeline dispatch if serialized job exceeds threshold.
+- **README:** Production checklist; **UPGRADE.md:** `RunContext` queue serialization field list, similarity-search dimension mismatch behavior, database vector scan cap; **capability matrix:** O(n) / checklist cross-links.
 - `LaravelAiFilesService` and `LaravelAiStoresService` wrapping Laravel AI `Files` / `Stores` with package DTOs; config `laravel_ai_files.default_provider`, `laravel_ai_stores.default_provider`.
 - `DatabaseVectorStore` and `ai-agent-kit.vector.default_driver` = `database`: SQL persistence for `VectorDocument` rows (`ai_agent_vector_documents` migration stub). Config: `vector.database.connection`, `vector.database.table`.
 - `AudioGenerationRuntime` contract, `AudioGenerationRequest` / `AudioGenerationResult`, and `SdkAudioGenerationRuntime` (Laravel AI `Audio::of()`); config `modalities.audio_generation.default_driver`, container binding, and `ConfigValidator` support.
 - `SimilaritySearchTool` (package `Tool`): embeds the query with `EmbeddingsRuntime`, searches `VectorStoreInterface`. Opt-in via `tools.similarity_search.enabled` and `tools.similarity_search.register` (defaults `false`); optional `name`, `default_namespace`, `default_limit`, and embedding overrides. Still subject to `tools.authorizer`.
 - `AgentKitManager` / `AgentKit` facade: `executeStream`, `embed`, `transcribe`, `generateImage`, `rerank`, `generateAudio`, `laravelAiFiles()`, `laravelAiStores()` — thin container delegates matching `app()` bindings.
+
+### Changed
+
+- `LaravelQueuedPipelineDispatcher` injects config and optional debug payload guard; `LaravelAiAgentKitServiceProvider::packageRegistered` split into private registrar methods.
 
 ### Documentation
 

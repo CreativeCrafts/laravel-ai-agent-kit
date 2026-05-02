@@ -4,6 +4,8 @@ This document maps **Laravel AI SDK** (`laravel/ai`) capabilities to **Laravel A
 
 The **`sdk-surface-parity`** roadmap (Phases 1–6) is **complete** as of the package release that ships this matrix revision. Historical design and tasks live under [openspec/changes/archive/2026-05-02-sdk-surface-parity](../openspec/changes/archive/2026-05-02-sdk-surface-parity/proposal.md). **Deferred** follow-ups (not part of that program) are listed under [Deferred follow-ups](#deferred-follow-ups) below.
 
+For production deployment concerns (singleton stores, vector scan cost, queues), see the **Production checklist** in [README.md](../README.md#production-checklist) and [UPGRADE.md](../UPGRADE.md).
+
 **SDK version pinned by this package:** `laravel/ai` `^0.6` (see `composer.json`). When the SDK adds gateways or tools, extend this matrix and the roadmap below.
 
 ## Legend
@@ -50,7 +52,7 @@ The **`sdk-surface-parity`** roadmap (Phases 1–6) is **complete** as of the pa
 | Laravel AI SDK | Agent Kit | Status | Notes |
 |----------------|-------------|--------|--------|
 | `Files::get`, `Files::put`, `Files::delete`, … | `LaravelAiFilesService` | **Covered** | DTOs: `StoredProviderFile`, `ProviderFileContents`. Optional `laravel_ai_files.default_provider`. |
-| `Stores::create`, `Stores::get`, `Store::add`, … (provider **vector stores** for RAG) | `LaravelAiStoresService` + `VectorStoreInterface` (`in_memory`, **`database`**) | **Partial** | **Stores API** wrapped for provider RAG workflows. **`VectorStoreInterface`** is app-owned embeddings + cosine search (distinct from OpenAI vector stores). |
+| `Stores::create`, `Stores::get`, `Store::add`, … (provider **vector stores** for RAG) | `LaravelAiStoresService` + `VectorStoreInterface` (`in_memory`, **`database`**) | **Partial** | **Stores API** wrapped for provider RAG workflows. **`VectorStoreInterface`** is app-owned embeddings + cosine dot-product search in PHP (**O(n)** rows read per namespace per query for the database driver; optional `max_scan_rows` caps reads). Distinct from OpenAI vector stores. |
 | `FileSearch` provider tool | Wired via provider tool factories + `provider_tool_names` | **Covered** | Requires store IDs / provider configuration in Laravel AI config. |
 
 ---

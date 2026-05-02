@@ -699,6 +699,16 @@ app()->instance(AgentOrchestrator::class, new FakeAgentOrchestrator());
 
 The package also exposes assertion helpers and Pest expectations for common fake-driven flows. See `CONTRIBUTING.md` and the package test suite for usage patterns.
 
+## Production checklist
+
+Before going live with Agent Kit:
+
+- **Memory driver:** `memory.default_driver` = `in_memory` is process-local; use `database` or `redis` for shared or durable conversation state across workers. Optional: enable `ephemeral_driver_warnings` to log when in-memory drivers are selected in configured environments (default: off).
+- **Vector driver:** `vector.default_driver` = `in_memory` is process-local; use `database` or a custom `VectorStoreInterface` binding for shared retrieval. `DatabaseVectorStore::search` is **O(n)** in table rows for the namespace; optional `vector.database.max_scan_rows` bounds reads (approximate top-K). See [docs/laravel-ai-sdk-capability-matrix.md](docs/laravel-ai-sdk-capability-matrix.md).
+- **Tool authorizer:** Replace `DenyAllToolAuthorizer` with a policy that allows only the tools and provider tools you intend to expose.
+- **Encryption:** Conversation payloads use `Encrypter` when database encryption is enabled; ensure `APP_KEY` and deployment practices match your threat model.
+- **Queues:** Queued pipelines serialize `RunContext` on the job; keep `input` / `state` / `metadata` small and avoid embedding full `Conversation` graphs when a `conversationId` suffices. See [UPGRADE.md](UPGRADE.md#queued-pipelines-and-runcontext-serialization) and optional `pipeline.queued.debug_payload_guard` for local debugging.
+
 ## Security and Privacy Defaults
 
 - Tool execution is default-deny unless tools are explicitly registered and authorized.
