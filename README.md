@@ -7,7 +7,7 @@
 Laravel AI Agent Kit is a Laravel package that delivers a structured agent-workflow toolkit built on top of the official Laravel AI SDK. It provides provider abstraction, pipeline orchestration,
 queued execution, and package foundations for building AI-powered application flows safely and predictably.
 
-Maintainers track **SDK ↔ package coverage** in [docs/laravel-ai-sdk-capability-matrix.md](docs/laravel-ai-sdk-capability-matrix.md) so Laravel AI capabilities map to runtime, pipelines, orchestration, budgets, and memory in one place.
+Maintainers track **SDK ↔ package coverage** in [docs/laravel-ai-sdk-capability-matrix.md](docs/laravel-ai-sdk-capability-matrix.md) so Laravel AI capabilities map to runtime, pipelines, orchestration, budgets, and memory in one place. The **`sdk-surface-parity`** program (audio, Files/Stores, database vectors, similarity search tool, AgentKit delegates) is **documented as complete** in that matrix; the OpenSpec change is **archived** at [openspec/changes/archive/2026-05-02-sdk-surface-parity](openspec/changes/archive/2026-05-02-sdk-surface-parity/proposal.md).
 
 ## Installation
 
