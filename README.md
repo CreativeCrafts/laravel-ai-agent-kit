@@ -88,6 +88,8 @@ and key lists rather than raw prompt, input, metadata, or provider option values
 
 The package ships several optional subsystems (structured evaluation, middleware, streaming, modalities, legacy conversation read bridge, attachment replay). **`CHANGELOG.md`** lists them under *Rollout* with the recommended order (Phases 1–6, plus Phase 0 hardening in parallel). **`UPGRADE.md`** has migration notes per phase. GitHub Actions workflows live under [`.github/workflows/`](https://github.com/creativecrafts/laravel-ai-agent-kit/tree/main/.github/workflows); the README CI badge targets [`ci.yml`](https://github.com/creativecrafts/laravel-ai-agent-kit/actions/workflows/ci.yml) on `main`.
 
+**`AgentKit` facade vs injection** — The `AgentKit` facade resolves `AgentKitManager`, which exposes blueprint/orchestration helpers plus thin delegates for **`executeStream`**, modality methods (`embed`, `transcribe`, `generateImage`, `rerank`, `generateAudio`), and **`laravelAiFiles()`** / **`laravelAiStores()`**. Each delegate uses the same container bindings as `app(Contract::class)`. Prefer **constructor injection** of the specific contract (`StreamingAiRuntime`, `EmbeddingsRuntime`, etc.) in application services and jobs so dependencies stay explicit and test doubles swap cleanly; use the facade for routes, one-off commands, or REPL-style exploration.
+
 Example configuration:
 
 ~~~php

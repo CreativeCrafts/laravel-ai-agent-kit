@@ -156,6 +156,10 @@ The package can register a **`similarity_search`** custom tool that:
 
 For **Eloquent / database-native** vector similarity (`whereVectorSimilarTo`), continue using Laravel AI’s **`Laravel\Ai\Tools\SimilaritySearch::usingModel(...)`** and register it yourself if you expose it to agents.
 
+### AgentKit facade helpers (Phase 5, `sdk-surface-parity`)
+
+`CreativeCrafts\LaravelAiAgentKit\Facades\AgentKit` / **`AgentKitManager`** now expose convenience methods that resolve the same singletons as the container: **`executeStream(ExecutionRequest)`**, **`embed`**, **`transcribe`**, **`generateImage`**, **`rerank`**, **`generateAudio`**, **`laravelAiFiles()`**, and **`laravelAiStores()`**. Prefer injecting the underlying contracts in long-lived services; see `README.md`.
+
 ### Vector store: database driver (Phase 2, `sdk-surface-parity`)
 
 The package can persist `VectorDocument` embeddings in SQL via **`ai-agent-kit.vector.default_driver` = `database`**.

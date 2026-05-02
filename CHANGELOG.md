@@ -10,6 +10,7 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 - `DatabaseVectorStore` and `ai-agent-kit.vector.default_driver` = `database`: SQL persistence for `VectorDocument` rows (`ai_agent_vector_documents` migration stub). Config: `vector.database.connection`, `vector.database.table`.
 - `AudioGenerationRuntime` contract, `AudioGenerationRequest` / `AudioGenerationResult`, and `SdkAudioGenerationRuntime` (Laravel AI `Audio::of()`); config `modalities.audio_generation.default_driver`, container binding, and `ConfigValidator` support.
 - `SimilaritySearchTool` (package `Tool`): embeds the query with `EmbeddingsRuntime`, searches `VectorStoreInterface`. Opt-in via `tools.similarity_search.enabled` and `tools.similarity_search.register` (defaults `false`); optional `name`, `default_namespace`, `default_limit`, and embedding overrides. Still subject to `tools.authorizer`.
+- `AgentKitManager` / `AgentKit` facade: `executeStream`, `embed`, `transcribe`, `generateImage`, `rerank`, `generateAudio`, `laravelAiFiles()`, `laravelAiStores()` — thin container delegates matching `app()` bindings.
 
 ### Documentation
 

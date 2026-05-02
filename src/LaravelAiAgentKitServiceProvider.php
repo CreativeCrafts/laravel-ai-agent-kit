@@ -183,6 +183,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
                 audioEvaluation: $app->make(AudioToTextToEvaluation::class),
                 orchestrator: $app->make(AgentOrchestrator::class),
                 blueprintRunner: $app->make(BlueprintRunner::class),
+                container: $app,
             );
         });
 

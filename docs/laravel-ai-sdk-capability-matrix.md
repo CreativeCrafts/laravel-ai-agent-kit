@@ -22,7 +22,8 @@ This document maps **Laravel AI SDK** (`laravel/ai`) capabilities to **Laravel A
 |----------------|-------------|--------|--------|
 | `AnonymousAgent`, `StructuredAnonymousAgent`, `Agent::prompt()` | `AiRuntime::execute()`, `ExecutionRequest` / `ExecutionResult`, `SdkAiRuntime` | **Covered** | Blueprints and orchestration resolve the same binding. |
 | Structured output (`ObjectSchema`, `HasStructuredOutput`, `StructuredAgentResponse`) | `ExecutionRequest::$schema`, `ExecutionResult::$structuredOutput` | **Covered** | Specialist blueprints prefer structured output; see `UPGRADE.md`. |
-| Streaming (`StreamedAgentResponse`, stream events) | `StreamingAiRuntime::executeStream()`, `StreamChunk` / `StreamComplete` / `StreamFailure` | **Covered** | No streaming for schema-backed calls; use `execute()`. |
+| Streaming (`StreamedAgentResponse`, stream events) | `StreamingAiRuntime::executeStream()`, `StreamChunk` / `StreamComplete` / `StreamFailure`; also `AgentKit::executeStream()` | **Covered** | No streaming for schema-backed calls; use `execute()`. |
+| Application convenience | `AgentKit` facade / `AgentKitManager` (`executeStream`, `embed`, `transcribe`, `generateImage`, `rerank`, `generateAudio`, `laravelAiFiles`, `laravelAiStores`) | **Covered** | Thin `app()` delegates; prefer injecting contracts in long-lived services. |
 | Provider tools: `WebSearch`, `WebFetch`, `FileSearch` | `provider_tool_names` on `ExecutionRequest`; provider tool factories in `LaravelAiAgentKitServiceProvider` | **Covered** | Names must match SDK tool registration. |
 | Custom `Laravel\Ai\Contracts\Tool` | Package `Tool` + `SdkToolAdapter` / authorizer | **Covered** | See tool registry and governance docs. |
 | SDK agent middleware (e.g. `RememberConversation`) | Package `RuntimeConversationMemoryBridge`, `ConversationStore`, `RunContext` | **Parallel** | Different persistence model; package memory + optional legacy read bridge replaces ad-hoc SDK conversation middleware for kit-driven flows. |
@@ -87,7 +88,7 @@ Ordered for **coverage without breaking** the single runtime story:
 2. **Provider `Files` + `Stores`** — **`LaravelAiFilesService`** / **`LaravelAiStoresService`** with config `laravel_ai_files.default_provider` and `laravel_ai_stores.default_provider` (Phase 3 shipped).
 3. **Vector / retrieval parity** — `ai-agent-kit.vector.default_driver` supports `in_memory` and **`database`** (publish `create_ai_agent_vector_documents_table` migration). Distinct from Laravel AI **Stores** (provider-hosted file stores for RAG).
 4. **Packaged similarity search** — **`SimilaritySearchTool`** + `tools.similarity_search` (Phase 4 shipped; opt-in registration). Laravel AI **`SimilaritySearch`** remains for Eloquent-native vector columns.
-5. **Facade ergonomics** — e.g. `AgentKit` helpers for streaming and modalities once contracts are stable (optional product decision).
+5. **Facade ergonomics** — **`AgentKit` / `AgentKitManager`** expose `executeStream`, modality delegates, and `laravelAiFiles()` / `laravelAiStores()` (Phase 5 shipped).
 
 ---
 
