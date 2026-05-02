@@ -12,10 +12,34 @@ use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluation;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationResult;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\BlueprintRunner;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\StreamingAiRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\AudioGenerationRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\EmbeddingsRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\ImageGenerationRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\RerankingRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\TranscriptionRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
+use CreativeCrafts\LaravelAiAgentKit\Core\LaravelAi\LaravelAiFilesService;
+use CreativeCrafts\LaravelAiAgentKit\Core\LaravelAi\LaravelAiStoresService;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\AudioGenerationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\AudioGenerationResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\EmbeddingsRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\EmbeddingsResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\ImageGenerationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\ImageGenerationResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\RerankingRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\RerankingResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionResult;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StreamChunk;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StreamComplete;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StreamFailure;
+use Generator;
+use Illuminate\Contracts\Container\Container;
 
 final readonly class AgentKitManager
 {
@@ -24,6 +48,7 @@ final readonly class AgentKitManager
         private AudioToTextToEvaluation $audioEvaluation,
         private AgentOrchestrator $orchestrator,
         private BlueprintRunner $blueprintRunner,
+        private Container $container,
     ) {
     }
 
@@ -60,5 +85,48 @@ final readonly class AgentKitManager
     public function orchestrator(): AgentOrchestrator
     {
         return $this->orchestrator;
+    }
+
+    /**
+     * @return Generator<int, StreamChunk|StreamComplete|StreamFailure>
+     */
+    public function executeStream(ExecutionRequest $request): Generator
+    {
+        return $this->container->make(StreamingAiRuntime::class)->executeStream($request);
+    }
+
+    public function embed(EmbeddingsRequest $request): EmbeddingsResult
+    {
+        return $this->container->make(EmbeddingsRuntime::class)->embed($request);
+    }
+
+    public function transcribe(TranscriptionRequest $request): TranscriptionResult
+    {
+        return $this->container->make(TranscriptionRuntime::class)->transcribe($request);
+    }
+
+    public function generateImage(ImageGenerationRequest $request): ImageGenerationResult
+    {
+        return $this->container->make(ImageGenerationRuntime::class)->generate($request);
+    }
+
+    public function rerank(RerankingRequest $request): RerankingResult
+    {
+        return $this->container->make(RerankingRuntime::class)->rerank($request);
+    }
+
+    public function generateAudio(AudioGenerationRequest $request): AudioGenerationResult
+    {
+        return $this->container->make(AudioGenerationRuntime::class)->generate($request);
+    }
+
+    public function laravelAiFiles(): LaravelAiFilesService
+    {
+        return $this->container->make(LaravelAiFilesService::class);
+    }
+
+    public function laravelAiStores(): LaravelAiStoresService
+    {
+        return $this->container->make(LaravelAiStoresService::class);
     }
 }

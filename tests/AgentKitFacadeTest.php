@@ -13,14 +13,23 @@ use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationReques
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationResult;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\BlueprintRunner;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\StreamingAiRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\EmbeddingsRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\EmbeddingsRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StreamComplete;
 use CreativeCrafts\LaravelAiAgentKit\Facades\AgentKit;
 use CreativeCrafts\LaravelAiAgentKit\Support\AgentKitManager;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\AgentKitTestingAgentRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\AgentKitTestingOrchestrator;
+use Generator;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Facade;
+use Laravel\Ai\AiServiceProvider;
+use Laravel\Ai\Embeddings;
 
 beforeEach(function (): void {
     refreshAgentKitFacadeBinding();
@@ -149,6 +158,99 @@ it('delegates orchestration requests through the facade without reshaping the pa
       ->and($result->finalOutput)->toBe(['task' => 'Draft a short refund response.'])
       ->and($orchestrator->requests)->toHaveCount(1)
       ->and($orchestrator->requests[0]->task)->toBe('Draft a short refund response.');
+});
+
+it('delegates executeStream through the facade to the same StreamingAiRuntime binding as the container', function (): void {
+    app()->register(AiServiceProvider::class);
+
+    /** @var array<string, mixed> $ai */
+    $ai = require __DIR__.'/../vendor/laravel/ai/config/ai.php';
+    Config::set('ai', $ai);
+    Config::set('ai.default', 'openai');
+    Config::set('ai.providers', [
+        'openai' => [
+            'driver' => 'openai',
+            'key' => 'test-key-for-ci',
+        ],
+    ]);
+
+    configureAgentKitFacadeTestBindings();
+
+    $streaming = new class () implements StreamingAiRuntime {
+        public int $executeStreamCalls = 0;
+
+        public function executeStream(ExecutionRequest $request): Generator
+        {
+            $this->executeStreamCalls++;
+
+            yield new StreamComplete(
+                runId: $request->runId,
+                output: 'facade-stream',
+                provider: 'openai',
+                model: 'gpt-4o-mini',
+                usage: ['prompt_tokens' => 1, 'completion_tokens' => 2],
+            );
+        }
+    };
+
+    app()->instance(StreamingAiRuntime::class, $streaming);
+    refreshAgentKitFacadeBinding();
+
+    $events = iterator_to_array(AgentKit::executeStream(
+        new ExecutionRequest(
+            runId: 'run-facade-stream',
+            prompt: 'Hello.',
+            provider: 'openai',
+            model: 'gpt-4o-mini',
+        ),
+    ));
+
+    expect($streaming->executeStreamCalls)->toBe(1)
+        ->and($events)->toHaveCount(1)
+        ->and($events[0])->toBeInstanceOf(StreamComplete::class)
+        ->and($events[0]->output)->toBe('facade-stream')
+        ->and(app(StreamingAiRuntime::class))->toBe($streaming);
+});
+
+it('delegates embed through AgentKitManager using the same EmbeddingsRuntime singleton as app()', function (): void {
+    app()->register(AiServiceProvider::class);
+
+    /** @var array<string, mixed> $ai */
+    $ai = require __DIR__.'/../vendor/laravel/ai/config/ai.php';
+    Config::set('ai', $ai);
+    Config::set('ai.default', 'openai');
+    Config::set('ai.default_for_embeddings', 'openai');
+    Config::set('ai.providers', [
+        'openai' => [
+            'driver' => 'openai',
+            'key' => 'test-key-for-ci',
+        ],
+    ]);
+
+    Embeddings::fake([[[0.1, 0.9]]])->preventStrayEmbeddings();
+
+    configureAgentKitFacadeTestBindings();
+
+    app()->forgetInstance(EmbeddingsRuntime::class);
+    refreshAgentKitFacadeBinding();
+
+    $resolved = app(EmbeddingsRuntime::class);
+    $manager = app(AgentKitManager::class);
+
+    expect($manager)->toBe(AgentKit::getFacadeRoot())
+        ->and(spl_object_id($resolved))->toBe(spl_object_id(app(EmbeddingsRuntime::class)));
+
+    $result = $manager->embed(
+        new EmbeddingsRequest(
+            runId: 'run-facade-emb',
+            inputs: ['one'],
+            dimensions: 2,
+            provider: 'openai',
+            model: 'text-embedding-3-small',
+        ),
+    );
+
+    expect($result->vectors[0][1])->toBe(0.9);
 });
 
 function configureAgentKitFacadeTestBindings(): AgentKitTestingOrchestrator

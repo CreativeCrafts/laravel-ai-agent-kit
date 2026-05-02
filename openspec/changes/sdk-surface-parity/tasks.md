@@ -44,10 +44,10 @@ Satisfies `specs/similarity-search-tool/spec.md`.
 
 Satisfies `specs/agentkit-facade-ergonomics/spec.md`.
 
-- [ ] 5.1 Add `AgentKitManager` methods: thin delegates for `StreamingAiRuntime::executeStream`, each modality runtime (including audio generation after Phase 1), following existing style.
-- [ ] 5.2 Extend `AgentKit` facade `@method` annotations; ensure PHPStan/Pest coverage (facade resolves same bindings as `app()`).
-- [ ] 5.3 README subsection: facade vs injection; update capability matrix facade row if present.
-- [ ] 5.4 `CHANGELOG.md` and `UPGRADE.md` note for new API surface.
+- [x] 5.1 Add `AgentKitManager` methods: thin delegates for `StreamingAiRuntime::executeStream`, each modality runtime (including audio generation after Phase 1), following existing style.
+- [x] 5.2 Extend `AgentKit` facade `@method` annotations; ensure PHPStan/Pest coverage (facade resolves same bindings as `app()`).
+- [x] 5.3 README subsection: facade vs injection; update capability matrix facade row if present.
+- [x] 5.4 `CHANGELOG.md` and `UPGRADE.md` note for new API surface.
 
 ## Phase 6 — Documentation and matrix closure
 

@@ -47,7 +47,7 @@ The package already exposes text runtime (`AiRuntime`, streaming), four modality
 
 ### D6 — AgentKit facade
 
-- Add **`@method` annotations** and thin methods on **`AgentKitManager`** (facade delegates there): e.g. `stream(PromptBlueprint|ExecutionRequest)` → `StreamingAiRuntime`, `embeddings(...)`, `image(...)`, `transcription(...)`, `reranking(...)`, **`audioGeneration(...)`** after Phase 1. Avoid fat facades; each method < ~5 lines delegating to resolved contract.
+- **Shipped:** **`AgentKitManager`** accepts the application **`Container`** and exposes thin methods: `executeStream`, `embed`, `transcribe`, `generateImage`, `rerank`, `generateAudio`, `laravelAiFiles`, `laravelAiStores` — each `make()`s the same contract binding as direct resolution. **`AgentKit`** facade `@method` annotations updated accordingly.
 
 ## Risks
 
