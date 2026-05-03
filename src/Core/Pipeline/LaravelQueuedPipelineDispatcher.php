@@ -74,7 +74,7 @@ final class LaravelQueuedPipelineDispatcher implements QueuedPipelineDispatcher
 
         if ($size > $maxBytes) {
             throw new RuntimeException(sprintf(
-                'Queued pipeline job serialized size (%d bytes) exceeds ai-agent-kit.pipeline.queued.max_serialized_job_bytes (%d). Reduce RunContext payload (see UPGRADE.md).',
+                'Queued pipeline job serialized size (%d bytes) exceeds ai-agent-kit.pipeline.queued.max_serialized_job_bytes (%d). Reduce RunContext payload (see README: Queued pipelines and RunContext).',
                 $size,
                 $maxBytes,
             ));

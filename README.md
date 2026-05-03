@@ -9,7 +9,7 @@ CI runs **PHP 8.3–8.5** against **Laravel 12 and 13** ([docs/github-ci-matrix.
 Laravel AI Agent Kit is a Laravel package that delivers a structured agent-workflow toolkit built on top of the official Laravel AI SDK. It provides provider abstraction, pipeline orchestration,
 queued execution, and package foundations for building AI-powered application flows safely and predictably.
 
-Maintainers track **SDK ↔ package coverage** in [docs/laravel-ai-sdk-capability-matrix.md](docs/laravel-ai-sdk-capability-matrix.md) so Laravel AI capabilities map to runtime, pipelines, orchestration, budgets, and memory in one place. **Async jobs** are mapped in [docs/sdk-async-inventory.md](docs/sdk-async-inventory.md). The **`sdk-surface-parity`** program (audio, Files/Stores, database vectors, similarity search tool, AgentKit delegates) is **documented as complete** in that matrix; the OpenSpec change is **archived** at [openspec/changes/archive/2026-05-02-sdk-surface-parity](openspec/changes/archive/2026-05-02-sdk-surface-parity/proposal.md).
+Maintainers and contributors use [docs/laravel-ai-sdk-capability-matrix.md](docs/laravel-ai-sdk-capability-matrix.md) to map Laravel AI SDK features to this package. **Async jobs** are summarized in [docs/sdk-async-inventory.md](docs/sdk-async-inventory.md).
 
 ## Installation
 
@@ -54,7 +54,7 @@ The package validates its configuration during boot by default.
 At least one enabled provider must exist, `default_provider` must reference an enabled configured provider, and `failover_order` must include the default provider.
 
 The default memory driver is `in_memory`. That default is explicit, non-persistent, and safe for tests, local development, and ephemeral runs. Switch `memory.default_driver` to `database` when you
-want encrypted persistent storage and retention-based purging, or to `redis` when you need shared ephemeral memory across workers. Optional **`memory.laravel_ai_legacy`** reads Laravel AI’s default `agent_*` tables when your package store has no row (database driver only; see `UPGRADE.md`). Optional **`memory.attachments_replay`** gates replay of persisted attachment references on continued conversations (opt-in per request via `metadata['attachment_replay']`; see `UPGRADE.md`).
+want encrypted persistent storage and retention-based purging, or to `redis` when you need shared ephemeral memory across workers. Optional **`memory.laravel_ai_legacy`** reads Laravel AI’s default `agent_*` tables when your package store has no row (database driver only; see config comments in `memory.laravel_ai_legacy`). Optional **`memory.attachments_replay`** gates replay of persisted attachment references on continued conversations (opt-in per request via `metadata['attachment_replay']`; see `memory.attachments_replay` in `config/ai-agent-kit.php`).
 
 Retry and circuit breaker resilience settings are configured explicitly under `resilience`. Retry policy evaluation is bounded by `budgets.max_retries_per_step` and is now enforced by the synchronous
 pipeline runner at execution time.
@@ -71,7 +71,7 @@ Optional **runtime middleware** wraps every `AiRuntime::execute` call (including
 
 **Laravel AI provider Files and Stores** — For provider-hosted uploads and vector stores (RAG with `FileSearch`), inject `CreativeCrafts\LaravelAiAgentKit\Core\LaravelAi\LaravelAiFilesService` and `LaravelAiStoresService`. They wrap `Laravel\Ai\Files` and `Laravel\Ai\Stores` and return package DTOs. Optional `laravel_ai_files.default_provider` and `laravel_ai_stores.default_provider` apply when you omit the provider argument. This is separate from **`VectorStoreInterface`** (application embedding storage with `in_memory` / `database` drivers).
 
-**Similarity search custom tool** — Optional package tool `similarity_search` (class `CreativeCrafts\LaravelAiAgentKit\Tools\SimilaritySearchTool`) searches documents in `VectorStoreInterface` using query embeddings from `EmbeddingsRuntime`. Built-in vector stores enforce **one embedding width per namespace**; set `tools.similarity_search.embedding_dimensions` to match your embedding model when you use a custom `VectorStoreInterface` that does not implement `VectorStoreReferenceEmbedding`. Enable with `tools.similarity_search.enabled` and `tools.similarity_search.register` in `config/ai-agent-kit.php`, then list `similarity_search` in `ExecutionRequest::$toolNames` and implement `ToolAuthorizer` so custom tools are allowed (the default authorizer denies all). This targets the kit vector store; for Eloquent `whereVectorSimilarTo` flows, Laravel AI’s `Laravel\Ai\Tools\SimilaritySearch` remains the right choice. See `UPGRADE.md`.
+**Similarity search custom tool** — Optional package tool `similarity_search` (class `CreativeCrafts\LaravelAiAgentKit\Tools\SimilaritySearchTool`) searches documents in `VectorStoreInterface` using query embeddings from `EmbeddingsRuntime`. Built-in vector stores enforce **one embedding width per namespace**; set `tools.similarity_search.embedding_dimensions` to match your embedding model when you use a custom `VectorStoreInterface` that does not implement `VectorStoreReferenceEmbedding`. Enable with `tools.similarity_search.enabled` and `tools.similarity_search.register` in `config/ai-agent-kit.php`, then list `similarity_search` in `ExecutionRequest::$toolNames` and implement `ToolAuthorizer` so custom tools are allowed (the default authorizer denies all). This targets the kit vector store; for Eloquent `whereVectorSimilarTo` flows, Laravel AI’s `Laravel\Ai\Tools\SimilaritySearch` remains the right choice.
 
 `budgets.max_cost_usd` is enforced in fail-closed mode: when configured, each runtime request must provide numeric `metadata.cost_usd` (or `metadata.estimated_cost_usd`) so cost ceilings can be
 validated deterministically.
@@ -86,11 +86,33 @@ Prompt repositories support two drivers via `prompts.default_driver`:
 Pipeline lifecycle and failover telemetry are emitted through Laravel events with redacted defaults. Event payloads expose safe metadata such as run identifiers, provider names, step classes, counts,
 and key lists rather than raw prompt, input, metadata, or provider option values by default.
 
-### Adopting features from the roadmap
+### Vector embeddings (built-in stores)
 
-The package ships several optional subsystems (structured evaluation, middleware, streaming, modalities, legacy conversation read bridge, attachment replay). **`CHANGELOG.md`** lists them under *Rollout* with the recommended order (Phases 1–6, plus Phase 0 hardening in parallel). **`UPGRADE.md`** has migration notes per phase. GitHub Actions workflows live under [`.github/workflows/`](https://github.com/creativecrafts/laravel-ai-agent-kit/tree/main/.github/workflows); the README CI badge targets [`ci.yml`](https://github.com/creativecrafts/laravel-ai-agent-kit/actions/workflows/ci.yml) on `main`.
+`InMemoryVectorStore`, `DatabaseVectorStore`, and the test fake `FakeVectorStore` enforce **one vector length per namespace**: the first `upsert` into an empty namespace sets the width, and every later document in that namespace must match. Mismatched `upsert` calls throw `VectorOperationException` (see `forEmbeddingDimensionMismatch`). `search` only scores documents whose stored embedding length **equals** the query vector length (other rows are skipped).
 
-**`AgentKit` facade vs injection** — The `AgentKit` facade resolves `AgentKitManager`, which exposes blueprint/orchestration helpers plus thin delegates for **`executeStream`**, modality methods (`embed`, `transcribe`, `generateImage`, `rerank`, `generateAudio`), and **`laravelAiFiles()`** / **`laravelAiStores()`**. Each delegate uses the same container bindings as `app(Contract::class)`. Prefer **constructor injection** of the specific contract (`StreamingAiRuntime`, `EmbeddingsRuntime`, etc.) in application services and jobs so dependencies stay explicit and test doubles swap cleanly; use the facade for routes, one-off commands, or REPL-style exploration.
+Use separate namespaces (or a custom `VectorStoreInterface`) if you intentionally mix embedding models.
+
+### Laravel AI Files and Stores observability
+
+`LaravelAiFilesService` and `LaravelAiStoresService` dispatch redacted events `LaravelAiFilesGatewayOperationFinished` and `LaravelAiStoresGatewayOperationFinished` (operation name, provider, ids, success, bounded error text — **no** file bodies or API keys). Toggle with `observability.laravel_ai_files_stores.enabled` (default **true**). In tests that assert global event counts, you may set it to `false`.
+
+### Queued pipelines and `RunContext`
+
+`RunQueuedPipelineJob` serializes the entire `RunContext`. Prefer small, serializable `input` / `state` / `metadata`; avoid putting a full `Conversation` graph on the job when a `conversationId` is enough.
+
+| Field | Notes |
+|-------|--------|
+| `runId` | Correlation id for the run. |
+| `input` | Associative map; avoid non-serializable objects. |
+| `state` | Pipeline step state; same caution as `input`. |
+| `metadata` | Small key/value bag for cross-cutting data. |
+| `stepCount`, `toolCallCount` | Integers. |
+| `selectedProvider` | Nullable provider key string. |
+| `conversationId` | Nullable `ConversationId` value object (serializable). |
+| `conversation` | Optional full `Conversation` graph — **large** if populated; prefer `conversationId` and load in the worker when possible. |
+| `storeConversation`, `continueConversation` | Booleans. |
+
+Optional dev guard: when `pipeline.queued.debug_payload_guard` is true and `config('app.debug')` is true, dispatch fails if the serialized job exceeds `pipeline.queued.max_serialized_job_bytes` (default 512 KiB).
 
 Example configuration:
 
@@ -189,7 +211,7 @@ return [
             'retention_days' => 7,
         ],
 
-        // Optional: read Laravel AI default `agent_*` tables when package store misses (see UPGRADE.md).
+        // Optional: read Laravel AI default `agent_*` tables when package store misses.
         // 'laravel_ai_legacy' => [
         //     'enabled' => true,
         //     'connection' => null,
@@ -197,7 +219,7 @@ return [
         //     'messages_table' => 'agent_conversation_messages',
         // ],
 
-        // Optional: attachment replay policy when continuing conversations (see UPGRADE.md).
+        // Optional: attachment replay policy when continuing conversations.
         // 'attachments_replay' => [
         //     'enabled' => false,
         //     'max_per_turn' => null,
@@ -220,6 +242,8 @@ return [
     ],
 ];
 ~~~
+
+**`AgentKit` facade vs injection** — The `AgentKit` facade resolves `AgentKitManager`, which exposes blueprint/orchestration helpers plus thin delegates for **`executeStream`**, modality methods (`embed`, `transcribe`, `generateImage`, `rerank`, `generateAudio`), and **`laravelAiFiles()`** / **`laravelAiStores()`**. Each delegate uses the same container bindings as `app(Contract::class)`. Prefer **constructor injection** of the specific contract (`StreamingAiRuntime`, `EmbeddingsRuntime`, etc.) in application services and jobs so dependencies stay explicit and test doubles swap cleanly; use the facade for routes, one-off commands, or quick exploration.
 
 ### Tool input schema support (in-memory registry)
 
@@ -608,7 +632,7 @@ final class SupportConversationService
 }
 ~~~
 
-For runtime-integrated memory (blueprints, `AiRuntime` with `store_conversation` / `continue_conversation`), use `ConversationContextManager` and the `RunContext` pipeline — see `UPGRADE.md` and the in-tree blueprint tests.
+For runtime-integrated memory (blueprints, `AiRuntime` with `store_conversation` / `continue_conversation`), use `ConversationContextManager` and the `RunContext` pipeline — see the blueprint tests under `tests/`.
 
 Run orchestrated multi-agent flows through the package agent orchestrator:
 
@@ -709,7 +733,7 @@ Before going live with Agent Kit:
 - **Vector driver:** `vector.default_driver` = `in_memory` is process-local; use `database` or a custom `VectorStoreInterface` binding for shared retrieval. Built-in stores enforce **one embedding width per namespace** on `upsert`. `DatabaseVectorStore::search` is **O(n)** in table rows for the namespace; optional `vector.database.max_scan_rows` bounds reads (approximate top-K). See [docs/laravel-ai-sdk-capability-matrix.md](docs/laravel-ai-sdk-capability-matrix.md).
 - **Tool authorizer:** Replace `DenyAllToolAuthorizer` with a policy that allows only the tools and provider tools you intend to expose.
 - **Encryption:** Conversation payloads use `Encrypter` when database encryption is enabled; ensure `APP_KEY` and deployment practices match your threat model.
-- **Queues:** Queued pipelines serialize `RunContext` on the job; keep `input` / `state` / `metadata` small and avoid embedding full `Conversation` graphs when a `conversationId` suffices. See [UPGRADE.md](UPGRADE.md#queued-pipelines-and-runcontext-serialization) and optional `pipeline.queued.debug_payload_guard` for local debugging.
+- **Queues:** Queued pipelines serialize `RunContext` on the job; keep `input` / `state` / `metadata` small and avoid embedding full `Conversation` graphs when a `conversationId` suffices. See **Queued pipelines and `RunContext`** above and optional `pipeline.queued.debug_payload_guard` for local debugging.
 
 Before tagging releases, maintainers follow [docs/release-verification.md](docs/release-verification.md).
 

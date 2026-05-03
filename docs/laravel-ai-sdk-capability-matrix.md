@@ -4,7 +4,7 @@ This document maps **Laravel AI SDK** (`laravel/ai`) capabilities to **Laravel A
 
 The **`sdk-surface-parity`** roadmap (Phases 1–6) is **complete** as of the package release that ships this matrix revision. Historical design and tasks live under [openspec/changes/archive/2026-05-02-sdk-surface-parity](../openspec/changes/archive/2026-05-02-sdk-surface-parity/proposal.md).
 
-For **async jobs and queue guidance**, see [sdk-async-inventory.md](sdk-async-inventory.md). For production deployment (singletons, queues, vectors), see the **Production checklist** in [README.md](../README.md#production-checklist) and [UPGRADE.md](../UPGRADE.md). Before tagging a release, follow [release-verification.md](release-verification.md).
+For **async jobs and queue guidance**, see [sdk-async-inventory.md](sdk-async-inventory.md). For production deployment (singletons, queues, vectors), see the **Production checklist** in [README.md](../README.md#production-checklist). Before tagging a release, follow [release-verification.md](release-verification.md).
 
 **SDK version pinned by this package:** `laravel/ai` `^0.6` (see `composer.json`). When the SDK adds gateways or tools, extend this matrix, [sdk-async-inventory.md](sdk-async-inventory.md), and `CHANGELOG.md`.
 
@@ -25,7 +25,7 @@ For **async jobs and queue guidance**, see [sdk-async-inventory.md](sdk-async-in
 | Laravel AI SDK | Agent Kit | Status | Notes |
 |----------------|-------------|--------|-------|
 | `AnonymousAgent`, `StructuredAnonymousAgent`, `Agent::prompt()` | `AiRuntime::execute()`, `ExecutionRequest` / `ExecutionResult`, `SdkAiRuntime` | **Covered** | Blueprints and orchestration resolve the same binding. |
-| Structured output (`ObjectSchema`, `HasStructuredOutput`, `StructuredAgentResponse`) | `ExecutionRequest::$schema`, `ExecutionResult::$structuredOutput` | **Covered** | Specialist blueprints prefer structured output; see `UPGRADE.md`. |
+| Structured output (`ObjectSchema`, `HasStructuredOutput`, `StructuredAgentResponse`) | `ExecutionRequest::$schema`, `ExecutionResult::$structuredOutput` | **Covered** | Specialist blueprints prefer structured output; see README and blueprint tests. |
 | Streaming (`StreamedAgentResponse`, stream events) | `StreamingAiRuntime::executeStream()`, `StreamChunk` / `StreamComplete` / `StreamFailure`; also `AgentKit::executeStream()` | **Covered** | No streaming for schema-backed calls; use `execute()`. |
 | Application convenience | `AgentKit` facade / `AgentKitManager` (`executeStream`, `embed`, `transcribe`, `generateImage`, `rerank`, `generateAudio`, `laravelAiFiles`, `laravelAiStores`) | **Covered** | Thin `app()` delegates; prefer injecting contracts in long-lived services. |
 | Provider tools: `WebSearch`, `WebFetch`, `FileSearch` | `provider_tool_names` on `ExecutionRequest`; provider tool factories in `LaravelAiAgentKitServiceProvider` | **Covered** | Names must match SDK tool registration. |
