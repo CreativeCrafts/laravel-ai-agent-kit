@@ -100,6 +100,7 @@ use Illuminate\Contracts\Encryption\Encrypter;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\DatabaseManager;
+use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
@@ -114,6 +115,8 @@ use Closure;
 
 class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 {
+    private static bool $ephemeralDriverWarningLogged = false;
+
     public function configurePackage(Package $package): void
     {
         $package
@@ -133,6 +136,54 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
     }
 
     public function packageRegistered(): void
+    {
+        $this->registerAgentOrchestrationBindings();
+        $this->registerConfigAndProviderBindings();
+        $this->registerResilienceBindings();
+        $this->registerSecurityBindings();
+        $this->registerMemoryBindings();
+        $this->registerPromptBindings();
+        $this->registerToolBindings();
+        $this->registerVectorAndLaravelAiFacadeBindings();
+        $this->registerBlueprintRuntimeAndPipelineBindings();
+        $this->registerSummarizationBindings();
+    }
+
+    /**
+     * @throws BindingResolutionException
+     */
+    public function packageBooted(): void
+    {
+        $app = $this->app;
+
+        /** @var ConfigRepository $config */
+        $config = $app->make(ConfigRepository::class);
+
+        /** @var array{enabled?: bool}|null $validation */
+        $validation = $config->get('ai-agent-kit.validation');
+
+        $enabled = !is_array($validation) || (bool)($validation['enabled'] ?? true);
+
+        if ($enabled) {
+            $app->make(ConfigValidator::class)->validateCurrentConfig();
+        }
+
+        if ($this->memoryDriver($config) === 'redis') {
+            $app->make(RedisConversationStore::class);
+        }
+
+        $this->maybeWarnEphemeralDrivers($config);
+
+        $normalizer = $app->make(SdkTelemetryNormalizer::class);
+        $events = $app->make(Dispatcher::class);
+
+        $events->listen(PromptingAgent::class, [$normalizer, 'handlePromptingAgent']);
+        $events->listen(AgentPrompted::class, [$normalizer, 'handleAgentPrompted']);
+        $events->listen(InvokingTool::class, [$normalizer, 'handleInvokingTool']);
+        $events->listen(ToolInvoked::class, [$normalizer, 'handleToolInvoked']);
+    }
+
+    private function registerAgentOrchestrationBindings(): void
     {
         $this->app->singleton(ContainerAgentRegistry::class, function (Application $app): ContainerAgentRegistry {
             return new ContainerAgentRegistry($app);
@@ -186,7 +237,10 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
                 container: $app,
             );
         });
+    }
 
+    private function registerConfigAndProviderBindings(): void
+    {
         $this->app->singleton(ConfigValidator::class, function (Application $app): ConfigValidator {
             /** @var ConfigRepository $config */
             $config = $app->make(ConfigRepository::class);
@@ -244,7 +298,10 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         $this->app->singleton(FailoverProviderSelector::class, function (Application $app): FailoverProviderSelector {
             return $app->make(ConfiguredFailoverProviderSelector::class);
         });
+    }
 
+    private function registerResilienceBindings(): void
+    {
         $this->app->singleton(ConfigRetryPolicyResolver::class, function (Application $app): ConfigRetryPolicyResolver {
             /** @var ConfigRepository $config */
             $config = $app->make(ConfigRepository::class);
@@ -273,7 +330,10 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 
             return new PipelineBudgetEnforcer($config);
         });
+    }
 
+    private function registerSecurityBindings(): void
+    {
         $this->app->singleton(LaravelEncryptionService::class, function (Application $app): LaravelEncryptionService {
             /** @var Encrypter $encrypter */
             $encrypter = $app->make(Encrypter::class);
@@ -292,7 +352,10 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         $this->app->singleton(Redactor::class, function (Application $app): Redactor {
             return $app->make(DefaultRedactor::class);
         });
+    }
 
+    private function registerMemoryBindings(): void
+    {
         $this->app->singleton(DatabaseConversationStore::class, function (Application $app): DatabaseConversationStore {
             /** @var DatabaseManager $database */
             $database = $app->make(DatabaseManager::class);
@@ -412,7 +475,10 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         $this->app->singleton(ConversationContextManager::class, function (Application $app): ConversationContextManager {
             return $app->make(StoreBackedConversationContextManager::class);
         });
+    }
 
+    private function registerPromptBindings(): void
+    {
         $this->app->singleton(InMemoryPromptRepository::class, function (): InMemoryPromptRepository {
             return new InMemoryPromptRepository();
         });
@@ -436,7 +502,10 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
                 default => throw new RuntimeException('Unsupported prompt repository driver.'),
             };
         });
+    }
 
+    private function registerToolBindings(): void
+    {
         $this->app->singleton(DenyAllToolAuthorizer::class, function (): DenyAllToolAuthorizer {
             return new DenyAllToolAuthorizer();
         });
@@ -491,7 +560,10 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         $this->app->singleton(ProviderToolRegistry::class, function (Application $app): ProviderToolRegistry {
             return $app->make(InMemoryProviderToolRegistry::class);
         });
+    }
 
+    private function registerVectorAndLaravelAiFacadeBindings(): void
+    {
         $this->app->singleton(InMemoryVectorStore::class, function (): InMemoryVectorStore {
             return new InMemoryVectorStore();
         });
@@ -514,15 +586,20 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         $this->app->singleton(LaravelAiFilesService::class, function (Application $app): LaravelAiFilesService {
             return new LaravelAiFilesService(
                 config: $app->make(ConfigRepository::class),
+                events: $app->make(Dispatcher::class),
             );
         });
 
         $this->app->singleton(LaravelAiStoresService::class, function (Application $app): LaravelAiStoresService {
             return new LaravelAiStoresService(
                 config: $app->make(ConfigRepository::class),
+                events: $app->make(Dispatcher::class),
             );
         });
+    }
 
+    private function registerBlueprintRuntimeAndPipelineBindings(): void
+    {
         $this->app->singleton(SdkToolMaterializer::class, function (Application $app): SdkToolMaterializer {
             return new SdkToolMaterializer(
                 toolRegistry: $app->make(ToolRegistry::class),
@@ -672,14 +749,24 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return $app->make(SynchronousPipelineRunner::class);
         });
 
+        $this->registerQueuedPipelineDispatcherBinding();
+    }
+
+    private function registerQueuedPipelineDispatcherBinding(): void
+    {
         $this->app->singleton(LaravelQueuedPipelineDispatcher::class, function (Application $app): LaravelQueuedPipelineDispatcher {
-            return new LaravelQueuedPipelineDispatcher();
+            return new LaravelQueuedPipelineDispatcher(
+                config: $app->make(ConfigRepository::class),
+            );
         });
 
         $this->app->singleton(QueuedPipelineDispatcher::class, function (Application $app): QueuedPipelineDispatcher {
             return $app->make(LaravelQueuedPipelineDispatcher::class);
         });
+    }
 
+    private function registerSummarizationBindings(): void
+    {
         $this->app->singleton(NullConversationSummarizer::class, function (Application $app): NullConversationSummarizer {
             /** @var ConfigRepository $config */
             $config = $app->make(ConfigRepository::class);
@@ -695,38 +782,6 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         $this->app->singleton(ConversationSummarizer::class, function (Application $app): ConversationSummarizer {
             return $app->make(NullConversationSummarizer::class);
         });
-    }
-
-    /**
-     * @throws BindingResolutionException
-     */
-    public function packageBooted(): void
-    {
-        $app = $this->app;
-
-        /** @var ConfigRepository $config */
-        $config = $app->make(ConfigRepository::class);
-
-        /** @var array{enabled?: bool}|null $validation */
-        $validation = $config->get('ai-agent-kit.validation');
-
-        $enabled = !is_array($validation) || (bool)($validation['enabled'] ?? true);
-
-        if ($enabled) {
-            $app->make(ConfigValidator::class)->validateCurrentConfig();
-        }
-
-        if ($this->memoryDriver($config) === 'redis') {
-            $app->make(RedisConversationStore::class);
-        }
-
-        $normalizer = $app->make(SdkTelemetryNormalizer::class);
-        $events = $app->make(Dispatcher::class);
-
-        $events->listen(PromptingAgent::class, [$normalizer, 'handlePromptingAgent']);
-        $events->listen(AgentPrompted::class, [$normalizer, 'handleAgentPrompted']);
-        $events->listen(InvokingTool::class, [$normalizer, 'handleInvokingTool']);
-        $events->listen(ToolInvoked::class, [$normalizer, 'handleToolInvoked']);
     }
 
     private function delegationPolicyModeConfig(ConfigRepository $config, string $key): DelegationPolicyMode
@@ -890,6 +945,56 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
     private function memoryDriver(ConfigRepository $config): string
     {
         return $this->stringConfig($config, 'ai-agent-kit.memory.default_driver');
+    }
+
+    private function maybeWarnEphemeralDrivers(ConfigRepository $config): void
+    {
+        $block = $config->get('ai-agent-kit.ephemeral_driver_warnings', []);
+
+        if (!is_array($block) || !($block['enabled'] ?? false)) {
+            return;
+        }
+
+        $environments = $block['environments'] ?? ['production'];
+        if (!is_array($environments) || $environments === []) {
+            return;
+        }
+
+        $envList = [];
+        foreach ($environments as $name) {
+            if (is_string($name) && $name !== '') {
+                $envList[] = $name;
+            }
+        }
+
+        if ($envList === [] || !app()->environment(...$envList)) {
+            return;
+        }
+
+        $memoryInMemory = $this->memoryDriver($config) === 'in_memory';
+        $vectorInMemory = $this->stringConfig($config, 'ai-agent-kit.vector.default_driver') === 'in_memory';
+
+        if (!$memoryInMemory && !$vectorInMemory) {
+            return;
+        }
+
+        if (self::$ephemeralDriverWarningLogged) {
+            return;
+        }
+
+        self::$ephemeralDriverWarningLogged = true;
+
+        $parts = [];
+        if ($memoryInMemory) {
+            $parts[] = 'memory.default_driver=in_memory';
+        }
+        if ($vectorInMemory) {
+            $parts[] = 'vector.default_driver=in_memory';
+        }
+
+        Log::warning('laravel-ai-agent-kit: in-memory drivers are active; data is not durable across requests or workers.', [
+            'drivers' => $parts,
+        ]);
     }
 
     private function promptDriver(ConfigRepository $config): string
@@ -1072,7 +1177,16 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             ? $database->connection($connectionName)
             : $database->connection();
 
-        return new DatabaseVectorStore($connection, $table);
+        $maxScan = $block['max_scan_rows'] ?? null;
+        $maxScanRows = null;
+        if ($maxScan !== null) {
+            if (!is_int($maxScan) || $maxScan < 1) {
+                throw new RuntimeException('Configuration key [ai-agent-kit.vector.database.max_scan_rows] must be null or an integer >= 1.');
+            }
+            $maxScanRows = $maxScan;
+        }
+
+        return new DatabaseVectorStore($connection, $table, $maxScanRows);
     }
 
     private function registerSimilaritySearchToolIfConfigured(Application $app, InMemoryToolRegistry $registry): void

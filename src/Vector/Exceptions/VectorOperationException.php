@@ -15,4 +15,17 @@ final class VectorOperationException extends VectorStoreException
             previous: $previous,
         );
     }
+
+    public static function forEmbeddingDimensionMismatch(
+        string $namespace,
+        int $expectedLength,
+        int $actualLength,
+        ?string $documentId = null,
+    ): self {
+        $suffix = $documentId !== null && $documentId !== '' ? " Document [{$documentId}]." : '';
+
+        return new self(
+            message: "Vector embedding dimension mismatch for namespace [{$namespace}]: expected length {$expectedLength}, got {$actualLength}.{$suffix}",
+        );
+    }
 }

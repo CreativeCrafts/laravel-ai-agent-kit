@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Testing\Fakes;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreInterface;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreReferenceEmbedding;
 use CreativeCrafts\LaravelAiAgentKit\Vector\Exceptions\VectorOperationException;
 use CreativeCrafts\LaravelAiAgentKit\Vector\VectorDocument;
+use CreativeCrafts\LaravelAiAgentKit\Vector\VectorEmbeddingDimensionGuard;
 use CreativeCrafts\LaravelAiAgentKit\Vector\VectorSearchQuery;
 use CreativeCrafts\LaravelAiAgentKit\Vector\VectorSearchResult;
 
-final class FakeVectorStore implements VectorStoreInterface
+final class FakeVectorStore implements VectorStoreInterface, VectorStoreReferenceEmbedding
 {
     /**
      * @var array<string, array<string, VectorDocument>>
@@ -43,6 +45,12 @@ final class FakeVectorStore implements VectorStoreInterface
     public function upsert(string $namespace, array $documents): void
     {
         $this->guardOperation('upsert', $namespace);
+        VectorEmbeddingDimensionGuard::assertUpsertBatch(
+            $namespace,
+            $this->existingNamespaceEmbeddingLength($namespace),
+            $documents,
+        );
+
         $this->upserts[] = [
           'namespace' => $namespace,
           'count' => count($documents),
@@ -51,6 +59,11 @@ final class FakeVectorStore implements VectorStoreInterface
         foreach ($documents as $document) {
             $this->documents[$namespace][$document->id] = $document;
         }
+    }
+
+    public function referenceEmbeddingDimensions(string $namespace): ?int
+    {
+        return $this->existingNamespaceEmbeddingLength($namespace);
     }
 
     /**
@@ -68,6 +81,10 @@ final class FakeVectorStore implements VectorStoreInterface
 
         foreach ($this->documents[$namespace] ?? [] as $document) {
             if (!$this->matchesFilter($document, $query->filter)) {
+                continue;
+            }
+
+            if (count($query->embedding) !== count($document->embedding)) {
                 continue;
             }
 
@@ -145,6 +162,23 @@ final class FakeVectorStore implements VectorStoreInterface
     public function documents(string $namespace): array
     {
         return $this->documents[$namespace] ?? [];
+    }
+
+    /**
+     * @return positive-int|null
+     */
+    private function existingNamespaceEmbeddingLength(string $namespace): ?int
+    {
+        $docs = $this->documents[$namespace] ?? [];
+        if ($docs === []) {
+            return null;
+        }
+
+        ksort($docs);
+        $first = reset($docs);
+        $length = count($first->embedding);
+
+        return $length >= 1 ? $length : null;
     }
 
     private function guardOperation(string $operation, string $namespace): void

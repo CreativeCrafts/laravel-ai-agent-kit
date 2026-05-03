@@ -5,57 +5,77 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Vector;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreInterface;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreReferenceEmbedding;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\Date;
 use JsonException;
 
-final readonly class DatabaseVectorStore implements VectorStoreInterface
+final readonly class DatabaseVectorStore implements VectorStoreInterface, VectorStoreReferenceEmbedding
 {
     public function __construct(
         private Connection $connection,
         private string $table,
+        private ?int $maxScanRows = null,
     ) {
+    }
+
+    public function referenceEmbeddingDimensions(string $namespace): ?int
+    {
+        return $this->firstStoredEmbeddingLength($namespace);
     }
 
     public function upsert(string $namespace, array $documents): void
     {
-        $now = Date::now();
+        $this->connection->transaction(function () use ($namespace, $documents): void {
+            $existing = $this->firstStoredEmbeddingLength($namespace);
+            VectorEmbeddingDimensionGuard::assertUpsertBatch($namespace, $existing, $documents);
 
-        foreach ($documents as $document) {
-            $payload = [
-                'embedding' => json_encode($document->embedding, JSON_THROW_ON_ERROR),
-                'metadata' => json_encode($document->metadata, JSON_THROW_ON_ERROR),
-                'updated_at' => $now,
-            ];
+            $now = Date::now();
 
-            $exists = $this->connection->table($this->table)
-                ->where('namespace', $namespace)
-                ->where('document_id', $document->id)
-                ->exists();
+            foreach ($documents as $document) {
+                $payload = [
+                    'embedding' => json_encode($document->embedding, JSON_THROW_ON_ERROR),
+                    'metadata' => json_encode($document->metadata, JSON_THROW_ON_ERROR),
+                    'updated_at' => $now,
+                ];
 
-            if ($exists) {
-                $this->connection->table($this->table)
+                $exists = $this->connection->table($this->table)
                     ->where('namespace', $namespace)
                     ->where('document_id', $document->id)
-                    ->update($payload);
+                    ->exists();
 
-                continue;
+                if ($exists) {
+                    $this->connection->table($this->table)
+                        ->where('namespace', $namespace)
+                        ->where('document_id', $document->id)
+                        ->update($payload);
+
+                    continue;
+                }
+
+                $this->connection->table($this->table)->insert([
+                    'namespace' => $namespace,
+                    'document_id' => $document->id,
+                    ...$payload,
+                    'created_at' => $now,
+                ]);
             }
-
-            $this->connection->table($this->table)->insert([
-                'namespace' => $namespace,
-                'document_id' => $document->id,
-                ...$payload,
-                'created_at' => $now,
-            ]);
-        }
+        });
     }
 
     public function search(string $namespace, VectorSearchQuery $query): array
     {
-        $rows = $this->connection->table($this->table)
+        // When maxScanRows is set, read at most N rows ordered by document_id for stable,
+        // deterministic partial scans (top-K is approximate if N < total namespace size).
+        $queryBuilder = $this->connection->table($this->table)
             ->where('namespace', $namespace)
-            ->get(['document_id', 'embedding', 'metadata']);
+            ->orderBy('document_id');
+
+        if ($this->maxScanRows !== null && $this->maxScanRows >= 1) {
+            $queryBuilder->limit($this->maxScanRows);
+        }
+
+        $rows = $queryBuilder->get(['document_id', 'embedding', 'metadata']);
 
         $matches = [];
 
@@ -78,6 +98,10 @@ final readonly class DatabaseVectorStore implements VectorStoreInterface
             );
 
             if (!$this->matchesFilter($document, $query->filter)) {
+                continue;
+            }
+
+            if (count($query->embedding) !== count($document->embedding)) {
                 continue;
             }
 
@@ -201,5 +225,30 @@ final readonly class DatabaseVectorStore implements VectorStoreInterface
         }
 
         return $assoc;
+    }
+
+    /**
+     * @return positive-int|null
+     */
+    private function firstStoredEmbeddingLength(string $namespace): ?int
+    {
+        $row = $this->connection->table($this->table)
+            ->where('namespace', $namespace)
+            ->orderBy('document_id')
+            ->first(['embedding']);
+
+        if ($row === null) {
+            return null;
+        }
+
+        $decoded = $this->decodeEmbedding($row->embedding ?? null);
+
+        if ($decoded === null) {
+            return null;
+        }
+
+        $length = count($decoded);
+
+        return $length >= 1 ? $length : null;
     }
 }

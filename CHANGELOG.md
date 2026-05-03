@@ -6,15 +6,30 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Added
 
+- `VectorEmbeddingDimensionGuard` and `VectorOperationException::forEmbeddingDimensionMismatch()` for namespace-wide embedding width enforcement.
+- `VectorStoreReferenceEmbedding` on built-in vector stores for `SimilaritySearchTool` dimension checks.
+- Redacted observability events `LaravelAiFilesGatewayOperationFinished` and `LaravelAiStoresGatewayOperationFinished` when using `LaravelAiFilesService` / `LaravelAiStoresService`; config `observability.laravel_ai_files_stores.enabled` (default **true**).
+- [docs/sdk-async-inventory.md](docs/sdk-async-inventory.md): Laravel AI queue jobs mapped to kit guidance.
+- [docs/release-verification.md](docs/release-verification.md): maintainer checklist before tagging.
+- `ai-agent-kit.ephemeral_driver_warnings` (default off): optional one-time-per-process log when in-memory memory or vector drivers are used in configured environments (e.g. production).
+- `ai-agent-kit.vector.database.max_scan_rows`: optional cap on rows read per `DatabaseVectorStore::search` (stable `document_id` order; approximate top-K when cap &lt; namespace size).
+- `ai-agent-kit.pipeline.queued.debug_payload_guard` and `max_serialized_job_bytes`: when `app.debug` is true, fail queued pipeline dispatch if serialized job exceeds threshold.
 - `LaravelAiFilesService` and `LaravelAiStoresService` wrapping Laravel AI `Files` / `Stores` with package DTOs; config `laravel_ai_files.default_provider`, `laravel_ai_stores.default_provider`.
 - `DatabaseVectorStore` and `ai-agent-kit.vector.default_driver` = `database`: SQL persistence for `VectorDocument` rows (`ai_agent_vector_documents` migration stub). Config: `vector.database.connection`, `vector.database.table`.
 - `AudioGenerationRuntime` contract, `AudioGenerationRequest` / `AudioGenerationResult`, and `SdkAudioGenerationRuntime` (Laravel AI `Audio::of()`); config `modalities.audio_generation.default_driver`, container binding, and `ConfigValidator` support.
 - `SimilaritySearchTool` (package `Tool`): embeds the query with `EmbeddingsRuntime`, searches `VectorStoreInterface`. Opt-in via `tools.similarity_search.enabled` and `tools.similarity_search.register` (defaults `false`); optional `name`, `default_namespace`, `default_limit`, and embedding overrides. Still subject to `tools.authorizer`.
 - `AgentKitManager` / `AgentKit` facade: `executeStream`, `embed`, `transcribe`, `generateImage`, `rerank`, `generateAudio`, `laravelAiFiles()`, `laravelAiStores()` — thin container delegates matching `app()` bindings.
 
+### Changed
+
+- **BREAKING:** `InMemoryVectorStore`, `DatabaseVectorStore`, and `FakeVectorStore` enforce a **single embedding length per namespace** on `upsert` (transactional for SQL). `search` skips stored rows whose embedding length differs from the query vector (no truncated dot product).
+- `FakeVectorStore` implements `VectorStoreReferenceEmbedding` and matches built-in upsert/search rules.
+- `LaravelAiFilesService` and `LaravelAiStoresService` accept `Dispatcher` and emit observability events when enabled.
+- `LaravelQueuedPipelineDispatcher` injects config and optional debug payload guard; `LaravelAiAgentKitServiceProvider::packageRegistered` split into private registrar methods.
+
 ### Documentation
 
-- [docs/laravel-ai-sdk-capability-matrix.md](docs/laravel-ai-sdk-capability-matrix.md): maps Laravel AI SDK surfaces to Agent Kit entry points; **roadmap priorities** section marks **`sdk-surface-parity`** complete and lists **deferred follow-ups** (Stores↔vector bridge, optional Files/Stores observability).
+- **README:** Production checklist, SDK async inventory link, release verification link; **UPGRADE.md:** vector width contract, Files/Stores observability, `RunContext` queue serialization, similarity-search dimension notes, database vector scan cap; **capability matrix:** refreshed rows and removed deferred trust gaps.
 - OpenSpec **`sdk-surface-parity`** archived to [openspec/changes/archive/2026-05-02-sdk-surface-parity](openspec/changes/archive/2026-05-02-sdk-surface-parity/proposal.md) (historical proposal, design, tasks, delta specs).
 
 ### Rollout: `close-agent-kit-gaps` program (Phases 0–6)

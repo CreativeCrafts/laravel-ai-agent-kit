@@ -21,6 +21,61 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Ephemeral driver warnings (optional)
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, the package logs a single warning per PHP process if an
+    | in-memory driver is selected while the application environment matches
+    | `environments` (default: production). Does not throw.
+    |
+    */
+  'ephemeral_driver_warnings' => [
+    'enabled' => (bool)env('AI_AGENT_KIT_EPHEMERAL_DRIVER_WARNINGS', false),
+    'environments' => array_values(
+        array_filter(
+            explode(',', (string)env('AI_AGENT_KIT_EPHEMERAL_WARN_ENVIRONMENTS', 'production')),
+            static fn (string $name): bool => $name !== '',
+        ),
+    ),
+  ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Queued pipeline
+    |--------------------------------------------------------------------------
+    |
+    | Optional dev guard: when `debug_payload_guard` is true and `config(app.debug)`
+    | is true, dispatch fails if the serialized queued job exceeds
+    | `max_serialized_job_bytes`. See UPGRADE.md for RunContext payload hygiene.
+    |
+    */
+  'pipeline' => [
+    'queued' => [
+      'debug_payload_guard' => (bool)env('AI_AGENT_KIT_QUEUED_PIPELINE_DEBUG_PAYLOAD_GUARD', false),
+      'max_serialized_job_bytes' => env('AI_AGENT_KIT_QUEUED_PIPELINE_MAX_SERIALIZED_BYTES') === null
+        ? 524288
+        : (int)env('AI_AGENT_KIT_QUEUED_PIPELINE_MAX_SERIALIZED_BYTES'),
+    ],
+  ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Observability
+    |--------------------------------------------------------------------------
+    |
+    | Redacted package events for Laravel AI Files / Stores gateway calls made
+    | through `LaravelAiFilesService` and `LaravelAiStoresService`. Disable in
+    | tests if you assert event counts globally.
+    |
+    */
+  'observability' => [
+    'laravel_ai_files_stores' => [
+      'enabled' => (bool)env('AI_AGENT_KIT_LARAVEL_AI_FILES_STORES_OBSERVABILITY', true),
+    ],
+  ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Providers
     |--------------------------------------------------------------------------
     |
@@ -267,6 +322,9 @@ return [
     'database' => [
       'connection' => env('AI_AGENT_KIT_VECTOR_DATABASE_CONNECTION'),
       'table' => (string)env('AI_AGENT_KIT_VECTOR_DATABASE_TABLE', 'ai_agent_vector_documents'),
+      'max_scan_rows' => env('AI_AGENT_KIT_VECTOR_DATABASE_MAX_SCAN_ROWS') === null
+        ? null
+        : (int)env('AI_AGENT_KIT_VECTOR_DATABASE_MAX_SCAN_ROWS'),
     ],
   ],
 

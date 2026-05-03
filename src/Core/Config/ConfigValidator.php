@@ -53,6 +53,10 @@ final readonly class ConfigValidator
     {
         $this->validateValidationSection($config);
 
+        $this->validateEphemeralDriverWarnings($config);
+        $this->validateQueuedPipeline($config);
+        $this->validateObservability($config);
+
         $providers = $this->requireArray($config, 'providers');
 
         if ($providers === []) {
@@ -180,6 +184,112 @@ final readonly class ConfigValidator
         $this->validateSummarization($config);
         $this->validateRuntime($config);
         $this->validateModalities($config);
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function validateObservability(array $config): void
+    {
+        if (!array_key_exists('observability', $config)) {
+            return;
+        }
+
+        if (!is_array($config['observability'])) {
+            throw InvalidConfigurationException::invalidType('observability', 'array');
+        }
+
+        $obs = $config['observability'];
+
+        if (!array_key_exists('laravel_ai_files_stores', $obs)) {
+            return;
+        }
+
+        if (!is_array($obs['laravel_ai_files_stores'])) {
+            throw InvalidConfigurationException::invalidType('observability.laravel_ai_files_stores', 'array');
+        }
+
+        $fs = $obs['laravel_ai_files_stores'];
+
+        if (array_key_exists('enabled', $fs) && !is_bool($fs['enabled'])) {
+            throw InvalidConfigurationException::invalidType('observability.laravel_ai_files_stores.enabled', 'bool');
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function validateEphemeralDriverWarnings(array $config): void
+    {
+        if (!array_key_exists('ephemeral_driver_warnings', $config)) {
+            return;
+        }
+
+        if (!is_array($config['ephemeral_driver_warnings'])) {
+            throw InvalidConfigurationException::invalidType('ephemeral_driver_warnings', 'array');
+        }
+
+        $block = $config['ephemeral_driver_warnings'];
+
+        if (array_key_exists('enabled', $block) && !is_bool($block['enabled'])) {
+            throw InvalidConfigurationException::invalidType('ephemeral_driver_warnings.enabled', 'bool');
+        }
+
+        if (array_key_exists('environments', $block)) {
+            if (!is_array($block['environments'])) {
+                throw InvalidConfigurationException::invalidType('ephemeral_driver_warnings.environments', 'array');
+            }
+
+            foreach ($block['environments'] as $i => $name) {
+                if (!is_string($name) || $name === '') {
+                    throw InvalidConfigurationException::invalidValue(
+                        "ephemeral_driver_warnings.environments.{$i}",
+                        'Must be a non-empty string.',
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function validateQueuedPipeline(array $config): void
+    {
+        if (!array_key_exists('pipeline', $config)) {
+            return;
+        }
+
+        if (!is_array($config['pipeline'])) {
+            throw InvalidConfigurationException::invalidType('pipeline', 'array');
+        }
+
+        $pipeline = $config['pipeline'];
+
+        if (!array_key_exists('queued', $pipeline)) {
+            return;
+        }
+
+        if (!is_array($pipeline['queued'])) {
+            throw InvalidConfigurationException::invalidType('pipeline.queued', 'array');
+        }
+
+        $queued = $pipeline['queued'];
+
+        if (array_key_exists('debug_payload_guard', $queued) && !is_bool($queued['debug_payload_guard'])) {
+            throw InvalidConfigurationException::invalidType('pipeline.queued.debug_payload_guard', 'bool');
+        }
+
+        if (array_key_exists('max_serialized_job_bytes', $queued)) {
+            $max = $queued['max_serialized_job_bytes'];
+
+            if (!is_int($max) || $max < 1) {
+                throw InvalidConfigurationException::invalidValue(
+                    'pipeline.queued.max_serialized_job_bytes',
+                    'Must be an integer >= 1.',
+                );
+            }
+        }
     }
 
     /**
@@ -804,6 +914,17 @@ final readonly class ConfigValidator
                     throw InvalidConfigurationException::invalidValue(
                         'vector.database.table',
                         'Must be a non-empty string.',
+                    );
+                }
+            }
+
+            if (array_key_exists('max_scan_rows', $database)) {
+                $maxScan = $database['max_scan_rows'];
+
+                if ($maxScan !== null && (!is_int($maxScan) || $maxScan < 1)) {
+                    throw InvalidConfigurationException::invalidValue(
+                        'vector.database.max_scan_rows',
+                        'Must be null or an integer >= 1.',
                     );
                 }
             }

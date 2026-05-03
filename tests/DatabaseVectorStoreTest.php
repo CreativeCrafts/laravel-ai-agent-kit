@@ -105,3 +105,43 @@ it('the database adapter complies with vector store contract semantics', functio
         ->and(array_map(static fn (VectorSearchResult $result): string => $result->id, $afterDelete))
         ->toBe(['doc-2', 'doc-3']);
 });
+
+it('caps database scan rows when max_scan_rows is set', function (): void {
+    config()->set('ai-agent-kit.vector.default_driver', 'database');
+    config()->set('ai-agent-kit.vector.database.connection', 'testing');
+    config()->set('ai-agent-kit.vector.database.table', 'ai_agent_vector_documents');
+    config()->set('ai-agent-kit.vector.database.max_scan_rows', 2);
+    forgetResolvedVectorStore();
+
+    /** @var VectorStoreInterface $store */
+    $store = app(VectorStoreInterface::class);
+
+    $store->upsert('support', [
+        new VectorDocument(
+            id: 'doc-1',
+            embedding: [1.0, 0.0],
+            metadata: [],
+        ),
+        new VectorDocument(
+            id: 'doc-2',
+            embedding: [0.0, 1.0],
+            metadata: [],
+        ),
+        new VectorDocument(
+            id: 'doc-3',
+            embedding: [1.0, 1.0],
+            metadata: [],
+        ),
+    ]);
+
+    $results = $store->search(
+        'support',
+        new VectorSearchQuery(
+            embedding: [1.0, 0.0],
+            limit: 10,
+            filter: [],
+        ),
+    );
+
+    expect($results)->toHaveCount(2);
+});

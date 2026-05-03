@@ -196,6 +196,57 @@ it('allows execution when the authorizer permits the tool', function (): void {
     expect($out['empty'])->toBeFalse();
 });
 
+it('returns embedding_dimension_mismatch when configured dimensions disagree with the query vector', function (): void {
+    Embeddings::fake([[[1.0, 0.0, 0.0]]])->preventStrayEmbeddings();
+
+    app()->forgetInstance(EmbeddingsRuntime::class);
+
+    Config::set('ai-agent-kit.tools.similarity_search', [
+        'default_namespace' => 'kb',
+        'embedding_dimensions' => 2,
+    ]);
+
+    $store = new InMemoryVectorStore();
+    $store->upsert('kb', [new VectorDocument('doc-1', [1.0, 0.0], [])]);
+
+    $tool = new SimilaritySearchTool(
+        embeddingsRuntime: app(EmbeddingsRuntime::class),
+        vectorStore: $store,
+        config: config(),
+    );
+
+    $out = $tool->execute(['query' => 'x']);
+
+    expect($out['error'])->toBe('embedding_dimension_mismatch')
+        ->and($out['query_dimensions'])->toBe(3)
+        ->and($out['expected_dimensions'])->toBe(2);
+});
+
+it('returns embedding_dimension_mismatch when stored vectors differ in width from the query', function (): void {
+    Embeddings::fake([[[1.0, 0.0, 0.0]]])->preventStrayEmbeddings();
+
+    app()->forgetInstance(EmbeddingsRuntime::class);
+
+    Config::set('ai-agent-kit.tools.similarity_search', [
+        'default_namespace' => 'kb',
+    ]);
+
+    $store = new InMemoryVectorStore();
+    $store->upsert('kb', [new VectorDocument('doc-1', [1.0, 0.0], [])]);
+
+    $tool = new SimilaritySearchTool(
+        embeddingsRuntime: app(EmbeddingsRuntime::class),
+        vectorStore: $store,
+        config: config(),
+    );
+
+    $out = $tool->execute(['query' => 'x']);
+
+    expect($out['error'])->toBe('embedding_dimension_mismatch')
+        ->and($out['reference_dimensions'])->toBe(2)
+        ->and($out['query_dimensions'])->toBe(3);
+});
+
 it('registers similarity_search on the container when enabled in config', function (): void {
     Config::set('ai-agent-kit.tools.similarity_search', [
         'enabled' => true,

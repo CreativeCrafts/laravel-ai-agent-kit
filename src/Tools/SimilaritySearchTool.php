@@ -7,6 +7,7 @@ namespace CreativeCrafts\LaravelAiAgentKit\Tools;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\EmbeddingsRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\Tool;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreInterface;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreReferenceEmbedding;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\EmbeddingsRequest;
 use CreativeCrafts\LaravelAiAgentKit\Vector\VectorSearchQuery;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
@@ -93,6 +94,11 @@ final readonly class SimilaritySearchTool implements Tool
         }
 
         $vector = $embedded->vectors[0];
+
+        $dimensionError = $this->validateEmbeddingDimensions($namespace, $vector);
+        if ($dimensionError !== null) {
+            return $dimensionError;
+        }
 
         $searchQuery = new VectorSearchQuery(
             embedding: $vector,
@@ -205,6 +211,48 @@ final readonly class SimilaritySearchTool implements Tool
         }
 
         return $normalized;
+    }
+
+    /**
+     * @param list<float> $queryVector
+     * @return array<string, mixed>|null
+     */
+    private function validateEmbeddingDimensions(string $namespace, array $queryVector): ?array
+    {
+        $configuredDims = $this->embeddingDimensions();
+        if ($configuredDims !== null && count($queryVector) !== $configuredDims) {
+            return [
+                'empty' => true,
+                'error' => 'embedding_dimension_mismatch',
+                'message' => 'Query embedding length does not match configured embedding_dimensions.',
+                'query_dimensions' => count($queryVector),
+                'expected_dimensions' => $configuredDims,
+                'results' => [],
+            ];
+        }
+
+        if (!$this->vectorStore instanceof VectorStoreReferenceEmbedding) {
+            return null;
+        }
+
+        $referenceDims = $this->vectorStore->referenceEmbeddingDimensions($namespace);
+
+        if ($referenceDims === null) {
+            return null;
+        }
+
+        if (count($queryVector) !== $referenceDims) {
+            return [
+                'empty' => true,
+                'error' => 'embedding_dimension_mismatch',
+                'message' => 'Query embedding length does not match stored vectors in this namespace.',
+                'query_dimensions' => count($queryVector),
+                'reference_dimensions' => $referenceDims,
+                'results' => [],
+            ];
+        }
+
+        return null;
     }
 
     private function embeddingDimensions(): ?int

@@ -16,6 +16,7 @@ use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\TestPipelineResultHandler;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\TestQueuedPipelineDefinition;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\Queue;
+use RuntimeException;
 
 beforeEach(function () {
     TestPipelineResultHandler::reset();
@@ -130,6 +131,21 @@ it('fails synchronously when dispatching an invalid queued pipeline definition c
         context: new RunContext(runId: 'run-invalid-definition'),
     );
 })->throws(InvalidQueuedPipelineDefinitionException::class);
+
+it('throws when debug payload guard rejects an oversized queued job', function () {
+    config()->set('app.debug', true);
+    config()->set('ai-agent-kit.pipeline.queued.debug_payload_guard', true);
+    config()->set('ai-agent-kit.pipeline.queued.max_serialized_job_bytes', 256);
+
+    /** @var QueuedPipelineDispatcher $dispatcher */
+    $dispatcher = app(QueuedPipelineDispatcher::class);
+
+    $large = str_repeat('x', 400);
+    $dispatcher->dispatch(
+        pipelineDefinition: TestQueuedPipelineDefinition::class,
+        context: new RunContext(runId: 'run-big', input: ['blob' => $large]),
+    );
+})->throws(RuntimeException::class);
 
 it('fails synchronously when dispatching an invalid result handler class', function () {
     /** @var QueuedPipelineDispatcher $dispatcher */

@@ -7,7 +7,7 @@
 Laravel AI Agent Kit is a Laravel package that delivers a structured agent-workflow toolkit built on top of the official Laravel AI SDK. It provides provider abstraction, pipeline orchestration,
 queued execution, and package foundations for building AI-powered application flows safely and predictably.
 
-Maintainers track **SDK ↔ package coverage** in [docs/laravel-ai-sdk-capability-matrix.md](docs/laravel-ai-sdk-capability-matrix.md) so Laravel AI capabilities map to runtime, pipelines, orchestration, budgets, and memory in one place. The **`sdk-surface-parity`** program (audio, Files/Stores, database vectors, similarity search tool, AgentKit delegates) is **documented as complete** in that matrix; the OpenSpec change is **archived** at [openspec/changes/archive/2026-05-02-sdk-surface-parity](openspec/changes/archive/2026-05-02-sdk-surface-parity/proposal.md).
+Maintainers track **SDK ↔ package coverage** in [docs/laravel-ai-sdk-capability-matrix.md](docs/laravel-ai-sdk-capability-matrix.md) so Laravel AI capabilities map to runtime, pipelines, orchestration, budgets, and memory in one place. **Async jobs** are mapped in [docs/sdk-async-inventory.md](docs/sdk-async-inventory.md). The **`sdk-surface-parity`** program (audio, Files/Stores, database vectors, similarity search tool, AgentKit delegates) is **documented as complete** in that matrix; the OpenSpec change is **archived** at [openspec/changes/archive/2026-05-02-sdk-surface-parity](openspec/changes/archive/2026-05-02-sdk-surface-parity/proposal.md).
 
 ## Installation
 
@@ -69,7 +69,7 @@ Optional **runtime middleware** wraps every `AiRuntime::execute` call (including
 
 **Laravel AI provider Files and Stores** — For provider-hosted uploads and vector stores (RAG with `FileSearch`), inject `CreativeCrafts\LaravelAiAgentKit\Core\LaravelAi\LaravelAiFilesService` and `LaravelAiStoresService`. They wrap `Laravel\Ai\Files` and `Laravel\Ai\Stores` and return package DTOs. Optional `laravel_ai_files.default_provider` and `laravel_ai_stores.default_provider` apply when you omit the provider argument. This is separate from **`VectorStoreInterface`** (application embedding storage with `in_memory` / `database` drivers).
 
-**Similarity search custom tool** — Optional package tool `similarity_search` (class `CreativeCrafts\LaravelAiAgentKit\Tools\SimilaritySearchTool`) searches documents in `VectorStoreInterface` using query embeddings from `EmbeddingsRuntime`. Enable with `tools.similarity_search.enabled` and `tools.similarity_search.register` in `config/ai-agent-kit.php`, then list `similarity_search` in `ExecutionRequest::$toolNames` and implement `ToolAuthorizer` so custom tools are allowed (the default authorizer denies all). This targets the kit vector store; for Eloquent `whereVectorSimilarTo` flows, Laravel AI’s `Laravel\Ai\Tools\SimilaritySearch` remains the right choice. See `UPGRADE.md`.
+**Similarity search custom tool** — Optional package tool `similarity_search` (class `CreativeCrafts\LaravelAiAgentKit\Tools\SimilaritySearchTool`) searches documents in `VectorStoreInterface` using query embeddings from `EmbeddingsRuntime`. Built-in vector stores enforce **one embedding width per namespace**; set `tools.similarity_search.embedding_dimensions` to match your embedding model when you use a custom `VectorStoreInterface` that does not implement `VectorStoreReferenceEmbedding`. Enable with `tools.similarity_search.enabled` and `tools.similarity_search.register` in `config/ai-agent-kit.php`, then list `similarity_search` in `ExecutionRequest::$toolNames` and implement `ToolAuthorizer` so custom tools are allowed (the default authorizer denies all). This targets the kit vector store; for Eloquent `whereVectorSimilarTo` flows, Laravel AI’s `Laravel\Ai\Tools\SimilaritySearch` remains the right choice. See `UPGRADE.md`.
 
 `budgets.max_cost_usd` is enforced in fail-closed mode: when configured, each runtime request must provide numeric `metadata.cost_usd` (or `metadata.estimated_cost_usd`) so cost ceilings can be
 validated deterministically.
@@ -698,6 +698,18 @@ app()->instance(AgentOrchestrator::class, new FakeAgentOrchestrator());
 ~~~
 
 The package also exposes assertion helpers and Pest expectations for common fake-driven flows. See `CONTRIBUTING.md` and the package test suite for usage patterns.
+
+## Production checklist
+
+Before going live with Agent Kit:
+
+- **Memory driver:** `memory.default_driver` = `in_memory` is process-local; use `database` or `redis` for shared or durable conversation state across workers. Optional: enable `ephemeral_driver_warnings` to log when in-memory drivers are selected in configured environments (default: off).
+- **Vector driver:** `vector.default_driver` = `in_memory` is process-local; use `database` or a custom `VectorStoreInterface` binding for shared retrieval. Built-in stores enforce **one embedding width per namespace** on `upsert`. `DatabaseVectorStore::search` is **O(n)** in table rows for the namespace; optional `vector.database.max_scan_rows` bounds reads (approximate top-K). See [docs/laravel-ai-sdk-capability-matrix.md](docs/laravel-ai-sdk-capability-matrix.md).
+- **Tool authorizer:** Replace `DenyAllToolAuthorizer` with a policy that allows only the tools and provider tools you intend to expose.
+- **Encryption:** Conversation payloads use `Encrypter` when database encryption is enabled; ensure `APP_KEY` and deployment practices match your threat model.
+- **Queues:** Queued pipelines serialize `RunContext` on the job; keep `input` / `state` / `metadata` small and avoid embedding full `Conversation` graphs when a `conversationId` suffices. See [UPGRADE.md](UPGRADE.md#queued-pipelines-and-runcontext-serialization) and optional `pipeline.queued.debug_payload_guard` for local debugging.
+
+Before tagging releases, maintainers follow [docs/release-verification.md](docs/release-verification.md).
 
 ## Security and Privacy Defaults
 

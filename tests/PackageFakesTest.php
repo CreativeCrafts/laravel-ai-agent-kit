@@ -173,7 +173,7 @@ it('provides a fake vector store with deterministic search delete and failure ho
 
     $fake->failOperation('search');
 
-    expect(fn () => $fake->search('support', new VectorSearchQuery(embedding: [1.0], limit: 1)))
+    expect(fn () => $fake->search('support', new VectorSearchQuery(embedding: [1.0, 0.0], limit: 1)))
       ->toThrow(VectorOperationException::class, 'search');
 });
 
