@@ -11,6 +11,7 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 - Redacted observability events `LaravelAiFilesGatewayOperationFinished` and `LaravelAiStoresGatewayOperationFinished` when using `LaravelAiFilesService` / `LaravelAiStoresService`; config `observability.laravel_ai_files_stores.enabled` (default **true**).
 - [docs/sdk-async-inventory.md](docs/sdk-async-inventory.md): Laravel AI queue jobs mapped to kit guidance.
 - [docs/release-verification.md](docs/release-verification.md): maintainer checklist before tagging.
+- [docs/github-ci-matrix.md](docs/github-ci-matrix.md): documents GitHub Actions PHP × Laravel matrix.
 - `ai-agent-kit.ephemeral_driver_warnings` (default off): optional one-time-per-process log when in-memory memory or vector drivers are used in configured environments (e.g. production).
 - `ai-agent-kit.vector.database.max_scan_rows`: optional cap on rows read per `DatabaseVectorStore::search` (stable `document_id` order; approximate top-K when cap &lt; namespace size).
 - `ai-agent-kit.pipeline.queued.debug_payload_guard` and `max_serialized_job_bytes`: when `app.debug` is true, fail queued pipeline dispatch if serialized job exceeds threshold.

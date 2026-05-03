@@ -4,6 +4,8 @@
 [![GitHub CI](https://img.shields.io/github/actions/workflow/status/creativecrafts/laravel-ai-agent-kit/ci.yml?branch=main&label=ci&style=flat-square)](https://github.com/creativecrafts/laravel-ai-agent-kit/actions/workflows/ci.yml)
 [![Total Downloads](https://img.shields.io/packagist/dt/creativecrafts/laravel-ai-agent-kit.svg?style=flat-square)](https://packagist.org/packages/creativecrafts/laravel-ai-agent-kit)
 
+CI runs **PHP 8.3–8.5** against **Laravel 12 and 13** ([docs/github-ci-matrix.md](docs/github-ci-matrix.md)).
+
 Laravel AI Agent Kit is a Laravel package that delivers a structured agent-workflow toolkit built on top of the official Laravel AI SDK. It provides provider abstraction, pipeline orchestration,
 queued execution, and package foundations for building AI-powered application flows safely and predictably.
 
