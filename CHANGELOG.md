@@ -23,6 +23,7 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Changed
 
+- **Packaging:** `docs/` is no longer `export-ignore` in `.gitattributes`, so the full `docs/` tree ships in Composer dist archives. README and maintainer links to `docs/*.md` resolve when the package is installed under `vendor/`.
 - **BREAKING:** `InMemoryVectorStore`, `DatabaseVectorStore`, and `FakeVectorStore` enforce a **single embedding length per namespace** on `upsert` (transactional for SQL). `search` skips stored rows whose embedding length differs from the query vector (no truncated dot product).
 - `FakeVectorStore` implements `VectorStoreReferenceEmbedding` and matches built-in upsert/search rules.
 - `LaravelAiFilesService` and `LaravelAiStoresService` accept `Dispatcher` and emit observability events when enabled.
@@ -30,6 +31,7 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Documentation
 
+- **README:** Shortened first-read path (install → minimal config → usage); deep dives moved to `docs/configuration.md`, `docs/orchestration-and-blueprints.md`, `docs/pipelines-queues-and-memory.md`, and `docs/testing-with-fakes.md`.
 - **README:** Production checklist, vector/queue/observability guidance, SDK async inventory link, release verification link; **capability matrix:** refreshed rows.
 - OpenSpec **`sdk-surface-parity`** archived to [openspec/changes/archive/2026-05-02-sdk-surface-parity](openspec/changes/archive/2026-05-02-sdk-surface-parity/proposal.md) (historical proposal, design, tasks, delta specs).
 
