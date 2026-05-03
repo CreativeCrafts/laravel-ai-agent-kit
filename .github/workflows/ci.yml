@@ -15,7 +15,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: [ "8.3", "8.4" ]
+        include:
+          - php: "8.3"
+            laravel: "12"
+          - php: "8.4"
+            laravel: "12"
+          - php: "8.5"
+            laravel: "12"
+          - php: "8.3"
+            laravel: "13"
+          - php: "8.4"
+            laravel: "13"
+          - php: "8.5"
+            laravel: "13"
+
+    name: PHP ${{ matrix.php }} · Laravel ${{ matrix.laravel }}
 
     steps:
       - name: Checkout
@@ -37,12 +51,24 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-php-${{ matrix.php }}-composer-${{ hashFiles('**/composer.lock') }}
+          key: ${{ runner.os }}-php-${{ matrix.php }}-laravel-${{ matrix.laravel }}-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
-            ${{ runner.os }}-php-${{ matrix.php }}-composer-
+            ${{ runner.os }}-php-${{ matrix.php }}-laravel-${{ matrix.laravel }}-composer-
 
-      - name: Install dependencies
+      - name: Install dependencies (lock file; Laravel 13 by default)
         run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Resolve to Laravel ${{ matrix.laravel }} for this matrix cell
+        if: matrix.laravel == '12'
+        run: |
+          composer update \
+            illuminate/contracts:^12.0 \
+            illuminate/database:^12.0 \
+            illuminate/support:^12.0 \
+            orchestra/testbench:^10.11 \
+            --with-all-dependencies \
+            --no-interaction \
+            --no-progress
 
       - name: Validate composer.json
         run: composer validate --strict
@@ -83,9 +109,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-php-8.3-composer-${{ hashFiles('**/composer.lock') }}
+          key: ${{ runner.os }}-php-8.3-laravel-13-coverage-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
-            ${{ runner.os }}-php-8.3-composer-
+            ${{ runner.os }}-php-8.3-laravel-13-coverage-composer-
 
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist

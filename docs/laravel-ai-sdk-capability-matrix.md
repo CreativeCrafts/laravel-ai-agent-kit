@@ -103,4 +103,5 @@ When upgrading `laravel/ai`:
 1. Scan `vendor/laravel/ai/src` for new facades, jobs, and provider tools.
 2. Update this matrix, [sdk-async-inventory.md](sdk-async-inventory.md), and `CHANGELOG.md`.
 3. Run [release-verification.md](release-verification.md).
-4. Prefer adding **contracts + config + tests** in Agent Kit when a new SDK surface should become a first-class kit pattern.
+4. If supported **PHP** or **Laravel** lines change, update [github-ci-matrix.md](github-ci-matrix.md) and `.github/workflows/ci.yml` together.
+5. Prefer adding **contracts + config + tests** in Agent Kit when a new SDK surface should become a first-class kit pattern.

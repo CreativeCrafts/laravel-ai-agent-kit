@@ -8,6 +8,7 @@ Use this checklist before tagging a **laravel-ai-agent-kit** release. It complem
 - [ ] `composer audit` (or your org’s equivalent)
 - [ ] `composer code-check` (or `composer ci` if that is your full gate)
 - [ ] Fix any new PHPStan or test failures on **supported** PHP and Laravel versions from `composer.json`.
+- [ ] If you change supported PHP or Laravel lines, update [github-ci-matrix.md](github-ci-matrix.md) and `.github/workflows/ci.yml` together.
 
 ## 2. OpenSpec
 
