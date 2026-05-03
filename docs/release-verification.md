@@ -27,8 +27,8 @@ Use this checklist before tagging a **laravel-ai-agent-kit** release. It complem
 
 ## 5. Vector and memory contracts
 
-- [ ] Re-read [UPGRADE.md](../UPGRADE.md) sections on **per-namespace embedding width** (built-in `VectorStoreInterface` implementations) and **RunContext** queue payloads.
-- [ ] If the release changes migrations, verify publish/merge steps in `UPGRADE.md`.
+- [ ] Re-read the **Production checklist** and **Queued pipelines and RunContext** sections in [README.md](../README.md) (vector width, `RunContext` queue payloads).
+- [ ] If the release changes migrations, verify publish steps in README (Installation) and `CHANGELOG.md`.
 
 ## 6. Tag and publish
 

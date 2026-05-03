@@ -46,7 +46,7 @@ return [
     |
     | Optional dev guard: when `debug_payload_guard` is true and `config(app.debug)`
     | is true, dispatch fails if the serialized queued job exceeds
-    | `max_serialized_job_bytes`. See UPGRADE.md for RunContext payload hygiene.
+    | `max_serialized_job_bytes`. See README (Queued pipelines and RunContext).
     |
     */
   'pipeline' => [
@@ -335,7 +335,7 @@ return [
     |
     | Optional default Laravel AI provider keys for package facades over
     | `Laravel\Ai\Files` and `Laravel\Ai\Stores`. Null defers to Laravel AI's
-    | per-call behavior. See UPGRADE.md.
+    | per-call behavior. See README (Laravel AI Files and Stores).
     |
     */
   'laravel_ai_files' => [

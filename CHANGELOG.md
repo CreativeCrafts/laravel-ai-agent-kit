@@ -30,14 +30,18 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Documentation
 
-- **README:** Production checklist, SDK async inventory link, release verification link; **UPGRADE.md:** vector width contract, Files/Stores observability, `RunContext` queue serialization, similarity-search dimension notes, database vector scan cap; **capability matrix:** refreshed rows and removed deferred trust gaps.
+- **README:** Production checklist, vector/queue/observability guidance, SDK async inventory link, release verification link; **capability matrix:** refreshed rows.
 - OpenSpec **`sdk-surface-parity`** archived to [openspec/changes/archive/2026-05-02-sdk-surface-parity](openspec/changes/archive/2026-05-02-sdk-surface-parity/proposal.md) (historical proposal, design, tasks, delta specs).
+
+### Removed
+
+- **`UPGRADE.md`** — First release targets new installs; migration and operational guidance now lives in **`README.md`** and linked docs. Reintroduce an upgrade guide when you ship breaking changes to existing adopters.
 
 ### Rollout: `close-agent-kit-gaps` program (Phases 0–6)
 
 These phases shipped together in development; adopt them in dependency order (see `openspec/changes/close-agent-kit-gaps/design.md`, decision D1):
 
-1. **Phase 1 — Structured evaluation** — Prefer `ExecutionResult::$structuredOutput` for `TextToStructuredEvaluation`; fall back to text normalization when needed (`UPGRADE.md`).
+1. **Phase 1 — Structured evaluation** — Prefer `ExecutionResult::$structuredOutput` for `TextToStructuredEvaluation`; fall back to text normalization when needed (see README and blueprint tests).
 2. **Phase 2 — Runtime middleware** — Register `ai-agent-kit.runtime.middleware` before relying on cross-cutting logging, tenancy, or policy around `AiRuntime::execute()`.
 3. **Phase 3 — Streaming** — Inject `StreamingAiRuntime` for `executeStream()`; optional `runtime.streaming.broadcast_channel` or request metadata for Echo.
 4. **Phase 4 — Modality runtimes** — Configure `ai-agent-kit.modalities.*.default_driver`; audio blueprint uses `TranscriptionRuntime` for decodable base64/data-URI audio.
@@ -67,7 +71,7 @@ These phases shipped together in development; adopt them in dependency order (se
 
 ### Changed
 
-- Documentation: `README.md` (rollout subsection, CI links, memory options, corrected `ConversationStore` example), `UPGRADE.md` (Phase 7 index), and `CHANGELOG.md` (phased adoption order). OpenSpec change `close-agent-kit-gaps` archived as `openspec/changes/archive/2026-05-01-close-agent-kit-gaps/`; `implement-deferred-runtime-phases` proposal notes supersession.
+- Documentation: `README.md` (rollout subsection, CI links, memory options, corrected `ConversationStore` example) and `CHANGELOG.md` (phased adoption order). OpenSpec change `close-agent-kit-gaps` archived as `openspec/changes/archive/2026-05-01-close-agent-kit-gaps/`; `implement-deferred-runtime-phases` proposal notes supersession.
 
 - `AiRuntime` resolves to `MiddlewareExecutingAiRuntime` around `SdkAiRuntime` when `runtime.middleware` lists one or more middleware classes (blueprints and orchestration use the same binding); the same wrapper now implements `StreamingAiRuntime` and delegates streaming to the inner SDK runtime.
 - `TextToStructuredEvaluation` specialist now requests structured output via `ExecutionRequest::$schema`, prefers `ExecutionResult::$structuredOutput` when valid, and falls back to the existing text normalizer when structured output is missing or invalid; coordinator forwards path flags into the final blueprint result.
