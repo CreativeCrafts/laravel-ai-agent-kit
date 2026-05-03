@@ -23,6 +23,7 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Changed
 
+- **Packaging:** `docs/` is no longer `export-ignore` in `.gitattributes`, so the full `docs/` tree ships in Composer dist archives. README and maintainer links to `docs/*.md` resolve when the package is installed under `vendor/`.
 - **BREAKING:** `InMemoryVectorStore`, `DatabaseVectorStore`, and `FakeVectorStore` enforce a **single embedding length per namespace** on `upsert` (transactional for SQL). `search` skips stored rows whose embedding length differs from the query vector (no truncated dot product).
 - `FakeVectorStore` implements `VectorStoreReferenceEmbedding` and matches built-in upsert/search rules.
 - `LaravelAiFilesService` and `LaravelAiStoresService` accept `Dispatcher` and emit observability events when enabled.
