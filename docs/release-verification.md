@@ -27,7 +27,7 @@ Use this checklist before tagging a **laravel-ai-agent-kit** release. It complem
 
 ## 5. Vector and memory contracts
 
-- [ ] Re-read the **Production checklist** and **Queued pipelines and RunContext** sections in [README.md](../README.md) (vector width, `RunContext` queue payloads).
+- [ ] Re-read the **Production checklist** in [README.md](../README.md#production-checklist) and **Queued pipelines and `RunContext`** in [configuration.md](configuration.md#queued-pipelines-and-runcontext) (vector width, queue payloads).
 - [ ] If the release changes migrations, verify publish steps in README (Installation) and `CHANGELOG.md`.
 
 ## 6. Tag and publish

@@ -30,6 +30,7 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Documentation
 
+- **README:** Shortened first-read path (install → minimal config → usage); deep dives moved to `docs/configuration.md`, `docs/orchestration-and-blueprints.md`, `docs/pipelines-queues-and-memory.md`, and `docs/testing-with-fakes.md`.
 - **README:** Production checklist, vector/queue/observability guidance, SDK async inventory link, release verification link; **capability matrix:** refreshed rows.
 - OpenSpec **`sdk-surface-parity`** archived to [openspec/changes/archive/2026-05-02-sdk-surface-parity](openspec/changes/archive/2026-05-02-sdk-surface-parity/proposal.md) (historical proposal, design, tasks, delta specs).
 

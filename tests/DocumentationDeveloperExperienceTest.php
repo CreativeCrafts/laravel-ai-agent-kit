@@ -33,8 +33,8 @@ it('documents that the default vector store binding is in-memory', function (): 
       ->toContain('VectorStoreInterface');
 });
 
-it('uses dependency injection for the remaining infrastructure contract examples in the readme', function (): void {
-    $contents = documentationContents('README.md');
+it('uses dependency injection for pipeline, queue, memory, and vector examples in the pipelines guide', function (): void {
+    $contents = documentationContents('docs/pipelines-queues-and-memory.md');
 
     expect($contents)
       ->toContain('private PipelineRunner $runner')

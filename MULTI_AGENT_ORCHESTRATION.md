@@ -369,5 +369,5 @@ When you add a new orchestration workflow or blueprint, follow these rules:
 Use package fakes for orchestration-level tests and Laravel AI SDK fakes only when the integration boundary itself is under test. Keep traces small and explicit so parent-child ownership remains
 obvious in assertions.
 
-When orchestration contracts, result semantics, or flagship workflows change, update this document together with `README.md` and `CONTRIBUTING.md`. The docs should always describe the package-owned
+When orchestration contracts, result semantics, or flagship workflows change, update this document together with `README.md`, `docs/orchestration-and-blueprints.md`, and `CONTRIBUTING.md`. The docs should always describe the package-owned
 boundary rather than provider-specific implementation details.
