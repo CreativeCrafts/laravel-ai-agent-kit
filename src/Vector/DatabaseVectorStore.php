@@ -21,52 +21,46 @@ final readonly class DatabaseVectorStore implements VectorStoreInterface, Vector
 
     public function referenceEmbeddingDimensions(string $namespace): ?int
     {
-        $row = $this->connection->table($this->table)
-            ->where('namespace', $namespace)
-            ->orderBy('document_id')
-            ->first(['embedding']);
-
-        if ($row === null) {
-            return null;
-        }
-
-        $decoded = $this->decodeEmbedding($row->embedding ?? null);
-
-        return $decoded === null ? null : count($decoded);
+        return $this->firstStoredEmbeddingLength($namespace);
     }
 
     public function upsert(string $namespace, array $documents): void
     {
-        $now = Date::now();
+        $this->connection->transaction(function () use ($namespace, $documents): void {
+            $existing = $this->firstStoredEmbeddingLength($namespace);
+            VectorEmbeddingDimensionGuard::assertUpsertBatch($namespace, $existing, $documents);
 
-        foreach ($documents as $document) {
-            $payload = [
-                'embedding' => json_encode($document->embedding, JSON_THROW_ON_ERROR),
-                'metadata' => json_encode($document->metadata, JSON_THROW_ON_ERROR),
-                'updated_at' => $now,
-            ];
+            $now = Date::now();
 
-            $exists = $this->connection->table($this->table)
-                ->where('namespace', $namespace)
-                ->where('document_id', $document->id)
-                ->exists();
+            foreach ($documents as $document) {
+                $payload = [
+                    'embedding' => json_encode($document->embedding, JSON_THROW_ON_ERROR),
+                    'metadata' => json_encode($document->metadata, JSON_THROW_ON_ERROR),
+                    'updated_at' => $now,
+                ];
 
-            if ($exists) {
-                $this->connection->table($this->table)
+                $exists = $this->connection->table($this->table)
                     ->where('namespace', $namespace)
                     ->where('document_id', $document->id)
-                    ->update($payload);
+                    ->exists();
 
-                continue;
+                if ($exists) {
+                    $this->connection->table($this->table)
+                        ->where('namespace', $namespace)
+                        ->where('document_id', $document->id)
+                        ->update($payload);
+
+                    continue;
+                }
+
+                $this->connection->table($this->table)->insert([
+                    'namespace' => $namespace,
+                    'document_id' => $document->id,
+                    ...$payload,
+                    'created_at' => $now,
+                ]);
             }
-
-            $this->connection->table($this->table)->insert([
-                'namespace' => $namespace,
-                'document_id' => $document->id,
-                ...$payload,
-                'created_at' => $now,
-            ]);
-        }
+        });
     }
 
     public function search(string $namespace, VectorSearchQuery $query): array
@@ -104,6 +98,10 @@ final readonly class DatabaseVectorStore implements VectorStoreInterface, Vector
             );
 
             if (!$this->matchesFilter($document, $query->filter)) {
+                continue;
+            }
+
+            if (count($query->embedding) !== count($document->embedding)) {
                 continue;
             }
 
@@ -227,5 +225,30 @@ final readonly class DatabaseVectorStore implements VectorStoreInterface, Vector
         }
 
         return $assoc;
+    }
+
+    /**
+     * @return positive-int|null
+     */
+    private function firstStoredEmbeddingLength(string $namespace): ?int
+    {
+        $row = $this->connection->table($this->table)
+            ->where('namespace', $namespace)
+            ->orderBy('document_id')
+            ->first(['embedding']);
+
+        if ($row === null) {
+            return null;
+        }
+
+        $decoded = $this->decodeEmbedding($row->embedding ?? null);
+
+        if ($decoded === null) {
+            return null;
+        }
+
+        $length = count($decoded);
+
+        return $length >= 1 ? $length : null;
     }
 }

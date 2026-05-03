@@ -1,5 +1,28 @@
 # Upgrade Guide
 
+## Vector store: per-namespace embedding width (**BREAKING**)
+
+`InMemoryVectorStore`, `DatabaseVectorStore`, and the test double `FakeVectorStore` now enforce **exactly one embedding vector length per namespace**:
+
+- The **first** successful `upsert` into an empty namespace sets the width `L` for all documents in that batch (all documents in the same call must already match `L`).
+- Any later `upsert` into the same namespace must use embeddings of length `L`, or the store throws `VectorOperationException` (including `forEmbeddingDimensionMismatch(...)`). **No partial writes** occur on failure for the database driver (transactional `upsert`).
+
+If you previously stored **mixed-width** vectors in one namespace (they scored with truncated dot products), **split namespaces** or **re-embed** documents to a single model width before upgrading.
+
+**Search:** `search` only scores documents whose stored embedding length **equals** the query vector length; rows that cannot be decoded or that have a different length are **skipped** (no silent truncation).
+
+Custom `VectorStoreInterface` implementations should document their own invariants; **`SimilaritySearchTool`** still validates against `VectorStoreReferenceEmbedding` when implemented and against `tools.similarity_search.embedding_dimensions` when set.
+
+## Laravel AI Files / Stores observability
+
+`LaravelAiFilesService` and `LaravelAiStoresService` dispatch redacted package events (`LaravelAiFilesGatewayOperationFinished`, `LaravelAiStoresGatewayOperationFinished`) after each public operation. Payloads contain operation name, provider, resource ids, success flag, and bounded error metadata only—**never** file bodies or API keys.
+
+Disable in tests if you use global event assertions:
+
+```php
+config(['ai-agent-kit.observability.laravel_ai_files_stores.enabled' => false]);
+```
+
 ## Documentation rollout (2026-05-01)
 
 Phase 7 finalizes consumer-facing documentation for the `close-agent-kit-gaps` program. No new runtime APIs: use **`UPGRADE.md`** for migration steps per phase (1–6) and **`CHANGELOG.md`** under *Rollout* for the recommended adoption order. **`README.md`** is the canonical index for config keys (`runtime`, `modalities`, `memory.laravel_ai_legacy`, `memory.attachments_replay`, **`vector`**), contracts (`AiRuntime`, `StreamingAiRuntime`, modality interfaces), and vector drivers (`in_memory`, **`database`**, or a custom `VectorStoreInterface` binding).

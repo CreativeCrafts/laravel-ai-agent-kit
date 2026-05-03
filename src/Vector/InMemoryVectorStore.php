@@ -14,6 +14,12 @@ final class InMemoryVectorStore implements VectorStoreInterface, VectorStoreRefe
 
     public function upsert(string $namespace, array $documents): void
     {
+        VectorEmbeddingDimensionGuard::assertUpsertBatch(
+            $namespace,
+            $this->existingNamespaceEmbeddingLength($namespace),
+            $documents,
+        );
+
         foreach ($documents as $document) {
             $this->documents[$namespace][$document->id] = $document;
         }
@@ -21,15 +27,7 @@ final class InMemoryVectorStore implements VectorStoreInterface, VectorStoreRefe
 
     public function referenceEmbeddingDimensions(string $namespace): ?int
     {
-        $docs = $this->documents[$namespace] ?? [];
-        if ($docs === []) {
-            return null;
-        }
-
-        ksort($docs);
-        $first = reset($docs);
-
-        return count($first->embedding);
+        return $this->existingNamespaceEmbeddingLength($namespace);
     }
 
     public function search(string $namespace, VectorSearchQuery $query): array
@@ -38,6 +36,10 @@ final class InMemoryVectorStore implements VectorStoreInterface, VectorStoreRefe
 
         foreach ($this->documents[$namespace] ?? [] as $document) {
             if (!$this->matchesFilter($document, $query->filter)) {
+                continue;
+            }
+
+            if (count($query->embedding) !== count($document->embedding)) {
                 continue;
             }
 
@@ -67,6 +69,23 @@ final class InMemoryVectorStore implements VectorStoreInterface, VectorStoreRefe
         }
 
         return $deleted;
+    }
+
+    /**
+     * @return positive-int|null
+     */
+    private function existingNamespaceEmbeddingLength(string $namespace): ?int
+    {
+        $docs = $this->documents[$namespace] ?? [];
+        if ($docs === []) {
+            return null;
+        }
+
+        ksort($docs);
+        $first = reset($docs);
+        $length = count($first->embedding);
+
+        return $length >= 1 ? $length : null;
     }
 
     /**

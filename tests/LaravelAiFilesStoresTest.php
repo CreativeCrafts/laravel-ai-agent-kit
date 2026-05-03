@@ -5,9 +5,12 @@ declare(strict_types=1);
 use CreativeCrafts\LaravelAiAgentKit\Core\LaravelAi\LaravelAiFilesService;
 use CreativeCrafts\LaravelAiAgentKit\Core\LaravelAi\LaravelAiStoresService;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Event;
 use Laravel\Ai\AiServiceProvider;
 use Laravel\Ai\Files;
 use Laravel\Ai\Stores;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\LaravelAiFilesGatewayOperationFinished;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\LaravelAiStoresGatewayOperationFinished;
 
 beforeEach(function (): void {
     app()->register(AiServiceProvider::class);
@@ -76,4 +79,58 @@ it('uses configured default providers when null is passed', function (): void {
     $stores->addToStore($created->id, $stored->id);
 
     expect($stored->id)->not->toBe('');
+});
+
+it('dispatches redacted files gateway events when observability is enabled', function (): void {
+    Event::fake();
+    Files::fake();
+
+    config()->set('ai-agent-kit.observability.laravel_ai_files_stores.enabled', true);
+
+    /** @var LaravelAiFilesService $files */
+    $files = app(LaravelAiFilesService::class);
+
+    $stored = $files->put('hello', mimeType: 'text/plain', provider: 'openai');
+
+    Event::assertDispatched(LaravelAiFilesGatewayOperationFinished::class, function ($e) use ($stored): bool {
+        return $e->operation === 'put'
+            && $e->provider === 'openai'
+            && $e->resourceId === $stored->id
+            && $e->success === true
+            && $e->errorClass === null;
+    });
+});
+
+it('does not dispatch files gateway events when observability is disabled', function (): void {
+    Event::fake();
+    Files::fake();
+
+    config()->set('ai-agent-kit.observability.laravel_ai_files_stores.enabled', false);
+
+    /** @var LaravelAiFilesService $files */
+    $files = app(LaravelAiFilesService::class);
+    $files->put('x', mimeType: 'text/plain', provider: 'openai');
+
+    Event::assertNotDispatched(LaravelAiFilesGatewayOperationFinished::class);
+});
+
+it('dispatches redacted stores gateway events when observability is enabled', function (): void {
+    Event::fake();
+    Stores::fake();
+    Files::fake();
+
+    config()->set('ai-agent-kit.observability.laravel_ai_files_stores.enabled', true);
+
+    /** @var LaravelAiFilesService $files */
+    $files = app(LaravelAiFilesService::class);
+    /** @var LaravelAiStoresService $stores */
+    $stores = app(LaravelAiStoresService::class);
+
+    $stored = $files->put('chunk', mimeType: 'text/plain', provider: 'openai');
+    $created = $stores->create('docs', provider: 'openai');
+    $stores->addToStore($created->id, $stored->id, provider: 'openai');
+
+    Event::assertDispatched(LaravelAiStoresGatewayOperationFinished::class, function ($e): bool {
+        return $e->operation === 'create' && $e->success === true;
+    });
 });

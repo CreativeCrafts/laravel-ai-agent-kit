@@ -4,25 +4,39 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Core\LaravelAi;
 
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\LaravelAiStoresGatewayOperationFinished;
 use DateInterval;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Responses\AddedDocumentResponse;
 use Laravel\Ai\Store;
 use Laravel\Ai\Stores;
+use Throwable;
 
 final readonly class LaravelAiStoresService
 {
     public function __construct(
         private ConfigRepository $config,
+        private Dispatcher $events,
     ) {
     }
 
     public function get(string $storeId, ?string $provider = null): ProviderVectorStoreState
     {
-        return $this->mapStore(Stores::get($storeId, $this->resolveStoreProvider($provider)));
+        $resolved = $this->resolveStoreProvider($provider);
+
+        try {
+            $state = $this->mapStore(Stores::get($storeId, $resolved));
+            $this->dispatchFinished('get', $resolved, $storeId, null, true);
+
+            return $state;
+        } catch (Throwable $throwable) {
+            $this->dispatchFinished('get', $resolved, $storeId, null, false, $throwable);
+            throw $throwable;
+        }
     }
 
     /**
@@ -35,25 +49,42 @@ final readonly class LaravelAiStoresService
         ?DateInterval $expiresWhenIdleFor = null,
         ?string $provider = null,
     ): ProviderVectorStoreState {
-        $collection = Collection::make($fileIds);
+        $resolved = $this->resolveStoreProvider($provider);
 
-        return $this->mapStore(Stores::create(
-            $name,
-            $description,
-            $collection,
-            $expiresWhenIdleFor,
-            $this->resolveStoreProvider($provider),
-        ));
+        try {
+            $collection = Collection::make($fileIds);
+            $state = $this->mapStore(Stores::create(
+                $name,
+                $description,
+                $collection,
+                $expiresWhenIdleFor,
+                $resolved,
+            ));
+            $this->dispatchFinished('create', $resolved, $state->id, null, true);
+
+            return $state;
+        } catch (Throwable $throwable) {
+            $this->dispatchFinished('create', $resolved, null, null, false, $throwable);
+            throw $throwable;
+        }
     }
 
     public function deleteStore(string $storeId, ?string $provider = null): bool
     {
-        return Stores::delete($storeId, $this->resolveStoreProvider($provider));
+        $resolved = $this->resolveStoreProvider($provider);
+
+        try {
+            $ok = Stores::delete($storeId, $resolved);
+            $this->dispatchFinished('delete_store', $resolved, $storeId, null, $ok);
+
+            return $ok;
+        } catch (Throwable $throwable) {
+            $this->dispatchFinished('delete_store', $resolved, $storeId, null, false, $throwable);
+            throw $throwable;
+        }
     }
 
     /**
-     * Add a provider file reference (or raw content string per SDK rules) to a store.
-     *
      * @param array<string, mixed> $metadata
      */
     public function addToStore(
@@ -62,10 +93,19 @@ final readonly class LaravelAiStoresService
         array $metadata = [],
         ?string $provider = null,
     ): AddedStoreDocument {
-        $store = Stores::get($storeId, $this->resolveStoreProvider($provider));
-        $response = $store->add($file, $metadata);
+        $resolved = $this->resolveStoreProvider($provider);
 
-        return $this->mapAdded($response);
+        try {
+            $store = Stores::get($storeId, $resolved);
+            $response = $store->add($file, $metadata);
+            $dto = $this->mapAdded($response);
+            $this->dispatchFinished('add_to_store', $resolved, $storeId, $dto->documentId, true);
+
+            return $dto;
+        } catch (Throwable $throwable) {
+            $this->dispatchFinished('add_to_store', $resolved, $storeId, null, false, $throwable);
+            throw $throwable;
+        }
     }
 
     public function removeFromStore(
@@ -74,16 +114,34 @@ final readonly class LaravelAiStoresService
         bool $deleteFile = false,
         ?string $provider = null,
     ): bool {
-        $store = Stores::get($storeId, $this->resolveStoreProvider($provider));
+        $resolved = $this->resolveStoreProvider($provider);
 
-        return $store->remove($documentId, $deleteFile);
+        try {
+            $store = Stores::get($storeId, $resolved);
+            $ok = $store->remove($documentId, $deleteFile);
+            $this->dispatchFinished('remove_from_store', $resolved, $storeId, $documentId, $ok);
+
+            return $ok;
+        } catch (Throwable $throwable) {
+            $this->dispatchFinished('remove_from_store', $resolved, $storeId, $documentId, false, $throwable);
+            throw $throwable;
+        }
     }
 
     public function refreshStore(string $storeId, ?string $provider = null): ProviderVectorStoreState
     {
-        $store = Stores::get($storeId, $this->resolveStoreProvider($provider));
+        $resolved = $this->resolveStoreProvider($provider);
 
-        return $this->mapStore($store->refresh());
+        try {
+            $store = Stores::get($storeId, $resolved);
+            $state = $this->mapStore($store->refresh());
+            $this->dispatchFinished('refresh_store', $resolved, $storeId, null, true);
+
+            return $state;
+        } catch (Throwable $throwable) {
+            $this->dispatchFinished('refresh_store', $resolved, $storeId, null, false, $throwable);
+            throw $throwable;
+        }
     }
 
     private function resolveStoreProvider(?string $provider): ?string
@@ -119,5 +177,43 @@ final readonly class LaravelAiStoresService
             documentId: $response->id(),
             storedFileId: $response->fileId(),
         );
+    }
+
+    private function dispatchFinished(
+        string $operation,
+        ?string $provider,
+        ?string $storeId,
+        ?string $documentId,
+        bool $success,
+        ?Throwable $failure = null,
+    ): void {
+        if (!$this->filesStoresObservabilityEnabled()) {
+            return;
+        }
+
+        $errorClass = null;
+        $errorSummary = null;
+        if ($failure !== null) {
+            $parts = GatewayOperationErrorSummary::fromThrowable($failure);
+            $errorClass = $parts['class'];
+            $errorSummary = $parts['summary'];
+        }
+
+        $this->events->dispatch(new LaravelAiStoresGatewayOperationFinished(
+            operation: $operation,
+            provider: $provider,
+            storeId: $storeId,
+            documentId: $documentId,
+            success: $success,
+            errorClass: $errorClass,
+            errorSummary: $errorSummary,
+        ));
+    }
+
+    private function filesStoresObservabilityEnabled(): bool
+    {
+        $block = $this->config->get('ai-agent-kit.observability.laravel_ai_files_stores', []);
+
+        return !is_array($block) || ($block['enabled'] ?? true) !== false;
     }
 }

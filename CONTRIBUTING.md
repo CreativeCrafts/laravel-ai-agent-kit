@@ -12,6 +12,8 @@ expectations.
 
 The canonical testing strategy for this repository lives in [`docs/testing-strategy.md`](docs/testing-strategy.md).
 
+**Release verification** for maintainers: [`docs/release-verification.md`](docs/release-verification.md).
+
 ### Quick Rules
 
 - Use **unit tests** for pure package logic such as validators, DTO invariants, retry calculations, redactors, and config validation helpers.

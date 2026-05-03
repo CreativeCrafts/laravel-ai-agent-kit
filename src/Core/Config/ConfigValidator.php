@@ -55,6 +55,7 @@ final readonly class ConfigValidator
 
         $this->validateEphemeralDriverWarnings($config);
         $this->validateQueuedPipeline($config);
+        $this->validateObservability($config);
 
         $providers = $this->requireArray($config, 'providers');
 
@@ -183,6 +184,36 @@ final readonly class ConfigValidator
         $this->validateSummarization($config);
         $this->validateRuntime($config);
         $this->validateModalities($config);
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function validateObservability(array $config): void
+    {
+        if (!array_key_exists('observability', $config)) {
+            return;
+        }
+
+        if (!is_array($config['observability'])) {
+            throw InvalidConfigurationException::invalidType('observability', 'array');
+        }
+
+        $obs = $config['observability'];
+
+        if (!array_key_exists('laravel_ai_files_stores', $obs)) {
+            return;
+        }
+
+        if (!is_array($obs['laravel_ai_files_stores'])) {
+            throw InvalidConfigurationException::invalidType('observability.laravel_ai_files_stores', 'array');
+        }
+
+        $fs = $obs['laravel_ai_files_stores'];
+
+        if (array_key_exists('enabled', $fs) && !is_bool($fs['enabled'])) {
+            throw InvalidConfigurationException::invalidType('observability.laravel_ai_files_stores.enabled', 'bool');
+        }
     }
 
     /**

@@ -60,6 +60,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Observability
+    |--------------------------------------------------------------------------
+    |
+    | Redacted package events for Laravel AI Files / Stores gateway calls made
+    | through `LaravelAiFilesService` and `LaravelAiStoresService`. Disable in
+    | tests if you assert event counts globally.
+    |
+    */
+  'observability' => [
+    'laravel_ai_files_stores' => [
+      'enabled' => (bool)env('AI_AGENT_KIT_LARAVEL_AI_FILES_STORES_OBSERVABILITY', true),
+    ],
+  ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Providers
     |--------------------------------------------------------------------------
     |

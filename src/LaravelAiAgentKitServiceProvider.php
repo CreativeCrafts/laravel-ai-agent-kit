@@ -586,12 +586,14 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         $this->app->singleton(LaravelAiFilesService::class, function (Application $app): LaravelAiFilesService {
             return new LaravelAiFilesService(
                 config: $app->make(ConfigRepository::class),
+                events: $app->make(Dispatcher::class),
             );
         });
 
         $this->app->singleton(LaravelAiStoresService::class, function (Application $app): LaravelAiStoresService {
             return new LaravelAiStoresService(
                 config: $app->make(ConfigRepository::class),
+                events: $app->make(Dispatcher::class),
             );
         });
     }
