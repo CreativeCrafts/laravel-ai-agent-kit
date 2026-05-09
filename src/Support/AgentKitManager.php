@@ -39,18 +39,18 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StreamChunk;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StreamComplete;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StreamFailure;
 use Generator;
+use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Contracts\Container\Container;
 
 final readonly class AgentKitManager
 {
     public function __construct(
-        private TextToStructuredEvaluation $textEvaluation,
-        private AudioToTextToEvaluation $audioEvaluation,
-        private AgentOrchestrator $orchestrator,
-        private BlueprintRunner $blueprintRunner,
-        private Container $container,
-    ) {
-    }
+      private TextToStructuredEvaluation $textEvaluation,
+      private AudioToTextToEvaluation $audioEvaluation,
+      private AgentOrchestrator $orchestrator,
+      private BlueprintRunner $blueprintRunner,
+      private Container $container,
+    ) {}
 
     public function evaluateText(TextToStructuredEvaluationRequest $request): TextToStructuredEvaluationResult
     {
@@ -89,42 +89,64 @@ final readonly class AgentKitManager
 
     /**
      * @return Generator<int, StreamChunk|StreamComplete|StreamFailure>
+     * @throws BindingResolutionException
      */
     public function executeStream(ExecutionRequest $request): Generator
     {
         return $this->container->make(StreamingAiRuntime::class)->executeStream($request);
     }
 
+    /**
+     * @throws BindingResolutionException
+     */
     public function embed(EmbeddingsRequest $request): EmbeddingsResult
     {
         return $this->container->make(EmbeddingsRuntime::class)->embed($request);
     }
 
+    /**
+     * @throws BindingResolutionException
+     */
     public function transcribe(TranscriptionRequest $request): TranscriptionResult
     {
         return $this->container->make(TranscriptionRuntime::class)->transcribe($request);
     }
 
+    /**
+     * @throws BindingResolutionException
+     */
     public function generateImage(ImageGenerationRequest $request): ImageGenerationResult
     {
         return $this->container->make(ImageGenerationRuntime::class)->generate($request);
     }
 
+    /**
+     * @throws BindingResolutionException
+     */
     public function rerank(RerankingRequest $request): RerankingResult
     {
         return $this->container->make(RerankingRuntime::class)->rerank($request);
     }
 
+    /**
+     * @throws BindingResolutionException
+     */
     public function generateAudio(AudioGenerationRequest $request): AudioGenerationResult
     {
         return $this->container->make(AudioGenerationRuntime::class)->generate($request);
     }
 
+    /**
+     * @throws BindingResolutionException
+     */
     public function laravelAiFiles(): LaravelAiFilesService
     {
         return $this->container->make(LaravelAiFilesService::class);
     }
 
+    /**
+     * @throws BindingResolutionException
+     */
     public function laravelAiStores(): LaravelAiStoresService
     {
         return $this->container->make(LaravelAiStoresService::class);
