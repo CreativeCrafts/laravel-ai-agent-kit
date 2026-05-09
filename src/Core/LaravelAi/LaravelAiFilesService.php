@@ -137,7 +137,7 @@ final readonly class LaravelAiFilesService
 
         $errorClass = null;
         $errorSummary = null;
-        if ($failure !== null) {
+        if ($failure instanceof Throwable) {
             $parts = GatewayOperationErrorSummary::fromThrowable($failure);
             $errorClass = $parts['class'];
             $errorSummary = $parts['summary'];

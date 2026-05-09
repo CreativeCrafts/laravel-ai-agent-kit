@@ -9,7 +9,6 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\RuntimeMiddleware;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\StreamingAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\TerminatingRuntimeMiddleware;
-use Throwable;
 use Generator;
 use RuntimeException;
 
@@ -39,11 +38,7 @@ final readonly class MiddlewareExecutingAiRuntime implements AiRuntime, Streamin
             $core,
         );
 
-        try {
-            $result = $pipeline($request);
-        } catch (Throwable $throwable) {
-            throw $throwable;
-        }
+        $result = $pipeline($request);
 
         foreach (array_reverse($this->middleware) as $middleware) {
             if ($middleware instanceof TerminatingRuntimeMiddleware) {

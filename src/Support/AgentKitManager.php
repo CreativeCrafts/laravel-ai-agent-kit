@@ -45,12 +45,13 @@ use Illuminate\Contracts\Container\Container;
 final readonly class AgentKitManager
 {
     public function __construct(
-      private TextToStructuredEvaluation $textEvaluation,
-      private AudioToTextToEvaluation $audioEvaluation,
-      private AgentOrchestrator $orchestrator,
-      private BlueprintRunner $blueprintRunner,
-      private Container $container,
-    ) {}
+        private TextToStructuredEvaluation $textEvaluation,
+        private AudioToTextToEvaluation $audioEvaluation,
+        private AgentOrchestrator $orchestrator,
+        private BlueprintRunner $blueprintRunner,
+        private Container $container,
+    ) {
+    }
 
     public function evaluateText(TextToStructuredEvaluationRequest $request): TextToStructuredEvaluationResult
     {

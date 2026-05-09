@@ -1222,7 +1222,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
      * @param  class-string<T>  $contract
      * @return T
      */
-    private function resolveModalityRuntime(Application $app, string $configKey, object $sdk, string $contract)
+    private function resolveModalityRuntime(Application $app, string $configKey, object $sdk, string $contract): object
     {
         /** @var ConfigRepository $config */
         $config = $app->make(ConfigRepository::class);
