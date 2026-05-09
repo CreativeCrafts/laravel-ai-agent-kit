@@ -4,14 +4,9 @@
 [![GitHub CI](https://img.shields.io/github/actions/workflow/status/creativecrafts/laravel-ai-agent-kit/ci.yml?branch=main&label=ci&style=flat-square)](https://github.com/creativecrafts/laravel-ai-agent-kit/actions/workflows/ci.yml)
 [![Total Downloads](https://img.shields.io/packagist/dt/creativecrafts/laravel-ai-agent-kit.svg?style=flat-square)](https://packagist.org/packages/creativecrafts/laravel-ai-agent-kit)
 
-CI runs **PHP 8.3–8.5** against **Laravel 12 and 13** ([docs/github-ci-matrix.md](docs/github-ci-matrix.md)).
+Laravel AI Agent Kit is a Laravel package for building AI-powered application workflows on top of the official Laravel AI SDK. It gives your app package-owned blueprints, agents, provider profiles, tools, memory, queues, vector retrieval, and redacted telemetry without exposing provider SDK details as your public workflow API.
 
-Laravel AI Agent Kit is a Laravel package that delivers a structured agent-workflow toolkit built on top of the official Laravel AI SDK. It provides provider abstraction, pipeline orchestration,
-queued execution, and package foundations for building AI-powered application flows safely and predictably.
-
-Maintainers map Laravel AI SDK features to this package in [docs/laravel-ai-sdk-capability-matrix.md](docs/laravel-ai-sdk-capability-matrix.md). **Async jobs** are summarized in [docs/sdk-async-inventory.md](docs/sdk-async-inventory.md).
-
-**Guides (deep dives):** [Configuration](docs/configuration.md) · [Orchestration and blueprints](docs/orchestration-and-blueprints.md) · [Pipelines, queues, memory, vectors](docs/pipelines-queues-and-memory.md) · [Testing with fakes](docs/testing-with-fakes.md)
+Use it when you want Laravel-native AI workflows that are explicit, testable, and safe by default.
 
 ## Installation
 
@@ -21,28 +16,21 @@ Install the package with Composer:
 composer require creativecrafts/laravel-ai-agent-kit
 ~~~
 
-Laravel AI Agent Kit requires the official Laravel AI SDK at runtime. The package declares `laravel/ai` as a Composer dependency, so Composer installs the SDK when you require this package.
-
-Publish the Laravel AI SDK configuration and migrations first:
+Publish the Laravel AI SDK configuration and migrations:
 
 ~~~bash
-php artisan vendor:publish --provider="Laravel\Ai\AiServiceProvider"
+php artisan vendor:publish --provider="Laravel\\Ai\\AiServiceProvider"
 ~~~
 
-Then publish and run this package's migrations:
+Publish this package's configuration and migrations:
 
 ~~~bash
+php artisan vendor:publish --tag="ai-agent-kit-config"
 php artisan vendor:publish --tag="ai-agent-kit-migrations"
 php artisan migrate
 ~~~
 
-Publish this package's configuration file:
-
-~~~bash
-php artisan vendor:publish --tag="ai-agent-kit-config"
-~~~
-
-Optionally, publish the views:
+Optionally publish views:
 
 ~~~bash
 php artisan vendor:publish --tag="ai-agent-kit-views"
@@ -50,27 +38,21 @@ php artisan vendor:publish --tag="ai-agent-kit-views"
 
 ## Minimal configuration
 
-After publishing `config/ai-agent-kit.php`, ensure at least one **enabled** provider exists, `default_provider` references it, and `failover_order` includes that provider. The default memory driver is **`in_memory`** (non-persistent; fine for tests and local use). For production drivers, queues, vectors, and tool defaults, see the [Production checklist](#production-checklist) and [docs/configuration.md](docs/configuration.md).
+After publishing `config/ai-agent-kit.php`, configure at least one enabled provider profile. The default local/test setup can use the bundled `null` provider profile. Production apps should configure real Laravel AI provider credentials through Laravel AI and map package provider profiles to the capabilities your workflows need.
 
-## Usage
+At minimum, make sure:
 
-Resolve the configured provider registry or default provider selector through the container:
+- `providers` contains at least one enabled provider profile.
+- `default_provider` references an enabled provider profile.
+- `failover_order` includes the default provider profile.
+- `memory.default_driver` is intentional. The default `in_memory` driver is process-local and non-persistent.
+- tool execution remains default-deny until you register and authorize tools deliberately.
 
-~~~php
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
+See [Configuration](docs/configuration.md) and [Providers](docs/providers.md) for the full setup path.
 
-$registry = app(ProviderRegistry::class);
-$selector = app(ProviderSelector::class);
+## Quick start: evaluate text
 
-$defaultProvider = $selector->selectDefault();
-$provider = $registry->get('null');
-~~~
-
-For package-facing workflows, prefer dependency injection in controllers, jobs, commands, or application services. Direct container resolution is still appropriate for infrastructure and advanced
-extension points, but it should not be the default teaching style for common workflow execution.
-
-### Injection-first workflow usage
+Prefer dependency injection in controllers, jobs, commands, and application services:
 
 ~~~php
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluation;
@@ -78,7 +60,7 @@ use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationReques
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-final class SupportReplyEvaluationController
+final class EvaluateSupportReplyController
 {
     public function __invoke(Request $request, TextToStructuredEvaluation $evaluation): JsonResponse
     {
@@ -96,18 +78,13 @@ final class SupportReplyEvaluationController
 }
 ~~~
 
-### AgentKit facade shortcuts
-
-The `AgentKit` facade is an optional convenience surface for application-facing workflow calls. Package internals and advanced extension points should continue to prefer dependency injection and
-explicit contracts.
+For route-level experiments or concise examples, the `AgentKit` facade exposes the same application-facing workflow shortcuts:
 
 ~~~php
-use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationRequest;
-use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Facades\AgentKit;
 
-$textResult = AgentKit::evaluateText(
+$result = AgentKit::evaluateText(
     new TextToStructuredEvaluationRequest(
         subject: 'support reply',
         text: 'We can refund the unused portion of your subscription within five business days.',
@@ -115,8 +92,17 @@ $textResult = AgentKit::evaluateText(
         promptVersion: '1.0.0',
     ),
 );
+~~~
 
-$audioResult = AgentKit::evaluateAudio(
+## Quick start: evaluate audio
+
+Use the audio blueprint when the workflow should transcribe audio and evaluate the transcript through one package-owned result shape:
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Facades\AgentKit;
+
+$result = AgentKit::evaluateAudio(
     new AudioToTextToEvaluationRequest(
         subject: 'support call',
         audioReference: 's3://bucket/audio/support-call.wav',
@@ -126,27 +112,13 @@ $audioResult = AgentKit::evaluateAudio(
         evaluationPromptVersion: '1.0.0',
     ),
 );
-
-$orchestrationResult = AgentKit::orchestrate(
-    new OrchestrationRequest(
-        entryAgent: 'support.agent',
-        task: 'Handle a support refund workflow',
-        input: ['subscription_id' => 'sub-123'],
-    ),
-);
-
-// Single-prompt execution with the new request surface
-// (generation options, structured output, attachments, provider tools).
-use CreativeCrafts\LaravelAiAgentKit\LaravelAiAgentKit;
-
-$result = AgentKit::run(
-    LaravelAiAgentKit::prompt('package.followup-summary')
-      ->withVariable('topic', 'refund window')
-      ->withSchema(\App\Schemas\FollowUpSummary::class)
-);
 ~~~
 
-Register first-class agents explicitly through the package agent registry in your application service provider:
+See [Blueprints](docs/blueprints.md) for request fields, result fields, prompt requirements, and structured-output behavior.
+
+## Quick start: register and orchestrate agents
+
+Register first-class agents explicitly through the package registry:
 
 ~~~php
 use App\Agents\CancellationAgent;
@@ -166,28 +138,50 @@ final class AppServiceProvider extends ServiceProvider
 }
 ~~~
 
-Registered agents are resolved through the Laravel container and looked up by the stable agent key returned from their package-owned `AgentDefinition`.
+Then start an orchestrated workflow:
 
-**Next:** multi-agent flows, blueprints, pipelines, memory, vectors, and extended config — [docs/orchestration-and-blueprints.md](docs/orchestration-and-blueprints.md), [docs/pipelines-queues-and-memory.md](docs/pipelines-queues-and-memory.md), [docs/configuration.md](docs/configuration.md), [docs/testing-with-fakes.md](docs/testing-with-fakes.md).
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Facades\AgentKit;
 
-## Production checklist
+$result = AgentKit::orchestrate(
+    new OrchestrationRequest(
+        entryAgent: 'support.agent',
+        task: 'Handle a support refund workflow',
+        input: ['subscription_id' => 'sub-123'],
+    ),
+);
+~~~
 
-Before going live with Agent Kit:
+See [Agents and orchestration](docs/agents-and-orchestration.md) for agent definitions, delegation, handoffs, provider-profile assignment, and trace semantics.
 
-- **Memory driver:** `memory.default_driver` = `in_memory` is process-local; use `database` or `redis` for shared or durable conversation state across workers. Optional: enable `ephemeral_driver_warnings` to log when in-memory drivers are selected in configured environments (default: off).
-- **Vector driver:** `vector.default_driver` = `in_memory` is process-local; use `database` or a custom `VectorStoreInterface` binding for shared retrieval. Built-in stores enforce **one embedding width per namespace** on `upsert`. `DatabaseVectorStore::search` is **O(n)** in table rows for the namespace; optional `vector.database.max_scan_rows` bounds reads (approximate top-K). See [docs/laravel-ai-sdk-capability-matrix.md](docs/laravel-ai-sdk-capability-matrix.md).
-- **Tool authorizer:** Replace `DenyAllToolAuthorizer` with a policy that allows only the tools and provider tools you intend to expose.
-- **Encryption:** Conversation payloads use `Encrypter` when database encryption is enabled; ensure `APP_KEY` and deployment practices match your threat model.
-- **Queues:** Queued pipelines serialize `RunContext` on the job; keep `input` / `state` / `metadata` small and avoid embedding full `Conversation` graphs when a `conversationId` suffices. See [Configuration — Queued pipelines and `RunContext`](docs/configuration.md#queued-pipelines-and-runcontext) and optional `pipeline.queued.debug_payload_guard` for local debugging.
+## Core concepts
 
-Before tagging releases, maintainers follow [docs/release-verification.md](docs/release-verification.md).
+| Concept | What it gives you | Guide |
+|--------|--------------------|-------|
+| Provider profiles | Capability-based provider selection and failover | [Providers](docs/providers.md) |
+| Blueprints | Ready-made workflows such as text and audio evaluation | [Blueprints](docs/blueprints.md) |
+| Agents | Package-owned multi-agent workflow participants | [Agents and orchestration](docs/agents-and-orchestration.md) |
+| Prompts | Versioned templates and explicit variables | [Prompts](docs/prompts.md) |
+| Tools | Explicit registration, schema validation, and authorization | [Tools](docs/tools.md) |
+| Memory | Conversation continuation with in-memory, database, or Redis drivers | [Memory](docs/memory.md) |
+| Pipelines and queues | Structured sync or queued execution with `RunContext` | [Pipelines and queues](docs/pipelines-and-queues.md) |
+| Vectors and retrieval | Application-owned vector stores plus provider Files/Stores boundaries | [Vectors and retrieval](docs/vectors-and-retrieval.md) |
+| Streaming and modalities | Streaming text, transcription, embeddings, images, reranking, and audio generation | [Streaming and modalities](docs/streaming-and-modalities.md) |
+| Testing | Package fakes and deterministic app tests | [Testing](docs/testing.md) |
+| Production | Operational defaults and deployment checks | [Production](docs/production.md) |
 
-## Security and Privacy Defaults
+## Security and privacy defaults
 
 - Tool execution is default-deny unless tools are explicitly registered and authorized.
-- Conversation persistence is package-owned and can be kept in memory, Redis, or encrypted database storage.
-- Retention-based purging is explicit and available through a command and queue job.
-- Telemetry is redacted by default and emits metadata-only package events.
+- Telemetry is redacted by default and emits metadata-oriented package events.
+- Conversation persistence is explicit: use `in_memory` for local/test use, `database` for encrypted durable storage, or `redis` for shared ephemeral memory.
+- Provider SDK details stay behind package-owned contracts and DTOs.
+- Queued workflows, vector stores, and persistent memory require production-specific configuration.
+
+## Documentation
+
+Start with [Getting started](docs/getting-started.md), then move to the focused guide for the subsystem you need. Maintainer and contributor process documents live behind [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
