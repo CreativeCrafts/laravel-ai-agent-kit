@@ -6,12 +6,12 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Added
 
+- Developer-focused documentation structure: `docs/getting-started.md`, `docs/providers.md`, `docs/blueprints.md`, `docs/agents-and-orchestration.md`, `docs/prompts.md`, `docs/tools.md`, `docs/memory.md`, `docs/pipelines-and-queues.md`, `docs/vectors-and-retrieval.md`, `docs/streaming-and-modalities.md`, `docs/errors-and-telemetry.md`, `docs/testing.md`, and `docs/production.md`.
+- Maintainer documentation namespace under `docs/maintainers/**` for CI matrix, release verification, SDK capability inventory, SDK async inventory, and contributor testing strategy.
+- Documentation developer-experience test coverage for README onboarding shape, public-doc guide existence, injection-first examples, maintainer-doc separation, and public-doc internal-marker exclusions.
 - `VectorEmbeddingDimensionGuard` and `VectorOperationException::forEmbeddingDimensionMismatch()` for namespace-wide embedding width enforcement.
 - `VectorStoreReferenceEmbedding` on built-in vector stores for `SimilaritySearchTool` dimension checks.
 - Redacted observability events `LaravelAiFilesGatewayOperationFinished` and `LaravelAiStoresGatewayOperationFinished` when using `LaravelAiFilesService` / `LaravelAiStoresService`; config `observability.laravel_ai_files_stores.enabled` (default **true**).
-- [docs/sdk-async-inventory.md](docs/sdk-async-inventory.md): Laravel AI queue jobs mapped to kit guidance.
-- [docs/release-verification.md](docs/release-verification.md): maintainer checklist before tagging.
-- [docs/github-ci-matrix.md](docs/github-ci-matrix.md): documents GitHub Actions PHP × Laravel matrix.
 - `ai-agent-kit.ephemeral_driver_warnings` (default off): optional one-time-per-process log when in-memory memory or vector drivers are used in configured environments (e.g. production).
 - `ai-agent-kit.vector.database.max_scan_rows`: optional cap on rows read per `DatabaseVectorStore::search` (stable `document_id` order; approximate top-K when cap &lt; namespace size).
 - `ai-agent-kit.pipeline.queued.debug_payload_guard` and `max_serialized_job_bytes`: when `app.debug` is true, fail queued pipeline dispatch if serialized job exceeds threshold.
@@ -23,17 +23,23 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Changed
 
+- **Documentation:** `README.md` is now a concise developer landing page focused on install, minimal configuration, first workflow examples, core concepts, and safe defaults.
+- **Documentation:** former combined public guides now redirect to focused topic guides; maintainer/process material now lives under `docs/maintainers/**` and is linked from `CONTRIBUTING.md`.
 - **Packaging:** `docs/` is no longer `export-ignore` in `.gitattributes`, so the full `docs/` tree ships in Composer dist archives. README and maintainer links to `docs/*.md` resolve when the package is installed under `vendor/`.
 - **BREAKING:** `InMemoryVectorStore`, `DatabaseVectorStore`, and `FakeVectorStore` enforce a **single embedding length per namespace** on `upsert` (transactional for SQL). `search` skips stored rows whose embedding length differs from the query vector (no truncated dot product).
 - `FakeVectorStore` implements `VectorStoreReferenceEmbedding` and matches built-in upsert/search rules.
 - `LaravelAiFilesService` and `LaravelAiStoresService` accept `Dispatcher` and emit observability events when enabled.
 - `LaravelQueuedPipelineDispatcher` injects config and optional debug payload guard; `LaravelAiAgentKitServiceProvider::packageRegistered` split into private registrar methods.
+- `AiRuntime` resolves to `MiddlewareExecutingAiRuntime` around `SdkAiRuntime` when `runtime.middleware` lists one or more middleware classes (blueprints and orchestration use the same binding); the same wrapper now implements `StreamingAiRuntime` and delegates streaming to the inner SDK runtime.
+- `TextToStructuredEvaluation` specialist now requests structured output via `ExecutionRequest::$schema`, prefers `ExecutionResult::$structuredOutput` when valid, and falls back to the existing text normalizer when structured output is missing or invalid; coordinator forwards path flags into the final blueprint result.
+- Runtime now includes `estimated_cost_usd` metadata in `ExecutionResult` when provided in request metadata.
+- Governance catalog IDs for multi-agent roadmap items were aligned from `P10-I*` to `P1X-I*`, and flagship blueprint statuses were aligned to `status:ready` in roadmap/catalog metadata.
+- `RuntimeConversationMemoryBridge` persists serialized attachment payloads on stored user messages; `SdkAiRuntime` merges prior-turn replay with `ExecutionRequest::$attachments` when `metadata['attachment_replay']` is `merge` or `replay_only` and `memory.attachments_replay.enabled` is true.
 
 ### Documentation
 
-- **README:** Shortened first-read path (install → minimal config → usage); deep dives moved to `docs/configuration.md`, `docs/orchestration-and-blueprints.md`, `docs/pipelines-queues-and-memory.md`, and `docs/testing-with-fakes.md`.
-- **README:** Production checklist, vector/queue/observability guidance, SDK async inventory link, release verification link; **capability matrix:** refreshed rows.
-- OpenSpec **`sdk-surface-parity`** archived to [openspec/changes/archive/2026-05-02-sdk-surface-parity](openspec/changes/archive/2026-05-02-sdk-surface-parity/proposal.md) (historical proposal, design, tasks, delta specs).
+- Historical development notes remain in this changelog and archived change records. Public developer docs now describe the current package behavior without requiring readers to understand development sequencing.
+- The developer docs are organized around application tasks: getting started, configuration, providers, blueprints, agents, prompts, tools, memory, queues, vectors, streaming/modalities, errors/telemetry, testing, and production readiness.
 
 ### Removed
 
@@ -41,9 +47,9 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Rollout: `close-agent-kit-gaps` program (Phases 0–6)
 
-These phases shipped together in development; adopt them in dependency order (see `openspec/changes/close-agent-kit-gaps/design.md`, decision D1):
+These phases shipped together in development; adopt them in dependency order (see archived change records for full proposal/design/task history):
 
-1. **Phase 1 — Structured evaluation** — Prefer `ExecutionResult::$structuredOutput` for `TextToStructuredEvaluation`; fall back to text normalization when needed (see README and blueprint tests).
+1. **Phase 1 — Structured evaluation** — Prefer `ExecutionResult::$structuredOutput` for `TextToStructuredEvaluation`; fall back to text normalization when needed.
 2. **Phase 2 — Runtime middleware** — Register `ai-agent-kit.runtime.middleware` before relying on cross-cutting logging, tenancy, or policy around `AiRuntime::execute()`.
 3. **Phase 3 — Streaming** — Inject `StreamingAiRuntime` for `executeStream()`; optional `runtime.streaming.broadcast_channel` or request metadata for Echo.
 4. **Phase 4 — Modality runtimes** — Configure `ai-agent-kit.modalities.*.default_driver`; audio blueprint uses `TranscriptionRuntime` for decodable base64/data-URI audio.
@@ -70,14 +76,3 @@ These phases shipped together in development; adopt them in dependency order (se
 - `RequestObservabilityKeys` helper for metadata key extraction shared with streaming completion events.
 - Optional Laravel AI legacy conversation read bridge: `memory.laravel_ai_legacy` config, `LegacyLaravelAiDatabaseConversationReader`, and `FallingBackToLegacyLaravelAiConversationStore` so `ConversationStore::find()` can load `agent_conversations` / `agent_conversation_messages` when the package store has no row (database driver only).
 - Conversation attachment persistence: `ai_agent_conversation_messages.attachments_ciphertext` (see migration stub), Redis message `attachments` field, `AttachmentReplayPolicy`, `RuntimeAttachmentReplayResolver`, and `RuntimeAttachmentsReplayed` when policy excludes replayed attachments.
-
-### Changed
-
-- Documentation: `README.md` (rollout subsection, CI links, memory options, corrected `ConversationStore` example) and `CHANGELOG.md` (phased adoption order). OpenSpec change `close-agent-kit-gaps` archived as `openspec/changes/archive/2026-05-01-close-agent-kit-gaps/`; `implement-deferred-runtime-phases` proposal notes supersession.
-
-- `AiRuntime` resolves to `MiddlewareExecutingAiRuntime` around `SdkAiRuntime` when `runtime.middleware` lists one or more middleware classes (blueprints and orchestration use the same binding); the same wrapper now implements `StreamingAiRuntime` and delegates streaming to the inner SDK runtime.
-- `TextToStructuredEvaluation` specialist now requests structured output via `ExecutionRequest::$schema`, prefers `ExecutionResult::$structuredOutput` when valid, and falls back to the existing text normalizer when structured output is missing or invalid; coordinator forwards path flags into the final blueprint result.
-- README documents the new observability fields and clarifies that the audio transcription stage remains plain text from the runtime.
-- Runtime now includes `estimated_cost_usd` metadata in `ExecutionResult` when provided in request metadata.
-- Governance catalog IDs for multi-agent roadmap items were aligned from `P10-I*` to `P1X-I*`, and flagship blueprint statuses were aligned to `status:ready` in roadmap/catalog metadata.
-- `RuntimeConversationMemoryBridge` persists serialized attachment payloads on stored user messages; `SdkAiRuntime` merges prior-turn replay with `ExecutionRequest::$attachments` when `metadata['attachment_replay']` is `merge` or `replay_only` and `memory.attachments_replay.enabled` is true.
