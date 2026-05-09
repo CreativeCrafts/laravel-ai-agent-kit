@@ -17,6 +17,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
+use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\Jobs\RunQueuedPipelineJob;
 
 it('rejects custom tool input with missing nested required fields before execution', function (): void {
     $registry = new InMemoryToolRegistry(allowAllToolAuthorizer());
@@ -202,7 +203,7 @@ it('does not run debug queued pipeline payload guard when debug is disabled and 
         ),
     );
 
-    Queue::assertPushed(\CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\Jobs\RunQueuedPipelineJob::class);
+    Queue::assertPushed(RunQueuedPipelineJob::class);
 });
 
 function allowAllToolAuthorizer(): ToolAuthorizer

@@ -309,10 +309,12 @@ final class InMemoryToolRegistry implements ToolRegistry
 
         $resolved = [];
         foreach ($properties as $property => $propertyDefinition) {
-            if (!is_string($property) || !is_array($propertyDefinition)) {
+            if (!is_string($property)) {
                 continue;
             }
-
+            if (!is_array($propertyDefinition)) {
+                continue;
+            }
             /** @var array<string, mixed> $propertyDefinition */
             $resolved[$property] = $propertyDefinition;
         }
@@ -345,13 +347,7 @@ final class InMemoryToolRegistry implements ToolRegistry
      */
     private function matchesEnum(array $enum, mixed $value): bool
     {
-        foreach ($enum as $candidate) {
-            if ($candidate === $value) {
-                return true;
-            }
-        }
-
-        return false;
+        return in_array($value, $enum, true);
     }
 
     private function matchesType(string $type, mixed $value): bool
