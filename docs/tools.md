@@ -16,25 +16,35 @@ A tool definition should describe:
 
 ## Input schema validation
 
-The in-memory registry validates a deterministic JSON-schema subset:
+The in-memory registry validates a deterministic JSON-schema subset before a custom tool handler is called.
+
+Supported validation includes:
 
 - root schema must be `type: object`
-- `properties` must be a top-level object map
+- `properties` must be an object map
 - supported property types are `string`, `integer`, `number`, `boolean`, `array`, and `object`
 - `required` must list declared property names
-- `additionalProperties` may be `true` or `false`
+- `additionalProperties` may be `true` or `false` and is enforced at every object level
+- nested `object.properties` and nested `required` lists are validated recursively
+- `array.items` is validated recursively when declared
+- `nullable: true` allows `null` for that property
+- scalar `enum` values are enforced when declared
 
-Nested JSON Schema features such as `oneOf`, nested `properties`, complex `items`, and format/pattern validation are intentionally out of scope for the built-in validator.
+Validation errors include property paths such as `customer.email` or `items[0]` where practical.
+
+Unsupported JSON Schema features such as `oneOf`, `anyOf`, complex conditional schemas, format validation, and pattern validation remain out of scope for the built-in validator.
 
 ## Authorization
 
 The default authorizer denies tool execution. Replace it with a policy that allows only the tools, users, tenants, and contexts your application supports.
 
-Do not treat registration as authorization. Registration says a tool exists; authorization says it may run for the current request.
+Do not treat registration as authorization. Registration says a tool exists; authorization says it may run for the current request. Input validation runs before authorization, and the tool handler runs only after both validation and authorization succeed.
 
 ## Provider tools
 
 Provider-native tools such as web or file search should still be selected through package request surfaces and provider profile policy. Do not expose provider SDK tool objects as your application workflow contract.
+
+Provider tools are authorized separately from package custom tools because provider-native tools execute on the provider side and may have different billing, privacy, and rate-limit implications.
 
 ## Similarity search tool
 
