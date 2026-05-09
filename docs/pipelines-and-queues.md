@@ -96,16 +96,16 @@ final class QueueTranscriptNormalizationCommand
     public function __invoke(): void
     {
         $this->dispatcher->dispatch(
-            definition: new NormalizeTranscriptPipeline(),
+            pipelineDefinition: NormalizeTranscriptPipeline::class,
             context: new RunContext(
                 runId: 'queued-run-001',
                 input: ['text' => 'Queued pipeline input'],
             ),
-            handler: new PersistPipelineResult(),
             options: new QueueDispatchOptions(
                 queue: 'ai-pipelines',
                 connection: 'sync',
             ),
+            resultHandler: PersistPipelineResult::class,
         );
     }
 }
@@ -124,7 +124,35 @@ Queued pipelines serialize the `RunContext`. Keep these fields small and seriali
 | `conversationId` | Prefer this over serializing a full conversation. |
 | `conversation` | Use only when the full graph is truly required. |
 
-Enable the debug payload guard in local development if you want dispatch to fail when serialized queued jobs become too large.
+## Payload guards
+
+Queued jobs can be rejected before dispatch when the serialized job exceeds `ai-agent-kit.pipeline.queued.max_serialized_job_bytes`.
+
+Use the debug guard for local development:
+
+~~~php
+'pipeline' => [
+    'queued' => [
+        'debug_payload_guard' => true,
+        'max_serialized_job_bytes' => 524288,
+    ],
+],
+~~~
+
+`debug_payload_guard` runs only when `app.debug` is true.
+
+Use the production-capable guard when you want dispatch-time protection outside debug mode:
+
+~~~php
+'pipeline' => [
+    'queued' => [
+        'payload_guard' => true,
+        'max_serialized_job_bytes' => 524288,
+    ],
+],
+~~~
+
+`payload_guard` is disabled by default. Enable it deliberately after choosing a size that matches your queue backend and workflow payloads.
 
 ## When to use Laravel AI SDK jobs directly
 
