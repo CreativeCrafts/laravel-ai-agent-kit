@@ -239,11 +239,13 @@ final class InMemoryToolRegistry implements ToolRegistry
         }
 
         if ($type === 'object') {
-            if (!is_array($value)) {
+            $objectValue = $this->associativeArrayValue($value);
+
+            if ($objectValue === null) {
                 return;
             }
 
-            $this->validateObjectValue($definition, $value, $path, $errors);
+            $this->validateObjectValue($definition, $objectValue, $path, $errors);
         }
 
         if ($type === 'array' && is_array($value) && isset($definition['items']) && is_array($definition['items'])) {
@@ -365,6 +367,28 @@ final class InMemoryToolRegistry implements ToolRegistry
             'object' => is_array($value) && !array_is_list($value),
             default => false,
         };
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function associativeArrayValue(mixed $value): ?array
+    {
+        if (!is_array($value) || array_is_list($value)) {
+            return null;
+        }
+
+        $resolved = [];
+
+        foreach ($value as $key => $item) {
+            if (!is_string($key)) {
+                return null;
+            }
+
+            $resolved[$key] = $item;
+        }
+
+        return $resolved;
     }
 
     private function childPath(string $parent, string $child): string
