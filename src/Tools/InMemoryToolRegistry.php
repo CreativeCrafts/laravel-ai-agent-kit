@@ -218,7 +218,13 @@ final class InMemoryToolRegistry implements ToolRegistry
             return;
         }
 
-        $type = $definition['type'];
+        $type = $definition['type'] ?? null;
+
+        if (!is_string($type) || !$this->isSupportedType($type)) {
+            $errors[] = "property [{$path}] has an invalid schema type";
+
+            return;
+        }
 
         if (!$this->matchesType($type, $value)) {
             $actualType = get_debug_type($value);
@@ -268,13 +274,13 @@ final class InMemoryToolRegistry implements ToolRegistry
 
         foreach ($required as $property) {
             if (!array_key_exists($property, $value)) {
-                $errors[] = "missing required property [{$path}.{$property}]";
+                $errors[] = "missing required property [{$this->childPath($path, $property)}]";
             }
         }
 
         foreach ($value as $property => $propertyValue) {
             $propertyName = (string) $property;
-            $propertyPath = $path === '$' ? $propertyName : $path . '.' . $propertyName;
+            $propertyPath = $this->childPath($path, $propertyName);
             $propertyDefinition = $properties[$propertyName] ?? null;
 
             if ($propertyDefinition === null) {
@@ -335,7 +341,7 @@ final class InMemoryToolRegistry implements ToolRegistry
     }
 
     /**
-     * @param array<int, mixed> $enum
+     * @param array<int|string, mixed> $enum
      */
     private function matchesEnum(array $enum, mixed $value): bool
     {
@@ -359,6 +365,11 @@ final class InMemoryToolRegistry implements ToolRegistry
             'object' => is_array($value) && !array_is_list($value),
             default => false,
         };
+    }
+
+    private function childPath(string $parent, string $child): string
+    {
+        return $parent === '$' ? $child : $parent . '.' . $child;
     }
 
     private function formatPathSegment(mixed $segment): string
