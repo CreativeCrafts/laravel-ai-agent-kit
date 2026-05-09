@@ -29,7 +29,14 @@ final readonly class SdkEmbeddingsRuntime implements EmbeddingsRuntime
 
         $vectors = [];
 
-        foreach ($response->embeddings as $index => $vector) {
+        /** @var mixed $embeddings */
+        $embeddings = $response->embeddings;
+
+        if (!is_iterable($embeddings)) {
+            throw new RuntimeException('Embeddings response must be iterable.');
+        }
+
+        foreach ($embeddings as $index => $vector) {
             if (!is_array($vector)) {
                 throw new RuntimeException(sprintf('Embeddings response vector at index %s must be a list of floats.', $index));
             }
