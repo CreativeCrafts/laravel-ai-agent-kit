@@ -38,7 +38,7 @@ final readonly class SdkEmbeddingsRuntime implements EmbeddingsRuntime
     }
 
     /**
-     * @return array<int, array<int, float>>
+     * @return list<list<float>>
      */
     private static function normalizeEmbeddings(mixed $embeddings): array
     {
@@ -65,10 +65,10 @@ final readonly class SdkEmbeddingsRuntime implements EmbeddingsRuntime
                 $row[] = (float) $value;
             }
 
-            $vectors[] = $row;
+            $vectors[] = array_values($row);
         }
 
-        return $vectors;
+        return array_values($vectors);
     }
 
     private static function formatIndex(mixed $index): string
