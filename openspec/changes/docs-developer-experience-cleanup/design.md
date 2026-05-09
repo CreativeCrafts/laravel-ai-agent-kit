@@ -1,6 +1,6 @@
 ## Context
 
-A detailed review of `README.md`, `MULTI_AGENT_ORCHESTRATION.md`, and every current file under `docs/` found that the documentation has strong technical coverage but weak developer experience because it mixes public onboarding, advanced extension guidance, maintainer process, SDK parity inventory, release verification, issue-history notes, and implementation-artifact language.
+A detailed review of the root README, the former root multi-agent orchestration guide, and every current file under `docs/` found that the documentation has strong technical coverage but weak developer experience because it mixes public onboarding, advanced extension guidance, maintainer process, SDK parity inventory, release verification, issue-history notes, and implementation-artifact language.
 
 The package needs a documentation structure that teaches the package by developer workflow first, architecture second, and internals last.
 
@@ -82,9 +82,9 @@ The following kinds of documents should not be on the primary developer path:
 
 They should move under `docs/maintainers/**` and be linked from `CONTRIBUTING.md`.
 
-### D4 — Multi-agent orchestration becomes a public guide, not a root artifact
+### D4 — Multi-agent orchestration becomes a public guide under `docs/`
 
-`MULTI_AGENT_ORCHESTRATION.md` contains valuable public guidance, but it should be folded into or replaced by `docs/agents-and-orchestration.md`.
+The former root multi-agent orchestration guide contained valuable public guidance, but that guidance should live in `docs/agents-and-orchestration.md` instead of a root-level document.
 
 The rewritten guide should retain:
 
@@ -157,7 +157,7 @@ docs/maintainers/
 2. Move maintainer-only material to `docs/maintainers/**`.
 3. Rewrite README as the concise developer landing page.
 4. Split overloaded guides into focused task pages.
-5. Fold `MULTI_AGENT_ORCHESTRATION.md` into `docs/agents-and-orchestration.md` and remove or redirect the root document.
+5. Fold the former root multi-agent orchestration content into `docs/agents-and-orchestration.md` and remove the root document.
 6. Move issue-history details to `CHANGELOG.md`.
 7. Update `CONTRIBUTING.md` to link maintainer docs.
 8. Update documentation developer-experience tests.
@@ -165,5 +165,4 @@ docs/maintainers/
 
 ## Open Questions
 
-- Should the root `MULTI_AGENT_ORCHESTRATION.md` be deleted after its content is folded into `docs/agents-and-orchestration.md`, or replaced with a short redirect-style document?
 - Should `docs/laravel-ai-sdk-capability-matrix.md` remain public as an advanced reference, or move entirely to `docs/maintainers/sdk-capability-matrix.md` with a shorter public `docs/laravel-ai-sdk.md` replacement?
