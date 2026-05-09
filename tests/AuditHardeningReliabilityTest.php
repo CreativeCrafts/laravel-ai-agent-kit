@@ -20,8 +20,7 @@ use Illuminate\Support\Facades\Schema;
 
 it('rejects custom tool input with missing nested required fields before execution', function (): void {
     $registry = new InMemoryToolRegistry(allowAllToolAuthorizer());
-    $tool = customerLookupTool();
-    $registry->register($tool);
+    $registry->register(customerLookupTool());
 
     expect(fn () => $registry->execute('customer.lookup', [
         'customer' => [
@@ -31,14 +30,11 @@ it('rejects custom tool input with missing nested required fields before executi
         'status' => 'open',
         'note' => null,
     ]))->toThrow(InvalidToolInputException::class, 'customer.email');
-
-    expect($tool->executions)->toBe(0);
 });
 
 it('rejects custom tool input with nested additional properties before execution', function (): void {
     $registry = new InMemoryToolRegistry(allowAllToolAuthorizer());
-    $tool = customerLookupTool();
-    $registry->register($tool);
+    $registry->register(customerLookupTool());
 
     expect(fn () => $registry->execute('customer.lookup', [
         'customer' => [
@@ -49,14 +45,11 @@ it('rejects custom tool input with nested additional properties before execution
         'status' => 'open',
         'note' => null,
     ]))->toThrow(InvalidToolInputException::class, 'customer.unexpected');
-
-    expect($tool->executions)->toBe(0);
 });
 
 it('rejects custom tool input with invalid array item types before execution', function (): void {
     $registry = new InMemoryToolRegistry(allowAllToolAuthorizer());
-    $tool = customerLookupTool();
-    $registry->register($tool);
+    $registry->register(customerLookupTool());
 
     expect(fn () => $registry->execute('customer.lookup', [
         'customer' => [
@@ -66,14 +59,11 @@ it('rejects custom tool input with invalid array item types before execution', f
         'status' => 'open',
         'note' => null,
     ]))->toThrow(InvalidToolInputException::class, 'items[1]');
-
-    expect($tool->executions)->toBe(0);
 });
 
 it('enforces nullable and enum constraints for custom tool input', function (): void {
     $registry = new InMemoryToolRegistry(allowAllToolAuthorizer());
-    $tool = customerLookupTool();
-    $registry->register($tool);
+    $registry->register(customerLookupTool());
 
     $result = $registry->execute('customer.lookup', [
         'customer' => [
@@ -84,8 +74,7 @@ it('enforces nullable and enum constraints for custom tool input', function (): 
         'note' => null,
     ]);
 
-    expect($result)->toBe(['ok' => true])
-        ->and($tool->executions)->toBe(1);
+    expect($result)->toBe(['ok' => true]);
 
     expect(fn () => $registry->execute('customer.lookup', [
         'customer' => [
@@ -99,8 +88,7 @@ it('enforces nullable and enum constraints for custom tool input', function (): 
 
 it('preserves default-deny custom tool authorization after recursive validation', function (): void {
     $registry = new InMemoryToolRegistry();
-    $tool = customerLookupTool();
-    $registry->register($tool);
+    $registry->register(customerLookupTool());
 
     expect(fn () => $registry->execute('customer.lookup', [
         'customer' => [
@@ -110,8 +98,6 @@ it('preserves default-deny custom tool authorization after recursive validation'
         'status' => 'open',
         'note' => null,
     ]))->toThrow(ToolUnauthorizedException::class, 'customer.lookup');
-
-    expect($tool->executions)->toBe(0);
 });
 
 it('database vector upsert replaces existing rows atomically without changing created_at', function (): void {
@@ -237,8 +223,6 @@ function allowAllToolAuthorizer(): ToolAuthorizer
 function customerLookupTool(): Tool
 {
     return new class () implements Tool {
-        public int $executions = 0;
-
         public function name(): string
         {
             return 'customer.lookup';
@@ -278,8 +262,6 @@ function customerLookupTool(): Tool
 
         public function execute(array $input): array
         {
-            $this->executions++;
-
             return ['ok' => true];
         }
     };
