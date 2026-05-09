@@ -65,10 +65,10 @@ final readonly class SdkEmbeddingsRuntime implements EmbeddingsRuntime
                 $row[] = (float) $value;
             }
 
-            $vectors[] = array_values($row);
+            $vectors[] = $row;
         }
 
-        return array_values($vectors);
+        return $vectors;
     }
 
     private static function formatIndex(mixed $index): string
