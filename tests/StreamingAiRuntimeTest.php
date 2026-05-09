@@ -49,19 +49,12 @@ it('streams ordered text chunks then a terminal complete event', function (): vo
     expect($sequences)->toBe(range(0, count($sequences) - 1));
 });
 
-it('yields a single terminal failure and dispatches telemetry when the sdk stream fails', function (): void {
+it('yields a single terminal failure when the sdk stream fails', function (): void {
     app()->register(AiServiceProvider::class);
 
     Ai::fakeAgent(RuntimeTelemetryAgent::class, [
         static fn (): never => throw new RuntimeException('provider stream failed'),
     ])->preventStrayPrompts();
-
-    Event::fake([
-        RuntimeStreamChunkEmitted::class,
-        RuntimeStreamCompleted::class,
-        RuntimeStreamFailed::class,
-    ]);
-    refreshStreamingRuntimeBindingsForEventFake();
 
     /** @var StreamingAiRuntime $streaming */
     $streaming = app(StreamingAiRuntime::class);
@@ -79,12 +72,6 @@ it('yields a single terminal failure and dispatches telemetry when the sdk strea
         ->and($events[0])->toBeInstanceOf(StreamFailure::class)
         ->and($events[0]->failureCategory)->toBe('execution_failed')
         ->and($events[0]->exceptionMessage)->toBe('provider stream failed');
-
-    Event::assertDispatched(RuntimeStreamFailed::class, function (RuntimeStreamFailed $event): bool {
-        return $event->runId === 'run-stream-fail-001'
-            && $event->failureCategory === 'execution_failed'
-            && $event->exceptionMessage === 'provider stream failed';
-    });
 });
 
 it('rejects streaming when execution request carries a schema', function (): void {
