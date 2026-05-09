@@ -16,7 +16,6 @@ use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\TestPipelineResultHandler;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\TestQueuedPipelineDefinition;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\Queue;
-use RuntimeException;
 
 beforeEach(function () {
     TestPipelineResultHandler::reset();
