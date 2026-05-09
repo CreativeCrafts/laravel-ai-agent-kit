@@ -1,0 +1,72 @@
+# Streaming and modalities
+
+Agent Kit exposes package-owned runtime contracts for streaming text and non-chat modalities. The default implementations bridge to Laravel AI SDK behind package contracts.
+
+## Streaming text
+
+Use `StreamingAiRuntime` for non-schema streaming text responses.
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\StreamingAiRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
+
+final class StreamSummary
+{
+    public function __construct(
+        private StreamingAiRuntime $runtime,
+    ) {
+    }
+
+    public function handle(): iterable
+    {
+        return $this->runtime->executeStream(
+            new ExecutionRequest(
+                runId: 'stream-001',
+                prompt: 'Summarize the refund policy in two sentences.',
+            ),
+        );
+    }
+}
+~~~
+
+Streaming returns ordered chunks followed by a terminal completion or failure value. Structured-output requests are not supported for streaming; use normal runtime execution for schema-backed calls.
+
+## Optional broadcast telemetry
+
+Set `runtime.streaming.broadcast_channel` or request metadata `streaming_broadcast_channel` to emit redacted streaming events for public Echo channels. Payloads contain safe identifiers, counts, and lengths, not raw prompt content.
+
+## Modality runtimes
+
+Modality contracts live under package-owned namespaces and default to SDK-backed drivers:
+
+| Modality | Contract purpose |
+|----------|------------------|
+| Transcription | audio to text |
+| Embeddings | text to vectors |
+| Image generation | prompt to image output |
+| Reranking | ranking candidate documents |
+| Audio generation | text to speech/audio output |
+
+Configure per modality:
+
+~~~php
+'modalities' => [
+    'transcription' => ['default_driver' => 'sdk'],
+    'embeddings' => ['default_driver' => 'sdk'],
+    'image_generation' => ['default_driver' => 'sdk'],
+    'reranking' => ['default_driver' => 'sdk'],
+    'audio_generation' => ['default_driver' => 'sdk'],
+],
+~~~
+
+You may replace a modality driver with a class that implements the corresponding package contract.
+
+## Blueprint integration
+
+`AudioToTextToEvaluation` uses the transcription runtime when the audio reference is raw base64 or a `data:*;base64,...` URI. Opaque references such as `s3://...` may still flow through prompt/runtime paths depending on the configured workflow.
+
+## Testing
+
+Use package fakes for runtime and modality behavior. Do not call real provider APIs in tests.
+
+See [Testing](testing.md).
