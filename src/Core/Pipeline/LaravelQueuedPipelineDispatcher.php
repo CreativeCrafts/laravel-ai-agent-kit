@@ -45,12 +45,12 @@ final class LaravelQueuedPipelineDispatcher implements QueuedPipelineDispatcher
             options: $options,
         );
 
-        $this->assertQueuedJobSizeIfDebugging($job);
+        $this->assertQueuedJobSizeIfGuarded($job);
 
         dispatch($job);
     }
 
-    private function assertQueuedJobSizeIfDebugging(RunQueuedPipelineJob $job): void
+    private function assertQueuedJobSizeIfGuarded(RunQueuedPipelineJob $job): void
     {
         $block = $this->config->get('ai-agent-kit.pipeline.queued', []);
 
@@ -58,9 +58,11 @@ final class LaravelQueuedPipelineDispatcher implements QueuedPipelineDispatcher
             return;
         }
 
-        $guard = (bool)($block['debug_payload_guard'] ?? false);
+        $payloadGuard = (bool)($block['payload_guard'] ?? false);
+        $debugGuard = (bool)($block['debug_payload_guard'] ?? false);
+        $debugEnabled = (bool)$this->config->get('app.debug', false);
 
-        if (!$guard || !$this->config->get('app.debug')) {
+        if (!$payloadGuard && !($debugGuard && $debugEnabled)) {
             return;
         }
 
@@ -74,7 +76,7 @@ final class LaravelQueuedPipelineDispatcher implements QueuedPipelineDispatcher
 
         if ($size > $maxBytes) {
             throw new RuntimeException(sprintf(
-                'Queued pipeline job serialized size (%d bytes) exceeds ai-agent-kit.pipeline.queued.max_serialized_job_bytes (%d). Reduce RunContext payload (see README: Queued pipelines and RunContext).',
+                'Queued pipeline job serialized size (%d bytes) exceeds ai-agent-kit.pipeline.queued.max_serialized_job_bytes (%d). Reduce RunContext payload; see docs/pipelines-and-queues.md.',
                 $size,
                 $maxBytes,
             ));
