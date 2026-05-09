@@ -29,7 +29,7 @@ final readonly class SdkEmbeddingsRuntime implements EmbeddingsRuntime
 
         return new EmbeddingsResult(
             runId: $request->runId,
-            vectors: self::normalizeEmbeddings($response->embeddings),
+            vectors: $this->normalizeEmbeddings($response->embeddings),
             tokenCount: $response->tokens,
             provider: $provider,
             model: $model,
@@ -40,7 +40,7 @@ final readonly class SdkEmbeddingsRuntime implements EmbeddingsRuntime
     /**
      * @return list<list<float>>
      */
-    private static function normalizeEmbeddings(mixed $embeddings): array
+    private function normalizeEmbeddings(mixed $embeddings): array
     {
         if (!is_iterable($embeddings)) {
             throw new RuntimeException('Embeddings response must be iterable.');
@@ -49,7 +49,7 @@ final readonly class SdkEmbeddingsRuntime implements EmbeddingsRuntime
         $vectors = [];
 
         foreach ($embeddings as $index => $vector) {
-            $formattedIndex = self::formatIndex($index);
+            $formattedIndex = $this->formatIndex($index);
 
             if (!is_array($vector)) {
                 throw new RuntimeException(sprintf('Embeddings response vector at index %s must be a list of floats.', $formattedIndex));
@@ -71,7 +71,7 @@ final readonly class SdkEmbeddingsRuntime implements EmbeddingsRuntime
         return $vectors;
     }
 
-    private static function formatIndex(mixed $index): string
+    private function formatIndex(mixed $index): string
     {
         if (is_int($index) || is_string($index)) {
             return (string) $index;
