@@ -6,6 +6,11 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Added
 
+- Security, correctness, and reliability hardening from the audit pass:
+  - stream creation failures are normalized into terminal `StreamFailure` values with redacted `RuntimeStreamFailed` telemetry;
+  - custom tool input validation now recursively enforces the supported schema subset, including nested objects, array item schemas, `additionalProperties: false`, nullable fields, and scalar enum values;
+  - `DatabaseVectorStore::upsert()` now uses atomic database upsert semantics keyed by `namespace` and `document_id`;
+  - `ai-agent-kit.pipeline.queued.payload_guard` adds production-capable queued pipeline serialized payload enforcement, while `debug_payload_guard` remains debug-only.
 - Developer-focused documentation structure: `docs/getting-started.md`, `docs/providers.md`, `docs/blueprints.md`, `docs/agents-and-orchestration.md`, `docs/prompts.md`, `docs/tools.md`, `docs/memory.md`, `docs/pipelines-and-queues.md`, `docs/vectors-and-retrieval.md`, `docs/streaming-and-modalities.md`, `docs/errors-and-telemetry.md`, `docs/testing.md`, and `docs/production.md`.
 - Maintainer documentation namespace under `docs/maintainers/**` for CI matrix, release verification, SDK capability inventory, SDK async inventory, and contributor testing strategy.
 - Documentation developer-experience test coverage for README onboarding shape, public-doc guide existence, injection-first examples, maintainer-doc separation, and public-doc internal-marker exclusions.
