@@ -67,55 +67,112 @@ final class InMemoryToolRegistry implements ToolRegistry
 
     private function assertValidSchema(Tool $tool): void
     {
+        /** @var array<string, mixed> $schema */
         $schema = $tool->inputSchema();
-        $name = $tool->name();
 
-        if (($schema['type'] ?? null) !== 'object') {
-            throw InvalidToolSchemaException::because($name, 'the root schema type must be [object].');
+        $this->assertValidSchemaDefinition(
+            toolName: $tool->name(),
+            definition: $schema,
+            path: '$',
+            root: true,
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $definition
+     */
+    private function assertValidSchemaDefinition(string $toolName, array $definition, string $path, bool $root = false): void
+    {
+        $type = $definition['type'] ?? null;
+
+        if (!is_string($type) || !$this->isSupportedType($type)) {
+            throw InvalidToolSchemaException::because($toolName, "schema [{$path}] must declare a supported [type].");
         }
 
-        $properties = $schema['properties'] ?? null;
+        if ($root && $type !== 'object') {
+            throw InvalidToolSchemaException::because($toolName, 'the root schema type must be [object].');
+        }
+
+        $nullable = $definition['nullable'] ?? false;
+        if (!is_bool($nullable)) {
+            throw InvalidToolSchemaException::because($toolName, "schema [{$path}] nullable must be boolean when provided.");
+        }
+
+        $enum = $definition['enum'] ?? null;
+        if ($enum !== null) {
+            if (!is_array($enum)) {
+                throw InvalidToolSchemaException::because($toolName, "schema [{$path}] enum must be an array when provided.");
+            }
+
+            foreach ($enum as $value) {
+                if (!is_string($value) && !is_int($value) && !is_float($value) && !is_bool($value) && $value !== null) {
+                    throw InvalidToolSchemaException::because($toolName, "schema [{$path}] enum values must be scalar or null.");
+                }
+            }
+        }
+
+        if ($type === 'object') {
+            $this->assertValidObjectSchemaDefinition($toolName, $definition, $path);
+        }
+
+        if ($type === 'array' && array_key_exists('items', $definition)) {
+            $items = $definition['items'];
+
+            if (!is_array($items)) {
+                throw InvalidToolSchemaException::because($toolName, "schema [{$path}.items] must be an array schema.");
+            }
+
+            /** @var array<string, mixed> $itemsDefinition */
+            $itemsDefinition = $items;
+            $this->assertValidSchemaDefinition($toolName, $itemsDefinition, $path . '[]');
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $definition
+     */
+    private function assertValidObjectSchemaDefinition(string $toolName, array $definition, string $path): void
+    {
+        $properties = $definition['properties'] ?? [];
 
         if (!is_array($properties)) {
-            throw InvalidToolSchemaException::because($name, 'the [properties] key must be an array.');
+            throw InvalidToolSchemaException::because($toolName, "schema [{$path}.properties] must be an array.");
         }
 
-        $required = $schema['required'] ?? [];
+        $required = $definition['required'] ?? [];
 
         if (!is_array($required)) {
-            throw InvalidToolSchemaException::because($name, 'the [required] key must be an array when provided.');
+            throw InvalidToolSchemaException::because($toolName, "schema [{$path}.required] must be an array when provided.");
         }
 
         foreach ($required as $property) {
             if (!is_string($property) || $property === '') {
-                throw InvalidToolSchemaException::because($name, 'required property names must be non-empty strings.');
+                throw InvalidToolSchemaException::because($toolName, "schema [{$path}.required] property names must be non-empty strings.");
             }
 
             if (!array_key_exists($property, $properties)) {
-                throw InvalidToolSchemaException::because($name, "required property [{$property}] is not defined in [properties].");
+                throw InvalidToolSchemaException::because($toolName, "required property [{$path}.{$property}] is not defined in [properties].");
             }
         }
 
-        foreach ($properties as $property => $definition) {
+        foreach ($properties as $property => $propertyDefinition) {
             if (!is_string($property) || $property === '') {
-                throw InvalidToolSchemaException::because($name, 'property names must be non-empty strings.');
+                throw InvalidToolSchemaException::because($toolName, "schema [{$path}.properties] property names must be non-empty strings.");
             }
 
-            if (!is_array($definition)) {
-                throw InvalidToolSchemaException::because($name, "property [{$property}] must be defined as an array schema.");
+            if (!is_array($propertyDefinition)) {
+                throw InvalidToolSchemaException::because($toolName, "schema [{$path}.{$property}] must be defined as an array schema.");
             }
 
-            $type = $definition['type'] ?? null;
-
-            if (!is_string($type) || !$this->isSupportedType($type)) {
-                throw InvalidToolSchemaException::because($name, "property [{$property}] must declare a supported [type].");
-            }
+            /** @var array<string, mixed> $nestedDefinition */
+            $nestedDefinition = $propertyDefinition;
+            $this->assertValidSchemaDefinition($toolName, $nestedDefinition, $path . '.' . $property);
         }
 
-        $additionalProperties = $schema['additionalProperties'] ?? false;
+        $additionalProperties = $definition['additionalProperties'] ?? false;
 
         if (!is_bool($additionalProperties)) {
-            throw InvalidToolSchemaException::because($name, 'the [additionalProperties] key must be a boolean when provided.');
+            throw InvalidToolSchemaException::because($toolName, "schema [{$path}.additionalProperties] must be boolean when provided.");
         }
     }
 
@@ -129,35 +186,16 @@ final class InMemoryToolRegistry implements ToolRegistry
      */
     private function assertValidInput(Tool $tool, array $input): void
     {
+        /** @var array<string, mixed> $schema */
         $schema = $tool->inputSchema();
-        $properties = $this->schemaProperties($tool);
-        $required = $this->schemaRequired($tool);
-        $allowAdditionalProperties = $schema['additionalProperties'] ?? false;
-
         $errors = [];
 
-        foreach ($required as $property) {
-            if (!array_key_exists($property, $input)) {
-                $errors[] = "missing required property [{$property}]";
-            }
-        }
-
-        foreach ($input as $property => $value) {
-            $definition = $properties[$property] ?? null;
-
-            if ($definition === null) {
-                if ($allowAdditionalProperties === false) {
-                    $errors[] = "unexpected property [{$property}]";
-                }
-
-                continue;
-            }
-
-            if (!$this->matchesType($definition['type'], $value)) {
-                $actualType = get_debug_type($value);
-                $errors[] = "property [{$property}] must be of type [{$definition['type']}], [{$actualType}] given";
-            }
-        }
+        $this->validateValue(
+            definition: $schema,
+            value: $input,
+            path: '$',
+            errors: $errors,
+        );
 
         if ($errors !== []) {
             throw InvalidToolInputException::withErrors($tool->name(), $errors);
@@ -165,25 +203,149 @@ final class InMemoryToolRegistry implements ToolRegistry
     }
 
     /**
-     * @return array<string, array{type:string}>
+     * @param array<string, mixed> $definition
+     * @param list<string> $errors
      */
-    private function schemaProperties(Tool $tool): array
+    private function validateValue(array $definition, mixed $value, string $path, array &$errors): void
     {
-        /** @var array<string, array{type:string}> $properties */
-        $properties = $tool->inputSchema()['properties'];
+        if ($value === null) {
+            if (($definition['nullable'] ?? false) === true) {
+                return;
+            }
 
-        return $properties;
+            $errors[] = "property [{$path}] must not be null";
+
+            return;
+        }
+
+        $type = $definition['type'];
+
+        if (!$this->matchesType($type, $value)) {
+            $actualType = get_debug_type($value);
+            $errors[] = "property [{$path}] must be of type [{$type}], [{$actualType}] given";
+
+            return;
+        }
+
+        $enum = $definition['enum'] ?? null;
+        if (is_array($enum) && !$this->matchesEnum($enum, $value)) {
+            $errors[] = "property [{$path}] must match one of the declared enum values";
+        }
+
+        if ($type === 'object') {
+            if (!is_array($value)) {
+                return;
+            }
+
+            $this->validateObjectValue($definition, $value, $path, $errors);
+        }
+
+        if ($type === 'array' && is_array($value) && isset($definition['items']) && is_array($definition['items'])) {
+            /** @var array<string, mixed> $items */
+            $items = $definition['items'];
+
+            foreach ($value as $index => $item) {
+                $this->validateValue(
+                    definition: $items,
+                    value: $item,
+                    path: $path . '[' . $this->formatPathSegment($index) . ']',
+                    errors: $errors,
+                );
+            }
+        }
     }
 
     /**
+     * @param array<string, mixed> $definition
+     * @param array<string, mixed> $value
+     * @param list<string> $errors
+     */
+    private function validateObjectValue(array $definition, array $value, string $path, array &$errors): void
+    {
+        $properties = $this->schemaProperties($definition);
+        $required = $this->schemaRequired($definition);
+        $allowAdditionalProperties = $definition['additionalProperties'] ?? false;
+
+        foreach ($required as $property) {
+            if (!array_key_exists($property, $value)) {
+                $errors[] = "missing required property [{$path}.{$property}]";
+            }
+        }
+
+        foreach ($value as $property => $propertyValue) {
+            $propertyName = (string) $property;
+            $propertyPath = $path === '$' ? $propertyName : $path . '.' . $propertyName;
+            $propertyDefinition = $properties[$propertyName] ?? null;
+
+            if ($propertyDefinition === null) {
+                if ($allowAdditionalProperties === false) {
+                    $errors[] = "unexpected property [{$propertyPath}]";
+                }
+
+                continue;
+            }
+
+            $this->validateValue($propertyDefinition, $propertyValue, $propertyPath, $errors);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $definition
+     * @return array<string, array<string, mixed>>
+     */
+    private function schemaProperties(array $definition): array
+    {
+        $properties = $definition['properties'] ?? [];
+
+        if (!is_array($properties)) {
+            return [];
+        }
+
+        $resolved = [];
+        foreach ($properties as $property => $propertyDefinition) {
+            if (!is_string($property) || !is_array($propertyDefinition)) {
+                continue;
+            }
+
+            /** @var array<string, mixed> $propertyDefinition */
+            $resolved[$property] = $propertyDefinition;
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * @param array<string, mixed> $definition
      * @return list<string>
      */
-    private function schemaRequired(Tool $tool): array
+    private function schemaRequired(array $definition): array
     {
-        /** @var list<string> $required */
-        $required = $tool->inputSchema()['required'] ?? [];
+        $required = $definition['required'] ?? [];
 
-        return $required;
+        if (!is_array($required)) {
+            return [];
+        }
+
+        return array_values(
+            array_filter(
+                $required,
+                static fn (mixed $property): bool => is_string($property) && $property !== '',
+            ),
+        );
+    }
+
+    /**
+     * @param array<int, mixed> $enum
+     */
+    private function matchesEnum(array $enum, mixed $value): bool
+    {
+        foreach ($enum as $candidate) {
+            if ($candidate === $value) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function matchesType(string $type, mixed $value): bool
@@ -193,9 +355,18 @@ final class InMemoryToolRegistry implements ToolRegistry
             'integer' => is_int($value),
             'number' => is_int($value) || is_float($value),
             'boolean' => is_bool($value),
-            'array' => is_array($value),
+            'array' => is_array($value) && array_is_list($value),
             'object' => is_array($value) && !array_is_list($value),
             default => false,
         };
+    }
+
+    private function formatPathSegment(mixed $segment): string
+    {
+        if (is_int($segment) || is_string($segment)) {
+            return (string) $segment;
+        }
+
+        return get_debug_type($segment);
     }
 }
