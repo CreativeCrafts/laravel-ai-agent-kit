@@ -44,13 +44,15 @@ return [
     | Queued pipeline
     |--------------------------------------------------------------------------
     |
-    | Optional dev guard: when `debug_payload_guard` is true and `config(app.debug)`
-    | is true, dispatch fails if the serialized queued job exceeds
-    | `max_serialized_job_bytes`. See README (Queued pipelines and RunContext).
+    | Optional payload guards fail dispatch if the serialized queued job exceeds
+    | `max_serialized_job_bytes`. `payload_guard` is an explicit production-capable
+    | opt-in. `debug_payload_guard` only runs when `config(app.debug)` is true.
+    | See docs/pipelines-and-queues.md.
     |
     */
   'pipeline' => [
     'queued' => [
+      'payload_guard' => (bool)env('AI_AGENT_KIT_QUEUED_PIPELINE_PAYLOAD_GUARD', false),
       'debug_payload_guard' => (bool)env('AI_AGENT_KIT_QUEUED_PIPELINE_DEBUG_PAYLOAD_GUARD', false),
       'max_serialized_job_bytes' => env('AI_AGENT_KIT_QUEUED_PIPELINE_MAX_SERIALIZED_BYTES') === null
         ? 524288
@@ -246,17 +248,6 @@ return [
         : (int)env('AI_AGENT_KIT_MEMORY_REDIS_RETENTION_DAYS'),
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Laravel AI legacy conversation tables (read bridge)
-    |--------------------------------------------------------------------------
-    |
-    | When `memory.default_driver` is `database`, enabling this option wraps the
-    | package store so `find()` falls back to Laravel AI's default
-    | `agent_conversations` / `agent_conversation_messages` rows when no matching
-    | `ai_agent_*` record exists. Writes always use the package tables.
-    |
-    */
     'laravel_ai_legacy' => [
       'enabled' => (bool)env('AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_FALLBACK', false),
       'connection' => env('AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_CONNECTION'),
@@ -270,17 +261,6 @@ return [
             ),
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Conversation attachment replay (Phase 6)
-    |--------------------------------------------------------------------------
-    |
-    | When enabled, continuing a conversation can rehydrate persisted attachment
-    | payloads from the previous user turn according to policy. Opt in per
-    | request with ExecutionRequest metadata `attachment_replay` = `merge` or
-    | `replay_only` (default `none`).
-    |
-    */
     'attachments_replay' => [
       'enabled' => (bool)env('AI_AGENT_KIT_MEMORY_ATTACHMENTS_REPLAY_ENABLED', false),
       'max_per_turn' => env('AI_AGENT_KIT_MEMORY_ATTACHMENTS_REPLAY_MAX_PER_TURN') === null
@@ -302,16 +282,6 @@ return [
     ],
   ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Vector Store
-    |--------------------------------------------------------------------------
-    |
-    | `in_memory` is for local use and tests. `database` persists vectors in
-    | `ai_agent_vector_documents` (publish migrations). Use a custom binding
-    | when you need an external index (Pinecone, etc.).
-    |
-    */
   'vector' => [
     'default_driver' => (string)env('AI_AGENT_KIT_VECTOR_DRIVER', 'in_memory'),
 
@@ -328,16 +298,6 @@ return [
     ],
   ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Laravel AI Files / Stores (provider APIs)
-    |--------------------------------------------------------------------------
-    |
-    | Optional default Laravel AI provider keys for package facades over
-    | `Laravel\Ai\Files` and `Laravel\Ai\Stores`. Null defers to Laravel AI's
-    | per-call behavior. See README (Laravel AI Files and Stores).
-    |
-    */
   'laravel_ai_files' => [
     'default_provider' => env('AI_AGENT_KIT_LARAVEL_AI_FILES_PROVIDER'),
   ],
@@ -346,29 +306,9 @@ return [
     'default_provider' => env('AI_AGENT_KIT_LARAVEL_AI_STORES_PROVIDER'),
   ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Tool Materialization
-    |--------------------------------------------------------------------------
-    |
-    | Package tools remain explicit and package-owned. Provider-native tools
-    | may only be enabled here through explicit aliases that the runtime can
-    | materialize on demand when a request names them.
-    |
-    */
   'tools' => [
     'authorizer' => DenyAllToolAuthorizer::class,
 
-    /*
-    |--------------------------------------------------------------------------
-    | Similarity search (VectorStoreInterface + embeddings)
-    |--------------------------------------------------------------------------
-    |
-    | Registers the package `similarity_search` custom tool when enabled.
-    | Embeds the query via `EmbeddingsRuntime`, then searches `VectorStoreInterface`.
-    | Authorization still flows through `tools.authorizer` (default: deny all).
-    |
-    */
     'similarity_search' => [
       'enabled' => (bool)env('AI_AGENT_KIT_SIMILARITY_SEARCH_ENABLED', false),
       'register' => (bool)env('AI_AGENT_KIT_SIMILARITY_SEARCH_REGISTER', false),
@@ -385,41 +325,9 @@ return [
       'embedding_model' => env('AI_AGENT_KIT_SIMILARITY_SEARCH_EMBEDDING_MODEL'),
     ],
 
-    'provider_tools' => [
-        // 'web.search' => [
-        //     'type' => 'web_search',
-        //     'enabled' => true,
-        //     'max_searches' => 3,
-        //     'allowed_domains' => ['example.com'],
-        //     'location' => [
-        //         'city' => 'Stockholm',
-        //         'region' => 'Stockholm County',
-        //         'country' => 'SE',
-        //     ],
-        // ],
-        // 'docs.search' => [
-        //     'type' => 'file_search',
-        //     'enabled' => true,
-        //     'stores' => ['store_123'],
-        //     'filters' => ['scope' => 'support'],
-        // ],
-    ],
+    'provider_tools' => [],
   ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Runtime execution
-    |--------------------------------------------------------------------------
-    |
-    | Optional middleware stack around every AiRuntime::execute call (direct,
-    | blueprint, orchestration). List fully-qualified class names in order; each
-    | must implement CreativeCrafts\LaravelAiAgentKit\Contracts\Core\RuntimeMiddleware.
-    |
-    | Optional default broadcast channel for stream lifecycle events (see
-    | runtime.streaming). Per-request override: metadata key
-    | streaming_broadcast_channel.
-    |
-    */
   'runtime' => [
     'middleware' => [],
 
@@ -428,16 +336,6 @@ return [
     ],
   ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Modality runtimes (transcription, embeddings, images, reranking, audio generation)
-    |--------------------------------------------------------------------------
-    |
-    | Each modality resolves a runtime contract from the container. Use
-    | `default_driver` => `sdk` for the package Laravel AI bridge, or a
-    | fully-qualified class name implementing the modality contract.
-    |
-    */
   'modalities' => [
     'transcription' => [
       'default_driver' => 'sdk',
@@ -456,17 +354,6 @@ return [
     ],
   ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Conversation Summarization
-    |--------------------------------------------------------------------------
-    |
-    | Summarization is pluggable and explicit. The default implementation is a
-    | safe no-op summarizer that preserves any existing summary and never writes
-    | a new one. Trigger thresholds are configured centrally so downstream
-    | implementations can reuse the same policy surface.
-    |
-    */
   'summarization' => [
     'enabled' => (bool)env('AI_AGENT_KIT_SUMMARIZATION_ENABLED', false),
     'trigger_message_count' => (int)env('AI_AGENT_KIT_SUMMARIZATION_TRIGGER_MESSAGE_COUNT', 20),
