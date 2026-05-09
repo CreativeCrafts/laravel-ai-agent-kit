@@ -1,6 +1,6 @@
 ## 1. Documentation inventory and API verification
 
-- [x] 1.1 Re-read `README.md`, `MULTI_AGENT_ORCHESTRATION.md`, and all current files under `docs/` from latest `main` before implementation.
+- [x] 1.1 Re-read the root README, the former root multi-agent orchestration guide, and all current files under `docs/` from latest `main` before implementation.
 - [x] 1.2 Inspect source files and tests needed to verify documented public APIs, config keys, facade methods, request/result DTOs, contracts, driver names, and publish tags.
 - [x] 1.3 Identify public developer docs versus maintainer-only docs and produce the final move/rename map before editing.
 
@@ -41,9 +41,9 @@
 
 ## 5. Multi-agent orchestration cleanup
 
-- [x] 5.1 Fold useful public content from `MULTI_AGENT_ORCHESTRATION.md` into `docs/agents-and-orchestration.md`.
-- [x] 5.2 Move flagship blueprint details from the root orchestration document into `docs/blueprints.md`.
-- [x] 5.3 Decide whether `MULTI_AGENT_ORCHESTRATION.md` should be deleted or replaced with a short redirect to `docs/agents-and-orchestration.md`; implement the chosen path consistently.
+- [x] 5.1 Fold useful public content from the former root multi-agent orchestration guide into `docs/agents-and-orchestration.md`.
+- [x] 5.2 Move flagship blueprint details from the former root orchestration guide into `docs/blueprints.md`.
+- [x] 5.3 Delete the root multi-agent orchestration document after redirecting links to `docs/agents-and-orchestration.md` and `docs/blueprints.md`.
 
 ## 6. Changelog and history cleanup
 
@@ -61,6 +61,6 @@
 
 ## 8. Validation and closure
 
-- [ ] 8.1 Run `openspec validate docs-developer-experience-cleanup`.
-- [ ] 8.2 Run formatting and test checks required by the repository for documentation changes.
+- [x] 8.1 Run `openspec validate docs-developer-experience-cleanup`.
+- [x] 8.2 Run formatting and test checks required by the repository for documentation changes.
 - [x] 8.3 Review the final documentation path as a new Laravel developer: install, configure, run first workflow, understand production constraints, and find advanced guides without reading maintainer history.
