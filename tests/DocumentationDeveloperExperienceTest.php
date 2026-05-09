@@ -28,7 +28,8 @@ it('keeps the readme focused on developer onboarding', function (): void {
       ->toContain('[Providers](docs/providers.md)')
       ->toContain('[Production](docs/production.md)')
       ->not->toContain('Maintainers map Laravel AI SDK features')
-      ->not->toContain('Before tagging releases');
+      ->not->toContain('Before tagging releases')
+      ->not->toContain('MULTI_AGENT_ORCHESTRATION.md');
 });
 
 it('documents security and privacy defaults in the readme', function (): void {
@@ -60,6 +61,8 @@ it('provides the focused public documentation guides linked from the readme', fu
     ] as $path) {
         expect(file_exists(repositoryPath($path)))->toBeTrue($path . ' should exist.');
     }
+
+    expect(file_exists(repositoryPath('MULTI_AGENT_ORCHESTRATION.md')))->toBeFalse('Root multi-agent orchestration doc should not exist.');
 });
 
 it('uses dependency injection in the focused developer guides', function (): void {
@@ -101,7 +104,6 @@ it('keeps maintainer documentation under the maintainer docs path', function ():
 it('keeps internal implementation-history markers out of public developer docs', function (): void {
     $publicPaths = [
         'README.md',
-        'MULTI_AGENT_ORCHESTRATION.md',
         'docs/configuration.md',
         'docs/getting-started.md',
         'docs/providers.md',
@@ -142,6 +144,30 @@ it('keeps internal implementation-history markers out of public developer docs',
         foreach ($forbiddenMarkers as $marker) {
             expect($contents)->not->toContain($marker, $path . ' should not contain internal marker [' . $marker . '].');
         }
+    }
+});
+
+it('does not link to the removed root multi-agent orchestration document', function (): void {
+    foreach ([
+        'README.md',
+        'CONTRIBUTING.md',
+        'CHANGELOG.md',
+        'docs/configuration.md',
+        'docs/getting-started.md',
+        'docs/providers.md',
+        'docs/blueprints.md',
+        'docs/agents-and-orchestration.md',
+        'docs/prompts.md',
+        'docs/tools.md',
+        'docs/memory.md',
+        'docs/pipelines-and-queues.md',
+        'docs/vectors-and-retrieval.md',
+        'docs/streaming-and-modalities.md',
+        'docs/errors-and-telemetry.md',
+        'docs/testing.md',
+        'docs/production.md',
+    ] as $path) {
+        expect(documentationContents($path))->not->toContain('MULTI_AGENT_ORCHESTRATION.md', $path . ' should link to docs/agents-and-orchestration.md instead.');
     }
 });
 
