@@ -75,12 +75,12 @@ it('yields a single terminal failure and dispatches telemetry when the sdk strea
 
     expect($events)->toHaveCount(1)
         ->and($events[0])->toBeInstanceOf(StreamFailure::class)
-        ->and($events[0]->failureCategory)->toBe('provider_failure')
+        ->and($events[0]->failureCategory)->toBe('execution_failed')
         ->and($events[0]->exceptionMessage)->toBe('provider stream failed');
 
     Event::assertDispatched(RuntimeStreamFailed::class, function (RuntimeStreamFailed $event): bool {
         return $event->runId === 'run-stream-fail-001'
-            && $event->failureCategory === 'provider_failure'
+            && $event->failureCategory === 'execution_failed'
             && $event->exceptionMessage === 'provider stream failed';
     });
 });
