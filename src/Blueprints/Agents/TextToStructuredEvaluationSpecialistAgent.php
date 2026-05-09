@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Blueprints\Agents;
 
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\Support\StructuredEvaluationOutputNormalizationResult;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\Exceptions\TextToStructuredEvaluationException;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\Support\StructuredEvaluationOutputNormalizer;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\Agent;
@@ -94,7 +95,7 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
             }
         }
 
-        if ($normalizedOutput === null) {
+        if (!$normalizedOutput instanceof StructuredEvaluationOutputNormalizationResult) {
             $normalizedOutput = $this->structuredEvaluationOutputNormalizer->normalize($runtimeResult->output);
         }
 

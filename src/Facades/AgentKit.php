@@ -4,25 +4,53 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Facades;
 
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationResult;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluationResult;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluation;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluation;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\PromptBlueprint;
+use Generator;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StreamChunk;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StreamComplete;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StreamFailure;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\EmbeddingsResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\EmbeddingsRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\ImageGenerationResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\ImageGenerationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\RerankingResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\RerankingRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\AudioGenerationResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\AudioGenerationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\LaravelAi\LaravelAiFilesService;
+use CreativeCrafts\LaravelAiAgentKit\Core\LaravelAi\LaravelAiStoresService;
 use CreativeCrafts\LaravelAiAgentKit\Support\AgentKitManager;
 use Illuminate\Support\Facades\Facade;
 
 /**
- * @method static \CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationResult evaluateText(\CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationRequest $request)
- * @method static \CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluationResult evaluateAudio(\CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluationRequest $request)
- * @method static \CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationResult orchestrate(\CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationRequest $request)
- * @method static \CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluation textToStructuredEvaluation()
- * @method static \CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluation audioToTextToEvaluation()
- * @method static \CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator orchestrator()
- * @method static \CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult run(\CreativeCrafts\LaravelAiAgentKit\Blueprints\PromptBlueprint $blueprint)
- * @method static \Generator<int, \CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StreamChunk|\CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StreamComplete|\CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StreamFailure> executeStream(\CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest $request)
- * @method static \CreativeCrafts\LaravelAiAgentKit\Core\Modality\EmbeddingsResult embed(\CreativeCrafts\LaravelAiAgentKit\Core\Modality\EmbeddingsRequest $request)
- * @method static \CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionResult transcribe(\CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionRequest $request)
- * @method static \CreativeCrafts\LaravelAiAgentKit\Core\Modality\ImageGenerationResult generateImage(\CreativeCrafts\LaravelAiAgentKit\Core\Modality\ImageGenerationRequest $request)
- * @method static \CreativeCrafts\LaravelAiAgentKit\Core\Modality\RerankingResult rerank(\CreativeCrafts\LaravelAiAgentKit\Core\Modality\RerankingRequest $request)
- * @method static \CreativeCrafts\LaravelAiAgentKit\Core\Modality\AudioGenerationResult generateAudio(\CreativeCrafts\LaravelAiAgentKit\Core\Modality\AudioGenerationRequest $request)
- * @method static \CreativeCrafts\LaravelAiAgentKit\Core\LaravelAi\LaravelAiFilesService laravelAiFiles()
- * @method static \CreativeCrafts\LaravelAiAgentKit\Core\LaravelAi\LaravelAiStoresService laravelAiStores()
+ * @method static TextToStructuredEvaluationResult evaluateText(TextToStructuredEvaluationRequest $request)
+ * @method static AudioToTextToEvaluationResult evaluateAudio(AudioToTextToEvaluationRequest $request)
+ * @method static OrchestrationResult orchestrate(OrchestrationRequest $request)
+ * @method static TextToStructuredEvaluation textToStructuredEvaluation()
+ * @method static AudioToTextToEvaluation audioToTextToEvaluation()
+ * @method static AgentOrchestrator orchestrator()
+ * @method static ExecutionResult run(PromptBlueprint $blueprint)
+ * @method static Generator<int, StreamChunk|StreamComplete|StreamFailure> executeStream(ExecutionRequest $request)
+ * @method static EmbeddingsResult embed(EmbeddingsRequest $request)
+ * @method static TranscriptionResult transcribe(TranscriptionRequest $request)
+ * @method static ImageGenerationResult generateImage(ImageGenerationRequest $request)
+ * @method static RerankingResult rerank(RerankingRequest $request)
+ * @method static AudioGenerationResult generateAudio(AudioGenerationRequest $request)
+ * @method static LaravelAiFilesService laravelAiFiles()
+ * @method static LaravelAiStoresService laravelAiStores()
  * @see AgentKitManager
  */
 final class AgentKit extends Facade

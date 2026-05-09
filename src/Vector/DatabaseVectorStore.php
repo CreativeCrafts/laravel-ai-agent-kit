@@ -81,7 +81,10 @@ final readonly class DatabaseVectorStore implements VectorStoreInterface, Vector
 
         foreach ($rows as $row) {
             $documentId = $row->document_id ?? null;
-            if (!is_string($documentId) || $documentId === '') {
+            if (!is_string($documentId)) {
+                continue;
+            }
+            if ($documentId === '') {
                 continue;
             }
 

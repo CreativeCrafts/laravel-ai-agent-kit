@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use DateTimeImmutable;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\Conversation;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;

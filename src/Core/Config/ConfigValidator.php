@@ -1068,9 +1068,6 @@ final readonly class ConfigValidator
         }
     }
 
-    /**
-     * @param mixed $section
-     */
     private function validateSimilaritySearchConfig(mixed $section): void
     {
         if ($section === null) {
@@ -1099,22 +1096,16 @@ final readonly class ConfigValidator
             throw InvalidConfigurationException::invalidValue('tools.similarity_search.default_namespace', 'Must be null or a non-empty string.');
         }
 
-        if (array_key_exists('default_limit', $section) && $section['default_limit'] !== null) {
-            if (!is_int($section['default_limit']) || $section['default_limit'] < 1) {
-                throw InvalidConfigurationException::invalidValue('tools.similarity_search.default_limit', 'Must be null or an integer >= 1.');
-            }
+        if (array_key_exists('default_limit', $section) && $section['default_limit'] !== null && (!is_int($section['default_limit']) || $section['default_limit'] < 1)) {
+            throw InvalidConfigurationException::invalidValue('tools.similarity_search.default_limit', 'Must be null or an integer >= 1.');
         }
 
-        if (array_key_exists('embedding_dimensions', $section) && $section['embedding_dimensions'] !== null) {
-            if (!is_int($section['embedding_dimensions']) || $section['embedding_dimensions'] < 1) {
-                throw InvalidConfigurationException::invalidValue('tools.similarity_search.embedding_dimensions', 'Must be null or an integer >= 1.');
-            }
+        if (array_key_exists('embedding_dimensions', $section) && $section['embedding_dimensions'] !== null && (!is_int($section['embedding_dimensions']) || $section['embedding_dimensions'] < 1)) {
+            throw InvalidConfigurationException::invalidValue('tools.similarity_search.embedding_dimensions', 'Must be null or an integer >= 1.');
         }
 
-        if (array_key_exists('embedding_timeout_seconds', $section) && $section['embedding_timeout_seconds'] !== null) {
-            if (!is_int($section['embedding_timeout_seconds']) || $section['embedding_timeout_seconds'] < 1) {
-                throw InvalidConfigurationException::invalidValue('tools.similarity_search.embedding_timeout_seconds', 'Must be null or an integer >= 1.');
-            }
+        if (array_key_exists('embedding_timeout_seconds', $section) && $section['embedding_timeout_seconds'] !== null && (!is_int($section['embedding_timeout_seconds']) || $section['embedding_timeout_seconds'] < 1)) {
+            throw InvalidConfigurationException::invalidValue('tools.similarity_search.embedding_timeout_seconds', 'Must be null or an integer >= 1.');
         }
 
         if (array_key_exists('embedding_provider', $section) && $section['embedding_provider'] !== null

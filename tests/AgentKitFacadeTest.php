@@ -25,7 +25,6 @@ use CreativeCrafts\LaravelAiAgentKit\Facades\AgentKit;
 use CreativeCrafts\LaravelAiAgentKit\Support\AgentKitManager;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\AgentKitTestingAgentRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\AgentKitTestingOrchestrator;
-use Generator;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Facade;
 use Laravel\Ai\AiServiceProvider;

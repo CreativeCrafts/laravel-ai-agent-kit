@@ -1,5 +1,17 @@
 # Contributing
 
+## Maintainer documentation
+
+Contributor and maintainer process documentation lives under `docs/maintainers/`:
+
+- [CI matrix](docs/maintainers/ci-matrix.md)
+- [Release verification](docs/maintainers/release-verification.md)
+- [SDK capability matrix](docs/maintainers/sdk-capability-matrix.md)
+- [SDK async inventory](docs/maintainers/sdk-async-inventory.md)
+- [Testing strategy](docs/maintainers/testing-strategy.md)
+
+Public developer documentation should stay focused on application usage. Keep release process, SDK inventory, and repository-maintenance details in maintainer docs or the changelog.
+
 ## Testing Strategy
 
 This package is an opinionated Laravel AI application layer built on top of Laravel AI SDK.
@@ -7,12 +19,9 @@ This package is an opinionated Laravel AI application layer built on top of Lara
 - **Laravel AI SDK** is the internal runtime substrate.
 - **This package** owns workflow composition, prompt governance, tool governance, memory policy, resilience policy, redacted telemetry, scaffolding, and package-owned public contracts.
 
-Tests must preserve that boundary. Contributors should validate **package semantics** through package-owned contracts and DTOs rather than normalizing vendor SDK types into package-facing
-expectations.
+Tests must preserve that boundary. Contributors should validate **package semantics** through package-owned contracts and DTOs rather than normalizing vendor SDK types into package-facing expectations.
 
-The canonical testing strategy for this repository lives in [`docs/testing-strategy.md`](docs/testing-strategy.md).
-
-**Release verification** for maintainers: [`docs/release-verification.md`](docs/release-verification.md).
+The canonical testing strategy for this repository lives in [`docs/maintainers/testing-strategy.md`](docs/maintainers/testing-strategy.md).
 
 ### Quick Rules
 

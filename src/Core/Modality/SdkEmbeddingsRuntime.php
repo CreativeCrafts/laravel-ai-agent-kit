@@ -27,18 +27,39 @@ final readonly class SdkEmbeddingsRuntime implements EmbeddingsRuntime
         $provider = $response->meta->provider ?? 'unknown';
         $model = $response->meta->model ?? 'unknown';
 
+        return new EmbeddingsResult(
+            runId: $request->runId,
+            vectors: $this->normalizeEmbeddings($response->embeddings),
+            tokenCount: $response->tokens,
+            provider: $provider,
+            model: $model,
+            metadata: $request->metadata,
+        );
+    }
+
+    /**
+     * @return list<list<float>>
+     */
+    private function normalizeEmbeddings(mixed $embeddings): array
+    {
+        if (!is_iterable($embeddings)) {
+            throw new RuntimeException('Embeddings response must be iterable.');
+        }
+
         $vectors = [];
 
-        foreach ($response->embeddings as $index => $vector) {
+        foreach ($embeddings as $index => $vector) {
+            $formattedIndex = $this->formatIndex($index);
+
             if (!is_array($vector)) {
-                throw new RuntimeException(sprintf('Embeddings response vector at index %s must be a list of floats.', $index));
+                throw new RuntimeException(sprintf('Embeddings response vector at index %s must be a list of floats.', $formattedIndex));
             }
 
             $row = [];
 
             foreach ($vector as $value) {
                 if (!is_int($value) && !is_float($value)) {
-                    throw new RuntimeException(sprintf('Embeddings response contains non-numeric value at index %s.', $index));
+                    throw new RuntimeException(sprintf('Embeddings response contains non-numeric value at index %s.', $formattedIndex));
                 }
 
                 $row[] = (float) $value;
@@ -47,13 +68,15 @@ final readonly class SdkEmbeddingsRuntime implements EmbeddingsRuntime
             $vectors[] = $row;
         }
 
-        return new EmbeddingsResult(
-            runId: $request->runId,
-            vectors: $vectors,
-            tokenCount: $response->tokens,
-            provider: $provider,
-            model: $model,
-            metadata: $request->metadata,
-        );
+        return $vectors;
+    }
+
+    private function formatIndex(mixed $index): string
+    {
+        if (is_int($index) || is_string($index)) {
+            return (string) $index;
+        }
+
+        return get_debug_type($index);
     }
 }

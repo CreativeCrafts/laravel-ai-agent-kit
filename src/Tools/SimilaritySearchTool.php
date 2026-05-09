@@ -203,10 +203,12 @@ final readonly class SimilaritySearchTool implements Tool
         $normalized = [];
 
         foreach ($decoded as $key => $value) {
-            if (!is_string($key) || $key === '') {
+            if (!is_string($key)) {
                 continue;
             }
-
+            if ($key === '') {
+                continue;
+            }
             $normalized[$key] = $value;
         }
 
