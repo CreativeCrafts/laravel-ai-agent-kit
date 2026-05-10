@@ -32,10 +32,10 @@ return [
   'ephemeral_driver_warnings' => [
     'enabled' => (bool)env('AI_AGENT_KIT_EPHEMERAL_DRIVER_WARNINGS', false),
     'environments' => array_values(
-      array_filter(
-        explode(',', (string)env('AI_AGENT_KIT_EPHEMERAL_WARN_ENVIRONMENTS', 'production')),
-        static fn(string $name): bool => $name !== '',
-      ),
+        array_filter(
+            explode(',', (string)env('AI_AGENT_KIT_EPHEMERAL_WARN_ENVIRONMENTS', 'production')),
+            static fn (string $name): bool => $name !== '',
+        ),
     ),
   ],
 
@@ -115,10 +115,10 @@ return [
   'default_provider' => (string)env('AI_AGENT_KIT_DEFAULT_PROVIDER', 'null'),
 
   'failover_order' => array_values(
-    array_filter(
-      explode(',', (string)env('AI_AGENT_KIT_FAILOVER_ORDER', 'null')),
-      static fn(string $name): bool => $name !== '',
-    ),
+      array_filter(
+          explode(',', (string)env('AI_AGENT_KIT_FAILOVER_ORDER', 'null')),
+          static fn (string $name): bool => $name !== '',
+      ),
   ),
 
     /*
@@ -263,12 +263,12 @@ return [
       'enabled' => (bool)env('AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_FALLBACK', false),
       'connection' => env('AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_CONNECTION'),
       'conversations_table' => (string)env(
-        'AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_CONVERSATIONS_TABLE',
-        'agent_conversations',
+          'AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_CONVERSATIONS_TABLE',
+          'agent_conversations',
       ),
       'messages_table' => (string)env(
-        'AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_MESSAGES_TABLE',
-        'agent_conversation_messages',
+          'AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_MESSAGES_TABLE',
+          'agent_conversation_messages',
       ),
     ],
 
