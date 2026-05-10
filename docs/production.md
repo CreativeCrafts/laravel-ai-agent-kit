@@ -17,6 +17,7 @@ See [Providers](providers.md).
 - Replace the default deny-all authorizer with an application policy that checks user, tenant, workflow, and tool context.
 - Validate tool inputs before execution.
 - Keep tool outputs bounded and structured.
+- Use the supported schema subset deliberately; nested objects, arrays, enums, nullable values, and `additionalProperties: false` are enforced before handlers run.
 
 See [Tools](tools.md).
 
@@ -36,7 +37,9 @@ See [Memory](memory.md).
 - Keep `RunContext` payloads small and serializable.
 - Prefer `conversationId` over serializing a full `Conversation` graph.
 - Configure queue connection, queue name, timeout, and result handler behavior deliberately.
-- Enable the debug payload guard in local development if you need serialized job size checks.
+- Enable `debug_payload_guard` in local development if you need serialized job size checks.
+- Enable `payload_guard` in production when you want dispatch-time rejection for oversized serialized jobs.
+- Set `max_serialized_job_bytes` to a limit that matches your queue backend and operational payload budget.
 
 See [Pipelines and queues](pipelines-and-queues.md).
 
@@ -47,8 +50,17 @@ See [Pipelines and queues](pipelines-and-queues.md).
 - Keep one embedding width per namespace.
 - Use separate namespaces for different embedding models or dimensions.
 - Understand that database vector search may scan rows in a namespace; configure scan limits when appropriate.
+- Database vector writes use an atomic upsert keyed by `namespace` and `document_id` after namespace dimension validation.
 
 See [Vectors and retrieval](vectors-and-retrieval.md).
+
+## Streaming
+
+- Streaming failures are normalized into terminal `StreamFailure` values.
+- Provider failures emitted before stream iteration and during stream iteration both produce redacted stream-failure telemetry.
+- Do not expect structured-output schemas from streaming calls; use normal runtime execution for schema-backed requests.
+
+See [Streaming and modalities](streaming-and-modalities.md).
 
 ## Telemetry
 
@@ -72,6 +84,7 @@ Before deploying:
 - verify tool authorization denies by default and allows only intended paths
 - verify memory persistence and retention behavior
 - verify queued workflows with the same queue driver shape you use in production
+- verify queue payload guard limits when enabled
 - verify telemetry payloads contain only safe operational metadata
 
 ## Recommended rollout

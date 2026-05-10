@@ -44,13 +44,15 @@ return [
     | Queued pipeline
     |--------------------------------------------------------------------------
     |
-    | Optional dev guard: when `debug_payload_guard` is true and `config(app.debug)`
-    | is true, dispatch fails if the serialized queued job exceeds
-    | `max_serialized_job_bytes`. See README (Queued pipelines and RunContext).
+    | Optional payload guards fail dispatch if the serialized queued job exceeds
+    | `max_serialized_job_bytes`. `payload_guard` is an explicit production-capable
+    | opt-in. `debug_payload_guard` only runs when `config(app.debug)` is true.
+    | See docs/pipelines-and-queues.md.
     |
     */
   'pipeline' => [
     'queued' => [
+      'payload_guard' => (bool)env('AI_AGENT_KIT_QUEUED_PIPELINE_PAYLOAD_GUARD', false),
       'debug_payload_guard' => (bool)env('AI_AGENT_KIT_QUEUED_PIPELINE_DEBUG_PAYLOAD_GUARD', false),
       'max_serialized_job_bytes' => env('AI_AGENT_KIT_QUEUED_PIPELINE_MAX_SERIALIZED_BYTES') === null
         ? 524288
@@ -246,17 +248,17 @@ return [
         : (int)env('AI_AGENT_KIT_MEMORY_REDIS_RETENTION_DAYS'),
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Laravel AI legacy conversation tables (read bridge)
-    |--------------------------------------------------------------------------
-    |
-    | When `memory.default_driver` is `database`, enabling this option wraps the
-    | package store so `find()` falls back to Laravel AI's default
-    | `agent_conversations` / `agent_conversation_messages` rows when no matching
-    | `ai_agent_*` record exists. Writes always use the package tables.
-    |
-    */
+      /*
+      |--------------------------------------------------------------------------
+      | Laravel AI legacy conversation tables
+      |--------------------------------------------------------------------------
+      |
+      | When `memory.default_driver` is `database`, enabling this option wraps the
+      | package store so `find()` falls back to Laravel AI's default
+      | `agent_conversations` / `agent_conversation_messages` rows when no matching
+      | `ai_agent_*` record exists. Writes always use the package tables.
+      |
+      */
     'laravel_ai_legacy' => [
       'enabled' => (bool)env('AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_FALLBACK', false),
       'connection' => env('AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_CONNECTION'),
@@ -264,23 +266,23 @@ return [
           'AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_CONVERSATIONS_TABLE',
           'agent_conversations',
       ),
-            'messages_table' => (string)env(
-                'AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_MESSAGES_TABLE',
-                'agent_conversation_messages',
-            ),
+      'messages_table' => (string)env(
+          'AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_MESSAGES_TABLE',
+          'agent_conversation_messages',
+      ),
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Conversation attachment replay (Phase 6)
-    |--------------------------------------------------------------------------
-    |
-    | When enabled, continuing a conversation can rehydrate persisted attachment
-    | payloads from the previous user turn according to policy. Opt in per
-    | request with ExecutionRequest metadata `attachment_replay` = `merge` or
-    | `replay_only` (default `none`).
-    |
-    */
+      /*
+      |--------------------------------------------------------------------------
+      | Conversation attachment replay
+      |--------------------------------------------------------------------------
+      |
+      | When enabled, continuing a conversation can rehydrate persisted attachment
+      | payloads from the previous user turn according to policy. Opt in per
+      | request with ExecutionRequest metadata `attachment_replay` = `merge` or
+      | `replay_only` (default `none`).
+      |
+      */
     'attachments_replay' => [
       'enabled' => (bool)env('AI_AGENT_KIT_MEMORY_ATTACHMENTS_REPLAY_ENABLED', false),
       'max_per_turn' => env('AI_AGENT_KIT_MEMORY_ATTACHMENTS_REPLAY_MAX_PER_TURN') === null
@@ -359,16 +361,16 @@ return [
   'tools' => [
     'authorizer' => DenyAllToolAuthorizer::class,
 
-    /*
-    |--------------------------------------------------------------------------
-    | Similarity search (VectorStoreInterface + embeddings)
-    |--------------------------------------------------------------------------
-    |
-    | Registers the package `similarity_search` custom tool when enabled.
-    | Embeds the query via `EmbeddingsRuntime`, then searches `VectorStoreInterface`.
-    | Authorization still flows through `tools.authorizer` (default: deny all).
-    |
-    */
+      /*
+      |--------------------------------------------------------------------------
+      | Similarity search (VectorStoreInterface + embeddings)
+      |--------------------------------------------------------------------------
+      |
+      | Registers the package `similarity_search` custom tool when enabled.
+      | Embeds the query via `EmbeddingsRuntime`, then searches `VectorStoreInterface`.
+      | Authorization still flows through `tools.authorizer` (default: deny all).
+      |
+      */
     'similarity_search' => [
       'enabled' => (bool)env('AI_AGENT_KIT_SIMILARITY_SEARCH_ENABLED', false),
       'register' => (bool)env('AI_AGENT_KIT_SIMILARITY_SEARCH_REGISTER', false),
@@ -412,7 +414,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Optional middleware stack around every AiRuntime::execute call (direct,
-    | blueprint, orchestration). List fully-qualified class names in order; each
+    | blueprint, orchestration). List fully qualified class names in order; each
     | must implement CreativeCrafts\LaravelAiAgentKit\Contracts\Core\RuntimeMiddleware.
     |
     | Optional default broadcast channel for stream lifecycle events (see
@@ -435,7 +437,7 @@ return [
     |
     | Each modality resolves a runtime contract from the container. Use
     | `default_driver` => `sdk` for the package Laravel AI bridge, or a
-    | fully-qualified class name implementing the modality contract.
+    | fully qualified class name implementing the modality contract.
     |
     */
   'modalities' => [

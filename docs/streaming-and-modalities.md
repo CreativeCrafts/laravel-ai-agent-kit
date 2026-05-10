@@ -29,7 +29,19 @@ final class StreamSummary
 }
 ~~~
 
-Streaming returns ordered chunks followed by a terminal completion or failure value. Structured-output requests are not supported for streaming; use normal runtime execution for schema-backed calls.
+Streaming returns ordered chunks followed by one terminal completion or failure value. Structured-output requests are not supported for streaming; use normal runtime execution for schema-backed calls.
+
+## Stream failures
+
+Provider and runtime failures are normalized into package-owned `StreamFailure` terminal values where possible. This includes failures thrown while creating the provider stream and failures thrown during stream iteration.
+
+Applications consuming `executeStream()` should handle three event families:
+
+- `StreamChunk` for ordered partial output
+- `StreamComplete` for successful terminal output
+- `StreamFailure` for terminal failure state
+
+Failure telemetry is emitted through redacted `RuntimeStreamFailed` events when an event dispatcher is available.
 
 ## Optional broadcast telemetry
 

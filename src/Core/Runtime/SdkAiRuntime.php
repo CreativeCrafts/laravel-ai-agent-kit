@@ -287,13 +287,27 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
             return;
         }
 
-        $stream = $agent->stream(
-            prompt: $request->prompt,
-            attachments: $this->effectivePromptAttachments($request, $projectedConversation),
-            provider: $request->provider,
-            model: $request->model,
-            timeout: $request->timeout,
-        );
+        try {
+            $stream = $agent->stream(
+                prompt: $request->prompt,
+                attachments: $this->effectivePromptAttachments($request, $projectedConversation),
+                provider: $request->provider,
+                model: $request->model,
+                timeout: $request->timeout,
+            );
+        } catch (Throwable $throwable) {
+            $wrapped = $this->wrapStreamFailure(
+                request: $request,
+                throwable: $throwable,
+                projectedMessageCount: $telemetryContext->projectedMessageCount,
+                packageConversationId: $telemetryContext->packageConversationId?->toString(),
+                broadcastChannel: $broadcastChannel,
+                failureCategory: FailureCategory::ProviderFailure->value,
+            );
+            yield $this->streamFailureFromThrowable($request, $wrapped);
+
+            return;
+        }
 
         $sequence = 0;
         $terminalEmitted = false;
@@ -522,7 +536,6 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
             return fn (JsonSchema $js): array => $schema->toSchema();
         }
 
-        // class-string<HasStructuredOutput>
         if (!class_exists($schema)) {
             throw SchemaResolutionException::forMissingClass($schema);
         }
@@ -599,7 +612,6 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
                 ),
             );
         } catch (Throwable) {
-            // Intentionally suppressed – preserving the original exception is paramount.
         }
     }
 

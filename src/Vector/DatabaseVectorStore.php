@@ -26,40 +26,33 @@ final readonly class DatabaseVectorStore implements VectorStoreInterface, Vector
 
     public function upsert(string $namespace, array $documents): void
     {
+        if ($documents === []) {
+            return;
+        }
+
         $this->connection->transaction(function () use ($namespace, $documents): void {
             $existing = $this->firstStoredEmbeddingLength($namespace);
             VectorEmbeddingDimensionGuard::assertUpsertBatch($namespace, $existing, $documents);
 
             $now = Date::now();
+            $rows = [];
 
             foreach ($documents as $document) {
-                $payload = [
-                    'embedding' => json_encode($document->embedding, JSON_THROW_ON_ERROR),
-                    'metadata' => json_encode($document->metadata, JSON_THROW_ON_ERROR),
-                    'updated_at' => $now,
-                ];
-
-                $exists = $this->connection->table($this->table)
-                    ->where('namespace', $namespace)
-                    ->where('document_id', $document->id)
-                    ->exists();
-
-                if ($exists) {
-                    $this->connection->table($this->table)
-                        ->where('namespace', $namespace)
-                        ->where('document_id', $document->id)
-                        ->update($payload);
-
-                    continue;
-                }
-
-                $this->connection->table($this->table)->insert([
+                $rows[] = [
                     'namespace' => $namespace,
                     'document_id' => $document->id,
-                    ...$payload,
+                    'embedding' => json_encode($document->embedding, JSON_THROW_ON_ERROR),
+                    'metadata' => json_encode($document->metadata, JSON_THROW_ON_ERROR),
                     'created_at' => $now,
-                ]);
+                    'updated_at' => $now,
+                ];
             }
+
+            $this->connection->table($this->table)->upsert(
+                $rows,
+                ['namespace', 'document_id'],
+                ['embedding', 'metadata', 'updated_at'],
+            );
         });
     }
 

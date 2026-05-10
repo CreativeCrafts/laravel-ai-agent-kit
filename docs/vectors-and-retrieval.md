@@ -62,6 +62,12 @@ Available built-in drivers:
 
 You may bind a custom `VectorStoreInterface` for services such as Pinecone, Qdrant, or pgvector-backed application storage.
 
+## Upsert semantics
+
+`upsert()` is idempotent for a namespace/document pair. The database driver writes rows with an atomic database upsert keyed by `namespace` and `document_id`, so repeated writes replace `embedding`, `metadata`, and `updated_at` without changing the original `created_at` value on existing rows.
+
+Empty upsert batches are no-ops.
+
 ## Embedding width rule
 
 Built-in vector stores enforce one embedding width per namespace. The first upsert into a namespace establishes the width; later documents in that namespace must match it.
@@ -98,6 +104,7 @@ Files/Stores gateway operations emit redacted events; no file bodies or API keys
 
 - `in_memory` is not shared across workers.
 - Database vector search may scan rows in the namespace; configure scan limits where needed.
+- Database vector upserts are atomic per `namespace` and `document_id`, but namespace dimension validation still runs before writes.
 - Keep vector metadata safe for logs and telemetry.
 - Match embedding dimensions deliberately.
 

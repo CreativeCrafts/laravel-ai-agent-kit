@@ -7,6 +7,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\StreamingAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\MiddlewareExecutingAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\RuntimeTelemetryAgent;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\SdkAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StreamChunk;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StreamComplete;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StreamFailure;
@@ -48,7 +49,7 @@ it('streams ordered text chunks then a terminal complete event', function (): vo
     expect($sequences)->toBe(range(0, count($sequences) - 1));
 });
 
-it('yields a single terminal failure when the sdk stream throws mid iteration', function (): void {
+it('yields a single terminal failure when the sdk stream fails', function (): void {
     app()->register(AiServiceProvider::class);
 
     Ai::fakeAgent(RuntimeTelemetryAgent::class, [
@@ -69,7 +70,8 @@ it('yields a single terminal failure when the sdk stream throws mid iteration', 
 
     expect($events)->toHaveCount(1)
         ->and($events[0])->toBeInstanceOf(StreamFailure::class)
-        ->and($events[0]->failureCategory)->not->toBe('');
+        ->and($events[0]->failureCategory)->toBe('execution_failed')
+        ->and($events[0]->exceptionMessage)->toBe('provider stream failed');
 });
 
 it('rejects streaming when execution request carries a schema', function (): void {
@@ -103,6 +105,7 @@ it('dispatches redacted stream observability events and optional broadcast when 
         RuntimeStreamCompleted::class,
         RuntimeStreamFailed::class,
     ]);
+    refreshStreamingRuntimeBindingsForEventFake();
 
     /** @var StreamingAiRuntime $streaming */
     $streaming = app(StreamingAiRuntime::class);
@@ -155,3 +158,10 @@ it('resolves streaming through middleware wrapping the sdk runtime', function ()
     expect($last)->toBeInstanceOf(StreamComplete::class)
         ->and($last->output)->toBe('wrapped stream ok');
 });
+
+function refreshStreamingRuntimeBindingsForEventFake(): void
+{
+    app()->forgetInstance(SdkAiRuntime::class);
+    app()->forgetInstance(AiRuntime::class);
+    app()->forgetInstance(StreamingAiRuntime::class);
+}
