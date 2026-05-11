@@ -124,6 +124,8 @@ Queued pipelines serialize the `RunContext`. Keep these fields small and seriali
 | `conversationId` | Prefer this over serializing a full conversation. |
 | `conversation` | Use only when the full graph is truly required. |
 
+When using the database memory driver, conversation saves are idempotent by conversation ID and message ID, which prevents common duplicate-key races from queued or multi-worker saves. This is storage-level write idempotence, not semantic merge. If two workers save different conversation histories for the same conversation ID, the final stored rows follow normal last-write-wins database behavior for the rows each save writes.
+
 ## Payload guards
 
 Queued jobs can be rejected before dispatch when the serialized job exceeds `ai-agent-kit.pipeline.queued.max_serialized_job_bytes`.
