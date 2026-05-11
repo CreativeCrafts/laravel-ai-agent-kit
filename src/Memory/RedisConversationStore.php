@@ -144,7 +144,10 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
 
             $decoded = $this->decodePayload($payload);
             $retentionUntil = $decoded['retention_until'] ?? null;
-            if (!is_string($retentionUntil) || $retentionUntil === '') {
+            if (!is_string($retentionUntil)) {
+                continue;
+            }
+            if ($retentionUntil === '') {
                 continue;
             }
 
