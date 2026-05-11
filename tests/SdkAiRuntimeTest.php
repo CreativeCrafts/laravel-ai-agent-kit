@@ -83,6 +83,128 @@ it('executes a runtime request through the laravel ai sdk bridge', function () {
       ->and($result->metadata['package_conversation_id'])->toBeNull();
 });
 
+it('uses the configured default provider when a request omits provider and model', function () {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai-agent-kit.default_provider', 'openai');
+    config()->set('ai-agent-kit.providers.openai.options.model', 'gpt-4o-mini');
+    refreshRuntimeProviderBindings();
+
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, ['Default provider response'])->preventStrayPrompts();
+
+    /** @var AiRuntime $runtime */
+    $runtime = app(AiRuntime::class);
+
+    $result = $runtime->execute(
+        new ExecutionRequest(
+            runId: 'run-default-provider-001',
+            prompt: 'Use the configured provider.',
+        ),
+    );
+
+    expect($result->output)->toBe('Default provider response')
+        ->and($result->metadata['runtime_provider_attempts'])->toBe(['openai'])
+        ->and($result->metadata['runtime_final_provider'])->toBe('openai')
+        ->and($result->metadata['runtime_failover_attempted'])->toBeFalse();
+
+    Ai::assertAgentWasPrompted(RuntimeTelemetryAgent::class, function ($prompt): bool {
+        return $prompt->provider === 'openai'
+            && $prompt->model === 'gpt-4o-mini';
+    });
+});
+
+it('preserves explicit provider and model as the first runtime provider attempt', function () {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai-agent-kit.default_provider', 'openai');
+    config()->set('ai-agent-kit.providers.anthropic', [
+        'driver' => 'anthropic',
+        'enabled' => true,
+        'capabilities' => ['text_generation'],
+        'options' => ['model' => 'claude-default'],
+    ]);
+    refreshRuntimeProviderBindings();
+
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, ['Explicit provider response'])->preventStrayPrompts();
+
+    /** @var AiRuntime $runtime */
+    $runtime = app(AiRuntime::class);
+
+    $result = $runtime->execute(
+        new ExecutionRequest(
+            runId: 'run-explicit-provider-001',
+            prompt: 'Use the explicit provider.',
+            provider: 'anthropic',
+            model: 'claude-explicit',
+        ),
+    );
+
+    expect($result->output)->toBe('Explicit provider response')
+        ->and($result->metadata['runtime_provider_attempts'])->toBe(['anthropic'])
+        ->and($result->metadata['runtime_final_provider'])->toBe('anthropic');
+
+    Ai::assertAgentWasPrompted(RuntimeTelemetryAgent::class, function ($prompt): bool {
+        return $prompt->provider === 'anthropic'
+            && $prompt->model === 'claude-explicit';
+    });
+});
+
+it('fails over provider prompt execution when the first provider attempt fails', function () {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai-agent-kit.default_provider', 'openai');
+    config()->set('ai-agent-kit.failover_order', ['openai', 'anthropic']);
+    config()->set('ai-agent-kit.providers.anthropic', [
+        'driver' => 'anthropic',
+        'enabled' => true,
+        'capabilities' => ['text_generation'],
+        'options' => ['model' => 'claude-3-haiku'],
+    ]);
+    refreshRuntimeProviderBindings();
+
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, [
+        static fn (): never => throw new RuntimeException('openai unavailable'),
+        'Fallback provider response',
+    ])->preventStrayPrompts();
+
+    /** @var AiRuntime $runtime */
+    $runtime = app(AiRuntime::class);
+
+    $result = $runtime->execute(
+        new ExecutionRequest(
+            runId: 'run-provider-failover-001',
+            prompt: 'Fail over if needed.',
+        ),
+    );
+
+    expect($result->output)->toBe('Fallback provider response')
+        ->and($result->metadata['runtime_provider_attempts'])->toBe(['openai', 'anthropic'])
+        ->and($result->metadata['runtime_final_provider'])->toBe('anthropic')
+        ->and($result->metadata['runtime_failover_attempted'])->toBeTrue();
+});
+
+it('normalizes provider failure when runtime failover is exhausted', function () {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai-agent-kit.default_provider', 'openai');
+    config()->set('ai-agent-kit.failover_order', ['openai']);
+    refreshRuntimeProviderBindings();
+
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, [
+        static fn (): never => throw new RuntimeException('openai unavailable'),
+    ])->preventStrayPrompts();
+
+    /** @var AiRuntime $runtime */
+    $runtime = app(AiRuntime::class);
+
+    expect(fn () => $runtime->execute(
+        new ExecutionRequest(
+            runId: 'run-provider-failover-exhausted-001',
+            prompt: 'Fail with no fallback.',
+        ),
+    ))->toThrow(RuntimeExecutionException::class, 'AI runtime execution failed for run [run-provider-failover-exhausted-001]');
+});
+
 it('materializes package-governed tools into the sdk agent prompt', function () {
     app()->register(AiServiceProvider::class);
 
@@ -515,6 +637,9 @@ it('enforces max cost budget when cost metadata is provided', function () {
 it('wraps sdk runtime failures in a typed runtime execution exception', function () {
     app()->register(AiServiceProvider::class);
 
+    config()->set('ai-agent-kit.failover_order', ['openai']);
+    refreshRuntimeProviderBindings();
+
     Ai::fakeAgent(RuntimeTelemetryAgent::class, [
       static function (): never {
           throw new RuntimeException('SDK failure');
@@ -534,3 +659,15 @@ it('wraps sdk runtime failures in a typed runtime execution exception', function
         ))
       ->toThrow(RuntimeExecutionException::class, 'AI runtime execution failed for run [run-bridge-failure]');
 });
+
+function refreshRuntimeProviderBindings(): void
+{
+    app()->forgetInstance(\CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry::class);
+    app()->forgetInstance(\CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry::class);
+    app()->forgetInstance(\CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector::class);
+    app()->forgetInstance(\CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector::class);
+    app()->forgetInstance(\CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredFailoverProviderSelector::class);
+    app()->forgetInstance(\CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector::class);
+    app()->forgetInstance(SdkAiRuntime::class);
+    app()->forgetInstance(AiRuntime::class);
+}
