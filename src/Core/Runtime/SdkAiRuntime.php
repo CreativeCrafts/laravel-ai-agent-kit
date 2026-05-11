@@ -7,7 +7,12 @@ namespace CreativeCrafts\LaravelAiAgentKit\Core\Runtime;
 use Closure;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\StreamingAiRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\CircuitBreakerManager;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\Redactor;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderNotInFailoverOrderException;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ProviderDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeBudgetExceededException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeExecutionException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\SchemaResolutionException;
@@ -122,25 +127,49 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
             );
         }
 
-        try {
-            $effectiveAttachments = $this->effectivePromptAttachments($request, $projectedConversation);
+        $effectiveAttachments = $this->effectivePromptAttachments($request, $projectedConversation);
+        $attemptedProviders = [];
+        $attemptRequest = $this->requestForInitialProviderAttempt($request);
+        $lastProviderThrowable = null;
 
-            $response = $agent->prompt(
-                prompt: $request->prompt,
-                attachments: $effectiveAttachments,
-                provider: $request->provider,
-                model: $request->model,
-                timeout: $request->timeout,
-            );
-        } catch (Throwable $throwable) {
-            throw $this->wrapAndReportRuntimeFailure(
-                request: $request,
-                throwable: $throwable,
-                projectedMessageCount: $telemetryContext->projectedMessageCount,
-                packageConversationId: $telemetryContext->packageConversationId?->toString(),
-                failureCategory: FailureCategory::ProviderFailure->value,
-            );
+        while (true) {
+            $attemptedProviders[] = $attemptRequest->provider ?? 'default';
+
+            try {
+                $response = $agent->prompt(
+                    prompt: $attemptRequest->prompt,
+                    attachments: $effectiveAttachments,
+                    provider: $attemptRequest->provider,
+                    model: $attemptRequest->model,
+                    timeout: $attemptRequest->timeout,
+                );
+
+                $this->recordProviderSuccess($attemptRequest->provider);
+                break;
+            } catch (Throwable $throwable) {
+                $lastProviderThrowable = $throwable;
+                $this->recordProviderFailure($attemptRequest->provider);
+
+                $nextProvider = $this->nextFailoverProvider($attemptRequest->provider);
+
+                if (!$nextProvider instanceof ProviderDefinition) {
+                    throw $this->wrapAndReportRuntimeFailure(
+                        request: $attemptRequest->withMetadata([
+                            'runtime_provider_attempts' => $attemptedProviders,
+                            'runtime_failover_exhausted' => true,
+                        ]),
+                        throwable: $throwable,
+                        projectedMessageCount: $telemetryContext->projectedMessageCount,
+                        packageConversationId: $telemetryContext->packageConversationId?->toString(),
+                        failureCategory: FailureCategory::ProviderFailure->value,
+                    );
+                }
+
+                $attemptRequest = $this->requestForProviderDefinition($request, $nextProvider);
+            }
         }
+
+        unset($lastProviderThrowable);
 
         $promptTokens = $response->usage->promptTokens ?? 0;
         $completionTokens = $response->usage->completionTokens ?? 0;
@@ -155,7 +184,7 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
             );
         } catch (RuntimeBudgetExceededException $exception) {
             $this->reportRuntimeFailure(
-                request: $request,
+                request: $attemptRequest,
                 throwable: $exception,
                 projectedMessageCount: $telemetryContext->projectedMessageCount,
                 packageConversationId: $telemetryContext->packageConversationId?->toString(),
@@ -167,13 +196,13 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
         try {
             $conversation = $this->runtimeConversationMemoryBridge->reconcile(
                 projected: $projectedConversation,
-                request: $request,
+                request: $attemptRequest,
                 response: $response,
-                userTurnAttachments: $this->effectivePromptAttachments($request, $projectedConversation),
+                userTurnAttachments: $effectiveAttachments,
             );
         } catch (Throwable $throwable) {
             throw $this->wrapAndReportRuntimeFailure(
-                request: $request,
+                request: $attemptRequest,
                 throwable: $throwable,
                 projectedMessageCount: $telemetryContext->projectedMessageCount,
                 packageConversationId: $telemetryContext->packageConversationId?->toString(),
@@ -209,6 +238,9 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
             'attachment_replay_merge' => $projectedConversation->attachmentReplayMerge,
             'attachment_replay_prior_included' => $projectedConversation->priorAttachmentReplayCount,
             'attachment_replay_prior_excluded' => $projectedConversation->priorAttachmentExcludedCount,
+            'runtime_provider_attempts' => $attemptedProviders,
+            'runtime_final_provider' => $attemptRequest->provider,
+            'runtime_failover_attempted' => count($attemptedProviders) > 1,
           ],
             structuredOutput: StructuredAgentResponseMapper::mapStructuredPayload($response),
         );
@@ -287,26 +319,47 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
             return;
         }
 
-        try {
-            $stream = $agent->stream(
-                prompt: $request->prompt,
-                attachments: $this->effectivePromptAttachments($request, $projectedConversation),
-                provider: $request->provider,
-                model: $request->model,
-                timeout: $request->timeout,
-            );
-        } catch (Throwable $throwable) {
-            $wrapped = $this->wrapStreamFailure(
-                request: $request,
-                throwable: $throwable,
-                projectedMessageCount: $telemetryContext->projectedMessageCount,
-                packageConversationId: $telemetryContext->packageConversationId?->toString(),
-                broadcastChannel: $broadcastChannel,
-                failureCategory: FailureCategory::ProviderFailure->value,
-            );
-            yield $this->streamFailureFromThrowable($request, $wrapped);
+        $effectiveAttachments = $this->effectivePromptAttachments($request, $projectedConversation);
+        $attemptedProviders = [];
+        $attemptRequest = $this->requestForInitialProviderAttempt($request);
 
-            return;
+        while (true) {
+            $attemptedProviders[] = $attemptRequest->provider ?? 'default';
+
+            try {
+                $stream = $agent->stream(
+                    prompt: $attemptRequest->prompt,
+                    attachments: $effectiveAttachments,
+                    provider: $attemptRequest->provider,
+                    model: $attemptRequest->model,
+                    timeout: $attemptRequest->timeout,
+                );
+
+                $this->recordProviderSuccess($attemptRequest->provider);
+                break;
+            } catch (Throwable $throwable) {
+                $this->recordProviderFailure($attemptRequest->provider);
+                $nextProvider = $this->nextFailoverProvider($attemptRequest->provider);
+
+                if (!$nextProvider instanceof ProviderDefinition) {
+                    $wrapped = $this->wrapStreamFailure(
+                        request: $attemptRequest->withMetadata([
+                            'runtime_provider_attempts' => $attemptedProviders,
+                            'runtime_failover_exhausted' => true,
+                        ]),
+                        throwable: $throwable,
+                        projectedMessageCount: $telemetryContext->projectedMessageCount,
+                        packageConversationId: $telemetryContext->packageConversationId?->toString(),
+                        broadcastChannel: $broadcastChannel,
+                        failureCategory: FailureCategory::ProviderFailure->value,
+                    );
+                    yield $this->streamFailureFromThrowable($attemptRequest, $wrapped);
+
+                    return;
+                }
+
+                $attemptRequest = $this->requestForProviderDefinition($request, $nextProvider);
+            }
         }
 
         $sequence = 0;
@@ -326,7 +379,7 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
                     );
 
                     $this->dispatchStreamChunkObserved(
-                        $request,
+                        $attemptRequest,
                         $sequence,
                         'text_delta',
                         $event->delta,
@@ -345,7 +398,7 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
                         failureCategory: FailureCategory::ProviderFailure->value,
                     );
                     $this->reportStreamFailure(
-                        $request,
+                        $attemptRequest,
                         $exception,
                         $telemetryContext->projectedMessageCount,
                         $telemetryContext->packageConversationId?->toString(),
@@ -363,13 +416,13 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
             }
         } catch (Throwable $throwable) {
             $wrapped = $this->wrapStreamFailure(
-                $request,
+                $attemptRequest,
                 $throwable,
                 $telemetryContext->projectedMessageCount,
                 $telemetryContext->packageConversationId?->toString(),
                 $broadcastChannel,
             );
-            yield $this->streamFailureFromThrowable($request, $wrapped);
+            yield $this->streamFailureFromThrowable($attemptRequest, $wrapped);
             $terminalEmitted = true;
         }
 
@@ -392,13 +445,13 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
                 failureCategory: FailureCategory::ProviderFailure->value,
             );
             $this->reportStreamFailure(
-                $request,
+                $attemptRequest,
                 $exception,
                 $telemetryContext->projectedMessageCount,
                 $telemetryContext->packageConversationId?->toString(),
                 $broadcastChannel,
             );
-            yield $this->streamFailureFromThrowable($request, $exception);
+            yield $this->streamFailureFromThrowable($attemptRequest, $exception);
 
             return;
         }
@@ -418,13 +471,13 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
             );
         } catch (RuntimeBudgetExceededException $exception) {
             $this->reportStreamFailure(
-                $request,
+                $attemptRequest,
                 $exception,
                 $telemetryContext->projectedMessageCount,
                 $telemetryContext->packageConversationId?->toString(),
                 $broadcastChannel,
             );
-            yield $this->streamFailureFromThrowable($request, $exception);
+            yield $this->streamFailureFromThrowable($attemptRequest, $exception);
 
             return;
         }
@@ -432,19 +485,19 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
         try {
             $conversation = $this->runtimeConversationMemoryBridge->reconcile(
                 projected: $projectedConversation,
-                request: $request,
+                request: $attemptRequest,
                 response: $streamedResponse,
-                userTurnAttachments: $this->effectivePromptAttachments($request, $projectedConversation),
+                userTurnAttachments: $effectiveAttachments,
             );
         } catch (Throwable $throwable) {
             $wrapped = $this->wrapStreamFailure(
-                $request,
+                $attemptRequest,
                 $throwable,
                 $telemetryContext->projectedMessageCount,
                 $telemetryContext->packageConversationId?->toString(),
                 $broadcastChannel,
             );
-            yield $this->streamFailureFromThrowable($request, $wrapped);
+            yield $this->streamFailureFromThrowable($attemptRequest, $wrapped);
 
             return;
         }
@@ -459,7 +512,7 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
         $modelLabel = $meta->model ?? 'unknown';
 
         $this->dispatchStreamCompleted(
-            request: $request,
+            request: $attemptRequest,
             invocationId: $stream->invocationId,
             provider: $providerLabel,
             model: $modelLabel,
@@ -485,6 +538,9 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
                 'package_conversation_id' => $conversation?->id->toString(),
                 'package_conversation_message_count' => $conversation?->messageCount(),
                 'estimated_cost_usd' => $estimatedCostUsd,
+                'runtime_provider_attempts' => $attemptedProviders,
+                'runtime_final_provider' => $attemptRequest->provider,
+                'runtime_failover_attempted' => count($attemptedProviders) > 1,
             ],
         );
     }
@@ -832,5 +888,127 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
             exceptionClass: $throwable::class,
             exceptionMessage: $message !== '' ? $message : null,
         );
+    }
+
+    private function requestForInitialProviderAttempt(ExecutionRequest $request): ExecutionRequest
+    {
+        if ($request->provider !== null) {
+            return $this->requestForProviderName($request, $request->provider);
+        }
+
+        /** @var ProviderSelector $selector */
+        $selector = $this->container->make(ProviderSelector::class);
+
+        return $this->requestForProviderDefinition($request, $selector->selectDefault());
+    }
+
+    private function requestForProviderName(ExecutionRequest $request, string $providerName): ExecutionRequest
+    {
+        $definition = $this->providerDefinitionByName($providerName);
+
+        if ($definition instanceof ProviderDefinition) {
+            return $this->requestForProviderDefinition($request, $definition);
+        }
+
+        return $this->cloneRequestWithProvider(
+            request: $request,
+            provider: $providerName,
+            model: $request->model,
+        );
+    }
+
+    private function requestForProviderDefinition(ExecutionRequest $request, ProviderDefinition $provider): ExecutionRequest
+    {
+        $configuredModel = $provider->options['model'] ?? null;
+
+        return $this->cloneRequestWithProvider(
+            request: $request,
+            provider: $provider->name,
+            model: $request->model ?? (is_string($configuredModel) && $configuredModel !== '' ? $configuredModel : null),
+        );
+    }
+
+    private function cloneRequestWithProvider(ExecutionRequest $request, ?string $provider, ?string $model): ExecutionRequest
+    {
+        return new ExecutionRequest(
+            runId: $request->runId,
+            prompt: $request->prompt,
+            instructions: $request->instructions,
+            provider: $provider,
+            model: $model,
+            toolNames: $request->toolNames,
+            input: $request->input,
+            metadata: $request->metadata,
+            timeout: $request->timeout,
+            conversationId: $request->conversationId,
+            storeConversation: $request->storeConversation,
+            continueConversation: $request->continueConversation,
+            generationOptions: $request->generationOptions,
+            schema: $request->schema,
+            attachments: $request->attachments,
+            providerToolNames: $request->providerToolNames,
+        );
+    }
+
+    private function providerDefinitionByName(string $providerName): ?ProviderDefinition
+    {
+        foreach ($this->failoverProviderSelector()->ordered() as $provider) {
+            if ($provider->name === $providerName) {
+                return $provider;
+            }
+        }
+
+        return null;
+    }
+
+    private function nextFailoverProvider(?string $currentProviderName): ?ProviderDefinition
+    {
+        if ($currentProviderName === null || $currentProviderName === '') {
+            return null;
+        }
+
+        try {
+            return $this->failoverProviderSelector()->nextAfter($currentProviderName);
+        } catch (ProviderNotInFailoverOrderException) {
+            return null;
+        }
+    }
+
+    private function failoverProviderSelector(): FailoverProviderSelector
+    {
+        /** @var FailoverProviderSelector $selector */
+        $selector = $this->container->make(FailoverProviderSelector::class);
+
+        return $selector;
+    }
+
+    private function recordProviderSuccess(?string $providerName): void
+    {
+        if ($providerName === null || $providerName === '') {
+            return;
+        }
+
+        $this->circuitBreakerManager()?->for('providers.' . $providerName)->recordSuccess();
+    }
+
+    private function recordProviderFailure(?string $providerName): void
+    {
+        if ($providerName === null || $providerName === '') {
+            return;
+        }
+
+        $this->circuitBreakerManager()?->for('providers.' . $providerName)->recordFailure();
+    }
+
+    private function circuitBreakerManager(): ?CircuitBreakerManager
+    {
+        try {
+            /** @var CircuitBreakerManager $manager */
+            $manager = $this->container->make(CircuitBreakerManager::class);
+
+            return $manager;
+        } catch (Throwable) {
+            return null;
+        }
     }
 }
