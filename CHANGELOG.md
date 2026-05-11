@@ -6,6 +6,12 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Added
 
+- Runtime provider failover execution:
+  - runtime requests that omit a provider now resolve the configured default provider before SDK execution;
+  - prompt execution retries provider-edge failures through configured `failover_order` until success or exhaustion;
+  - stream execution supports creation-only failover before any chunks are emitted;
+  - runtime results include provider attempt metadata such as attempted providers, final provider, and whether failover occurred;
+  - provider success/failure attempts are recorded against provider circuit breakers.
 - Security, correctness, and reliability hardening from the audit pass:
   - stream creation failures are normalized into terminal `StreamFailure` values with redacted `RuntimeStreamFailed` telemetry;
   - custom tool input validation now recursively enforces the supported schema subset, including nested objects, array item schemas, `additionalProperties: false`, nullable fields, and scalar enum values;
