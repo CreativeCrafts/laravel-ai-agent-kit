@@ -8,6 +8,10 @@ Review this checklist before running real workloads with Agent Kit.
 - Map provider profiles to package capabilities such as `text_generation`, `structured_output`, and `audio_transcription`.
 - Keep model names and provider-specific options inside provider profile `options`.
 - Configure failover order intentionally.
+- Ensure every provider that may participate in runtime failover appears in `failover_order`.
+- Configure circuit-breaker failover filtering when you want open breakers to skip unhealthy providers.
+- Remember that prompt failover can make multiple provider attempts for one application request.
+- For streaming, failover is conservative: stream creation can fail over before chunks are emitted; mid-stream failures are terminal and are not replayed against another provider.
 
 See [Providers](providers.md).
 
@@ -58,6 +62,8 @@ See [Vectors and retrieval](vectors-and-retrieval.md).
 
 - Streaming failures are normalized into terminal `StreamFailure` values.
 - Provider failures emitted before stream iteration and during stream iteration both produce redacted stream-failure telemetry.
+- Stream creation may fail over to the next eligible provider before chunks are emitted.
+- Mid-stream failures are terminal and do not trigger replay against another provider.
 - Do not expect structured-output schemas from streaming calls; use normal runtime execution for schema-backed requests.
 
 See [Streaming and modalities](streaming-and-modalities.md).
@@ -67,6 +73,7 @@ See [Streaming and modalities](streaming-and-modalities.md).
 - Listen to package events for workflow, runtime, failover, files/stores, and streaming observability.
 - Keep telemetry redacted by default.
 - Use package failure categories in alerts and dashboards.
+- Monitor runtime provider attempt metadata and failover exhaustion events when failover is enabled.
 - Avoid attaching sensitive values to metadata.
 
 See [Errors and telemetry](errors-and-telemetry.md).
@@ -86,7 +93,8 @@ Before deploying:
 - verify queued workflows with the same queue driver shape you use in production
 - verify queue payload guard limits when enabled
 - verify telemetry payloads contain only safe operational metadata
+- verify failover behavior with fakes before enabling multi-provider failover in production
 
 ## Recommended rollout
 
-Start with one blueprint or one agent workflow, observe telemetry and failure behavior, then expand tool, memory, vector, and queued execution surfaces as needed.
+Start with one blueprint or one agent workflow, observe telemetry and failure behavior, then expand tool, memory, vector, queued execution, and provider failover surfaces as needed.
