@@ -4,8 +4,16 @@ declare(strict_types=1);
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ProviderToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\Tool;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredFailoverProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeBudgetExceededException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeExecutionException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
@@ -20,6 +28,8 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessage;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessageRole;
 use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
 use CreativeCrafts\LaravelAiAgentKit\Tools\Exceptions\ToolAuthorizationDeniedException;
+use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryToolRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Tools\ProviderToolMaterializer;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolAdapter;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Ai;
@@ -31,17 +41,7 @@ use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ProviderToolRegistry;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolAuthorizer;
-use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryToolRegistry;
-use CreativeCrafts\LaravelAiAgentKit\Tools\ProviderToolMaterializer;
 use Laravel\Ai\Responses\StructuredAgentResponse;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
-use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredFailoverProviderSelector;
-use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
-use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
 
 it('binds the ai runtime contract to the sdk ai runtime', function () {
     app()->register(AiServiceProvider::class);
@@ -150,9 +150,17 @@ it('fails over provider prompt execution when the first provider attempt fails',
     configureRuntimeProvider('anthropic', 'anthropic', 'claude-3-haiku');
     refreshRuntimeProviderBindings();
 
+    $attempts = 0;
     Ai::fakeAgent(RuntimeTelemetryAgent::class, [
-        static fn (): never => throw new RuntimeException('openai unavailable'),
-        'Fallback provider response',
+        static function () use (&$attempts): string {
+            $attempts++;
+
+            if ($attempts === 1) {
+                throw new RuntimeException('openai unavailable');
+            }
+
+            return 'Fallback provider response';
+        },
     ])->preventStrayPrompts();
 
     /** @var AiRuntime $runtime */
@@ -165,7 +173,8 @@ it('fails over provider prompt execution when the first provider attempt fails',
         ),
     );
 
-    expect($result->output)->toBe('Fallback provider response')
+    expect($attempts)->toBe(2)
+        ->and($result->output)->toBe('Fallback provider response')
         ->and($result->metadata['runtime_provider_attempts'])->toBe(['openai', 'anthropic'])
         ->and($result->metadata['runtime_final_provider'])->toBe('anthropic')
         ->and($result->metadata['runtime_failover_attempted'])->toBeTrue();
