@@ -1,9 +1,9 @@
 ## 1. Redis encryption config
 
 - [x] 1.1 Add `ai-agent-kit.memory.redis.encrypt_payloads` config with secure default.
-- [ ] 1.2 Validate `memory.redis.encrypt_payloads` as boolean when present.
-- [ ] 1.3 Inject `EncryptionService` into `RedisConversationStore` binding.
-- [ ] 1.4 Add tests for invalid config type.
+- [x] 1.2 Validate `memory.redis.encrypt_payloads` as boolean when present.
+- [x] 1.3 Inject `EncryptionService` into `RedisConversationStore` binding.
+- [x] 1.4 Add tests for invalid config type.
 
 ## 2. Encrypted Redis payload storage
 
