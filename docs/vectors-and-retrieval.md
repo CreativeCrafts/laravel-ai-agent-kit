@@ -90,6 +90,12 @@ Laravel AI provider Files/Stores are provider-hosted resources. Use the package 
 
 Files/Stores gateway operations emit redacted events; no file bodies or API keys are included.
 
+## SDK vector stores versus Agent Kit vectors
+
+Laravel AI SDK/provider vector or retrieval facilities are direct-SDK/provider-hosted surfaces. Use them directly when your application wants provider-native retrieval behavior, provider-hosted indexes, or SDK-specific store semantics.
+
+Use Agent Kit `VectorStoreInterface` when your application owns the vectors and wants package-owned persistence, deterministic fakes, `SimilaritySearchTool`, and package testing patterns. Agent Kit does not treat provider-hosted stores and application-owned vectors as interchangeable.
+
 ## Choosing a retrieval surface
 
 | Need | Use |
@@ -98,6 +104,7 @@ Files/Stores gateway operations emit redacted events; no file bodies or API keys
 | App wants simple local/test vector search | `in_memory` vector driver |
 | App wants SQL-backed package vectors | `database` vector driver |
 | Provider hosts files and RAG stores | Laravel AI Files/Stores wrappers + `FileSearch` |
+| Provider-native vector/store semantics | Laravel AI SDK directly |
 | Tool-driven search over package vectors | `similarity_search` tool |
 
 ## Production notes
