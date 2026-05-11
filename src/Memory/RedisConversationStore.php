@@ -18,18 +18,27 @@ use Throwable;
 
 final readonly class RedisConversationStore implements ConversationRetentionPurger, ConversationStore
 {
+    private EncryptionService $encryptionService;
+
+    private bool $encryptPayloads;
+
     public function __construct(
         private Application $app,
-        private EncryptionService $encryptionService,
         private ?string $connectionName,
         private string $keyPrefix,
         private string $driverName,
         private ?int $retentionDays = null,
-        private bool $encryptPayloads = true,
+        ?EncryptionService $encryptionService = null,
+        ?bool $encryptPayloads = null,
     ) {
         if (!$this->app->bound('redis')) {
             throw new RuntimeException('Redis memory driver requires a bound [redis] service in the container.');
         }
+
+        $this->encryptionService = $encryptionService ?? $this->app->make(EncryptionService::class);
+
+        $configuredEncryptPayloads = $this->app->make('config')->get('ai-agent-kit.memory.redis.encrypt_payloads', true);
+        $this->encryptPayloads = $encryptPayloads ?? (is_bool($configuredEncryptPayloads) ? $configuredEncryptPayloads : true);
     }
 
     /**
