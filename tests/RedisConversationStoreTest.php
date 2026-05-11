@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationRetentionPurger;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\EncryptionService;
 use CreativeCrafts\LaravelAiAgentKit\Memory\Conversation;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessage;
@@ -45,6 +46,16 @@ it('fails fast when redis memory driver is configured but redis manager binding 
     app(ConversationStore::class);
 })->throws(RuntimeException::class, 'requires a bound [redis] service');
 
+it('fails fast when redis encrypt payloads config is not boolean', function (): void {
+    config()->set('ai-agent-kit.memory.redis.encrypt_payloads', 'yes');
+
+    app()->forgetInstance(ConversationStore::class);
+    app()->forgetInstance(ConversationRetentionPurger::class);
+    app()->forgetInstance(RedisConversationStore::class);
+
+    app(ConversationStore::class);
+})->throws(RuntimeException::class, 'Configuration key [ai-agent-kit.memory.redis.encrypt_payloads] must be a boolean.');
+
 it('persists and reloads conversations through the redis-backed store', function (): void {
     $store = app(ConversationStore::class);
     $conversation = redisConversation('conv-redis');
@@ -79,6 +90,59 @@ it('writes encrypted redis payloads by default and still round-trips through fin
 
     expect($reloaded)->toBeInstanceOf(Conversation::class)
         ->and($reloaded?->latestMessage()?->content)->toBe('Here is the shared summary.');
+});
+
+it('uses the container encryption service when resolving the redis store binding', function (): void {
+    $encryptionService = new class () implements EncryptionService {
+        public int $encryptions = 0;
+
+        public int $decryptions = 0;
+
+        public function encryptString(string $plaintext): string
+        {
+            $this->encryptions++;
+
+            return 'custom:' . base64_encode($plaintext);
+        }
+
+        public function decryptString(string $ciphertext): string
+        {
+            $this->decryptions++;
+
+            if (!str_starts_with($ciphertext, 'custom:')) {
+                throw new RuntimeException('Unexpected ciphertext format.');
+            }
+
+            $decoded = base64_decode(substr($ciphertext, 7), true);
+
+            if (!is_string($decoded)) {
+                throw new RuntimeException('Invalid custom ciphertext.');
+            }
+
+            return $decoded;
+        }
+    };
+
+    app()->instance(EncryptionService::class, $encryptionService);
+    app()->forgetInstance(ConversationStore::class);
+    app()->forgetInstance(ConversationRetentionPurger::class);
+    app()->forgetInstance(RedisConversationStore::class);
+
+    $store = app(ConversationStore::class);
+    $store->save(redisConversation('conv-redis-container-encryption'));
+
+    $stored = redisConnection()->get('ai_agent_memory:conv-redis-container-encryption');
+    $decoded = json_decode((string)$stored, true);
+
+    expect($decoded)->toMatchArray(['encrypted' => true])
+        ->and($decoded['payload'] ?? null)->toStartWith('custom:')
+        ->and($encryptionService->encryptions)->toBe(1);
+
+    $reloaded = $store->find(new ConversationId('conv-redis-container-encryption'));
+
+    expect($reloaded)->toBeInstanceOf(Conversation::class)
+        ->and($reloaded?->latestMessage()?->content)->toBe('Here is the shared summary.')
+        ->and($encryptionService->decryptions)->toBe(1);
 });
 
 it('reads legacy plaintext redis payloads for compatibility', function (): void {
