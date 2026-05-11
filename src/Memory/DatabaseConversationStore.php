@@ -240,13 +240,7 @@ final readonly class DatabaseConversationStore implements ConversationStore
             ];
         }
 
-        $sequenceOffset = count($rows) + 1000000;
-        $connection
-            ->table($this->messagesTable)
-            ->where('conversation_record_id', $conversationRecordId)
-            ->update([
-                'sequence' => $connection->raw('sequence + ' . $sequenceOffset),
-            ]);
+        $this->moveExistingMessageSequencesOutOfIncomingRange($connection, $conversationRecordId, count($rows));
 
         $connection
             ->table($this->messagesTable)
@@ -269,6 +263,28 @@ final readonly class DatabaseConversationStore implements ConversationStore
                     'updated_at',
                 ],
             );
+    }
+
+    private function moveExistingMessageSequencesOutOfIncomingRange(
+        Connection $connection,
+        int $conversationRecordId,
+        int $incomingMessageCount,
+    ): void {
+        $temporarySequence = $incomingMessageCount + 1000000;
+        $recordIds = $connection
+            ->table($this->messagesTable)
+            ->where('conversation_record_id', $conversationRecordId)
+            ->orderByDesc('sequence')
+            ->pluck('id');
+
+        foreach ($recordIds as $recordId) {
+            $connection
+                ->table($this->messagesTable)
+                ->where('id', $recordId)
+                ->update(['sequence' => $temporarySequence]);
+
+            $temporarySequence++;
+        }
     }
 
     private function requireStringValue(object $record, string $field): string
