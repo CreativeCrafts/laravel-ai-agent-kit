@@ -6,6 +6,10 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Added
 
+- Laravel AI SDK parity governance:
+  - expanded maintainer SDK capability and async inventories for the supported `laravel/ai ^0.6` range;
+  - added maintainer event and provider-tool inventory with package-normalized, direct-SDK, deferred, and out-of-scope classifications;
+  - public docs now clarify Agent Kit versus direct Laravel AI SDK usage, SDK jobs versus Agent Kit queued pipelines, SDK vector stores versus Agent Kit vectors, and fake/testing guidance for direct-SDK escape hatches.
 - Database conversation store atomic persistence:
   - database conversation rows now use atomic write semantics keyed by `conversation_id`;
   - database message rows are persisted idempotently per conversation record and message ID;
