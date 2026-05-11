@@ -158,7 +158,15 @@ Use the production-capable guard when you want dispatch-time protection outside 
 
 ## When to use Laravel AI SDK jobs directly
 
-Use Agent Kit queued pipelines when you need package budgets, memory, result handlers, and redacted telemetry. Use Laravel AI SDK jobs directly only when you intentionally want the SDK queue contract and do not need the package pipeline envelope.
+Use Agent Kit queued pipelines when you need the package pipeline envelope:
+
+- package budgets and retry policy
+- package memory and `RunContext`
+- result handlers
+- redacted package telemetry
+- deterministic package fakes around workflow state
+
+Use Laravel AI SDK jobs directly when you intentionally want the SDK queue contract and do not need the package pipeline envelope. Common direct-SDK cases include SDK broadcast-agent jobs, thin async prompts, or provider-specific modality jobs where your application wants Laravel AI's native job behavior exactly.
 
 ## Testing queues
 
