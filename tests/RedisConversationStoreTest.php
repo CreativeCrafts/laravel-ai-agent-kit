@@ -171,6 +171,22 @@ it('uses a minimum redis ttl of one second for past retention timestamps', funct
     expect(redisConnection()->ttlFor('ai_agent_memory:conv-redis-past-ttl'))->toBe(1);
 });
 
+it('deletes expired redis payloads on find as a lazy expiration safety net', function (): void {
+    config()->set('ai-agent-kit.memory.redis.retention_days', 1);
+    app()->forgetInstance(ConversationStore::class);
+    app()->forgetInstance(ConversationRetentionPurger::class);
+    app()->forgetInstance(RedisConversationStore::class);
+
+    $store = app(ConversationStore::class);
+    $conversationId = new ConversationId('conv-redis-lazy-expired');
+
+    $store->save(redisConversation('conv-redis-lazy-expired', new DateTimeImmutable('2020-01-01T09:00:00+00:00')));
+
+    expect(redisConnection()->get('ai_agent_memory:conv-redis-lazy-expired'))->toBeString()
+        ->and($store->find($conversationId))->toBeNull()
+        ->and(redisConnection()->get('ai_agent_memory:conv-redis-lazy-expired'))->toBeNull();
+});
+
 it('preserves delete semantics through the shared redis memory contract', function (): void {
     $store = app(ConversationStore::class);
     $startedAt = new DateTimeImmutable('2036-05-14T09:00:00+00:00');
