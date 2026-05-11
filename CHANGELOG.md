@@ -6,6 +6,10 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Added
 
+- Redis memory hardening:
+  - `memory.redis.encrypt_payloads` encrypts Redis conversation payloads by default using the package encryption service;
+  - Redis memory can read existing plaintext Redis payloads for compatibility while writing the currently configured format;
+  - Redis memory writes native Redis key TTLs when `memory.redis.retention_days` is configured and retains lazy expiration checks as a safety net.
 - Runtime provider failover execution:
   - runtime requests that omit a provider now resolve the configured default provider before SDK execution;
   - prompt execution retries provider-edge failures through configured `failover_order` until success or exhaustion;
