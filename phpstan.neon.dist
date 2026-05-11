@@ -17,7 +17,11 @@ parameters:
 
     # No broad global ignores. If a false-positive is confirmed, add a narrowly scoped
     # ignore using `identifier` + `path`.
-    ignoreErrors: []
+    ignoreErrors:
+        -
+            identifier: instanceof.alwaysTrue
+            path: src/LaravelAiAgentKitServiceProvider.php
+            message: '#^Instanceof between CreativeCrafts\\LaravelAiAgentKit\\Core\\Runtime\\SdkAiRuntime and CreativeCrafts\\LaravelAiAgentKit\\Contracts\\Core\\StreamingAiRuntime will always evaluate to true\.$#'
 
     bootstrapFiles:
         - vendor/autoload.php
