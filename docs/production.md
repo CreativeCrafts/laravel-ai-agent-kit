@@ -30,7 +30,11 @@ See [Tools](tools.md).
 - Do not use `in_memory` for durable or cross-worker state.
 - Use `database` when conversations must persist and encrypted payload storage is required.
 - Use `redis` for shared ephemeral memory across workers.
-- Set retention expectations explicitly.
+- Keep Redis memory encryption enabled unless you explicitly accept plaintext prompt content, assistant output, metadata, and attachment references in Redis.
+- Use stable application encryption keys for Redis memory; applications sharing encrypted Redis keys must share the same encryption key.
+- Use separate Redis prefixes per application and environment to avoid cross-application payload/key collisions.
+- Set Redis `retention_days` when shared ephemeral memory should expire automatically; Agent Kit writes Redis keys with native TTL when retention is configured.
+- Set retention expectations explicitly and keep purge/lazy-expiration behavior in your operational model.
 - Avoid storing sensitive values in metadata.
 
 See [Memory](memory.md).
@@ -90,6 +94,7 @@ Before deploying:
 - verify provider profiles and failover order
 - verify tool authorization denies by default and allows only intended paths
 - verify memory persistence and retention behavior
+- verify Redis memory encryption, Redis key prefixing, encryption key management, and retention TTL behavior when Redis memory is enabled
 - verify queued workflows with the same queue driver shape you use in production
 - verify queue payload guard limits when enabled
 - verify telemetry payloads contain only safe operational metadata
