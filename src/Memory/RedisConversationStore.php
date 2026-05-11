@@ -6,6 +6,7 @@ namespace CreativeCrafts\LaravelAiAgentKit\Memory;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationRetentionPurger;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\EncryptionService;
 use CreativeCrafts\LaravelAiAgentKit\Memory\Exceptions\ConversationStoreException;
 use DateMalformedStringException;
 use DateTimeImmutable;
@@ -19,10 +20,12 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
 {
     public function __construct(
         private Application $app,
+        private EncryptionService $encryptionService,
         private ?string $connectionName,
         private string $keyPrefix,
         private string $driverName,
         private ?int $retentionDays = null,
+        private bool $encryptPayloads = true,
     ) {
         if (!$this->app->bound('redis')) {
             throw new RuntimeException('Redis memory driver requires a bound [redis] service in the container.');
@@ -74,27 +77,27 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
     public function save(Conversation $conversation): void
     {
         $payload = [
-          'conversation_id' => $conversation->id->toString(),
-          'driver' => $this->driverName,
-          'retention_until' => $this->retentionTimestamp($conversation),
-          'created_at' => $conversation->createdAt->format(DATE_ATOM),
-          'updated_at' => $conversation->updatedAt->format(DATE_ATOM),
-          'metadata' => $conversation->metadata,
-          'messages' => array_map(
-              function (ConversationMessage $message): array {
-                  [$meta, $attachments] = $this->splitAttachmentsFromMetadata($message->metadata);
+            'conversation_id' => $conversation->id->toString(),
+            'driver' => $this->driverName,
+            'retention_until' => $this->retentionTimestamp($conversation),
+            'created_at' => $conversation->createdAt->format(DATE_ATOM),
+            'updated_at' => $conversation->updatedAt->format(DATE_ATOM),
+            'metadata' => $conversation->metadata,
+            'messages' => array_map(
+                function (ConversationMessage $message): array {
+                    [$meta, $attachments] = $this->splitAttachmentsFromMetadata($message->metadata);
 
-                  return [
-                      'id' => $message->id->toString(),
-                      'role' => $message->role->value,
-                      'content' => $message->content,
-                      'created_at' => $message->createdAt->format(DATE_ATOM),
-                      'metadata' => $meta,
-                      'attachments' => $attachments,
-                  ];
-              },
-              $conversation->messages,
-          ),
+                    return [
+                        'id' => $message->id->toString(),
+                        'role' => $message->role->value,
+                        'content' => $message->content,
+                        'created_at' => $message->createdAt->format(DATE_ATOM),
+                        'metadata' => $meta,
+                        'attachments' => $attachments,
+                    ];
+                },
+                $conversation->messages,
+            ),
         ];
 
         try {
@@ -103,7 +106,11 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
             throw ConversationStoreException::payloadEncodingFailed('redis.payload', $exception);
         }
 
-        $this->setValue($this->keyFor($conversation->id), $encodedPayload);
+        $this->setValue(
+            key: $this->keyFor($conversation->id),
+            value: $this->encodeStoredPayload($encodedPayload),
+            ttlSeconds: $this->retentionTtlSeconds($conversation),
+        );
     }
 
     /**
@@ -124,10 +131,7 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
 
             $decoded = $this->decodePayload($payload);
             $retentionUntil = $decoded['retention_until'] ?? null;
-            if (!is_string($retentionUntil)) {
-                continue;
-            }
-            if ($retentionUntil === '') {
+            if (!is_string($retentionUntil) || $retentionUntil === '') {
                 continue;
             }
 
@@ -148,9 +152,9 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
     private function command(string $name, array $arguments): mixed
     {
         return $this->app
-          ->make('redis')
-          ->connection($this->connectionName)
-          ->command($name, $arguments);
+            ->make('redis')
+            ->connection($this->connectionName)
+            ->command($name, $arguments);
     }
 
     /**
@@ -172,21 +176,68 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
      */
     private function decodePayload(string $payload): array
     {
+        $decoded = $this->decodeJsonPayload($payload, 'redis.payload');
+
+        if (($decoded['encrypted'] ?? false) !== true) {
+            return $decoded;
+        }
+
+        $encryptedPayload = $decoded['payload'] ?? null;
+        if (!is_string($encryptedPayload) || $encryptedPayload === '') {
+            throw ConversationStoreException::payloadDecodingFailed(
+                'redis.payload.payload',
+                new RuntimeException('Encrypted Redis payload must contain a non-empty payload string.'),
+            );
+        }
+
+        try {
+            $plaintext = $this->encryptionService->decryptString($encryptedPayload);
+        } catch (Throwable $throwable) {
+            throw ConversationStoreException::payloadDecodingFailed('redis.payload.payload', $throwable);
+        }
+
+        return $this->decodeJsonPayload($plaintext, 'redis.payload.decrypted');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeJsonPayload(string $payload, string $field): array
+    {
         try {
             $decoded = json_decode($payload, true, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
-            throw ConversationStoreException::payloadDecodingFailed('redis.payload', $exception);
+            throw ConversationStoreException::payloadDecodingFailed($field, $exception);
         }
 
         if (!is_array($decoded)) {
             throw ConversationStoreException::payloadDecodingFailed(
-                'redis.payload',
+                $field,
                 new RuntimeException('Decoded Redis payload must be an array.'),
             );
         }
 
         /** @var array<string, mixed> $decoded */
         return $decoded;
+    }
+
+    /**
+     * @throws ConversationStoreException
+     */
+    private function encodeStoredPayload(string $encodedPayload): string
+    {
+        if (!$this->encryptPayloads) {
+            return $encodedPayload;
+        }
+
+        try {
+            return json_encode([
+                'encrypted' => true,
+                'payload' => $this->encryptionService->encryptString($encodedPayload),
+            ], JSON_THROW_ON_ERROR);
+        } catch (JsonException $exception) {
+            throw ConversationStoreException::payloadEncodingFailed('redis.payload.encrypted', $exception);
+        }
     }
 
     /**
@@ -324,17 +375,38 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
         }
 
         return $conversation
-          ->updatedAt
-          ->modify(sprintf('+%d days', $this->retentionDays))
-          ->format(DATE_ATOM);
+            ->updatedAt
+            ->modify(sprintf('+%d days', $this->retentionDays))
+            ->format(DATE_ATOM);
+    }
+
+    /**
+     * @throws DateMalformedStringException
+     */
+    private function retentionTtlSeconds(Conversation $conversation): ?int
+    {
+        if ($this->retentionDays === null) {
+            return null;
+        }
+
+        $expiresAt = $conversation->updatedAt->modify(sprintf('+%d days', $this->retentionDays));
+        $seconds = $expiresAt->getTimestamp() - (new DateTimeImmutable())->getTimestamp();
+
+        return max(1, $seconds);
     }
 
     /**
      * @throws Throwable
      */
-    private function setValue(string $key, string $value): void
+    private function setValue(string $key, string $value, ?int $ttlSeconds = null): void
     {
-        $this->command('SET', [$key, $value]);
+        if ($ttlSeconds === null) {
+            $this->command('SET', [$key, $value]);
+
+            return;
+        }
+
+        $this->command('SET', [$key, $value, 'EX', $ttlSeconds]);
     }
 
     /**
