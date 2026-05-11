@@ -46,7 +46,7 @@
 
 ## 8. Validation
 
-- [ ] 8.1 Run `openspec validate audit-laravel-ai-sdk-parity`.
-- [ ] 8.2 Run formatting checks if docs tooling requires it.
-- [ ] 8.3 Run relevant documentation tests.
-- [ ] 8.4 Run fake parity tests if code/test changes are included.
+- [x] 8.1 Run `openspec validate audit-laravel-ai-sdk-parity`.
+- [x] 8.2 Run formatting checks if docs tooling requires it.
+- [x] 8.3 Run relevant documentation tests.
+- [x] 8.4 Run fake parity tests if code/test changes are included.
