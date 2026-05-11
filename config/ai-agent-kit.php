@@ -246,6 +246,7 @@ return [
       'retention_days' => env('AI_AGENT_KIT_MEMORY_REDIS_RETENTION_DAYS') === null
         ? null
         : (int)env('AI_AGENT_KIT_MEMORY_REDIS_RETENTION_DAYS'),
+      'encrypt_payloads' => (bool)env('AI_AGENT_KIT_MEMORY_REDIS_ENCRYPT_PAYLOADS', true),
     ],
 
       /*
