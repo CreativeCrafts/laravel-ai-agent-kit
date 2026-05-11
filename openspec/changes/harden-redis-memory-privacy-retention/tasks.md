@@ -28,8 +28,8 @@
 
 ## 5. Validation
 
-- [ ] 5.1 Run `openspec validate harden-redis-memory-privacy-retention`.
-- [ ] 5.2 Run formatting checks.
-- [ ] 5.3 Run PHPStan/static analysis.
-- [ ] 5.4 Run Redis memory test subset.
-- [ ] 5.5 Run the full test suite if feasible.
+- [x] 5.1 Run `openspec validate harden-redis-memory-privacy-retention`.
+- [x] 5.2 Run formatting checks.
+- [x] 5.3 Run PHPStan/static analysis.
+- [x] 5.4 Run Redis memory test subset.
+- [x] 5.5 Run the full test suite if feasible.
