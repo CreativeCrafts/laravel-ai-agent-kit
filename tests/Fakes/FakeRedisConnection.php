@@ -14,17 +14,27 @@ final class FakeRedisConnection
     private array $values = [];
 
     /**
+     * @var array<string, int>
+     */
+    private array $ttlSeconds = [];
+
+    /**
+     * @var list<array{name: string, arguments: list<mixed>}>
+     */
+    private array $commands = [];
+
+    /**
      * @param list<mixed> $arguments
      */
     public function command(string $name, array $arguments): mixed
     {
-        return match (strtoupper($name)) {
+        $name = strtoupper($name);
+        $this->commands[] = ['name' => $name, 'arguments' => $arguments];
+
+        return match ($name) {
             'PING' => 'PONG',
             'GET' => $this->get((string)($arguments[0] ?? '')),
-            'SET' => $this->set(
-                (string)($arguments[0] ?? ''),
-                (string)($arguments[1] ?? ''),
-            ),
+            'SET' => $this->setCommand($arguments),
             'DEL' => $this->del((string)($arguments[0] ?? '')),
             'KEYS' => $this->keys((string)($arguments[0] ?? '')),
             'SCAN' => $this->scan($arguments),
@@ -37,11 +47,30 @@ final class FakeRedisConnection
         return $this->values[$key] ?? null;
     }
 
-    public function set(string $key, string $value): string
+    public function set(string $key, string $value, ?int $ttlSeconds = null): string
     {
         $this->values[$key] = $value;
 
+        if ($ttlSeconds === null) {
+            unset($this->ttlSeconds[$key]);
+        } else {
+            $this->ttlSeconds[$key] = $ttlSeconds;
+        }
+
         return 'OK';
+    }
+
+    public function ttlFor(string $key): ?int
+    {
+        return $this->ttlSeconds[$key] ?? null;
+    }
+
+    /**
+     * @return list<array{name: string, arguments: list<mixed>}>
+     */
+    public function recordedCommands(): array
+    {
+        return $this->commands;
     }
 
     public function del(string $key): int
@@ -50,7 +79,7 @@ final class FakeRedisConnection
             return 0;
         }
 
-        unset($this->values[$key]);
+        unset($this->values[$key], $this->ttlSeconds[$key]);
 
         return 1;
     }
@@ -95,5 +124,21 @@ final class FakeRedisConnection
         }
 
         return ['0', $this->keys($pattern)];
+    }
+
+    /**
+     * @param list<mixed> $arguments
+     */
+    private function setCommand(array $arguments): string
+    {
+        $key = (string)($arguments[0] ?? '');
+        $value = (string)($arguments[1] ?? '');
+        $ttlSeconds = null;
+
+        if (($arguments[2] ?? null) === 'EX' && is_int($arguments[3] ?? null)) {
+            $ttlSeconds = $arguments[3];
+        }
+
+        return $this->set($key, $value, $ttlSeconds);
     }
 }
