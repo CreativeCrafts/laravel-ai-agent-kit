@@ -38,7 +38,11 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
         $this->encryptionService = $encryptionService ?? $this->app->make(EncryptionService::class);
 
         $configuredEncryptPayloads = $this->app->make('config')->get('ai-agent-kit.memory.redis.encrypt_payloads', true);
-        $this->encryptPayloads = $encryptPayloads ?? (is_bool($configuredEncryptPayloads) ? $configuredEncryptPayloads : true);
+        if ($encryptPayloads === null && !is_bool($configuredEncryptPayloads)) {
+            throw new RuntimeException('Configuration key [ai-agent-kit.memory.redis.encrypt_payloads] must be a boolean.');
+        }
+
+        $this->encryptPayloads = $encryptPayloads ?? $configuredEncryptPayloads;
     }
 
     /**
