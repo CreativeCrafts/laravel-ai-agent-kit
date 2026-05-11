@@ -41,6 +41,14 @@ Common capabilities include:
 
 Use capability names to express workflow needs. Keep provider-specific model details inside the profile `options` array.
 
+## Runtime provider resolution
+
+When a runtime request omits `provider`, Agent Kit resolves the configured `default_provider` and uses that profile as the first attempt. If the request also omits `model`, the runtime uses the profile `options.model` value when present; otherwise the Laravel AI SDK provider default may apply.
+
+When a runtime request explicitly supplies `provider` and `model`, those values are used for the first attempt. The explicit provider remains eligible for failover only when it appears in `failover_order`.
+
+Direct runtime, blueprint, and orchestration paths all flow through the same runtime binding, so provider resolution is centralized.
+
 ## Failover
 
 `failover_order` defines the deterministic provider traversal order:
@@ -52,7 +60,15 @@ Use capability names to express workflow needs. Keep provider-specific model det
 ],
 ~~~
 
-The package-owned failover policy decides which provider profile should be tried next. It emits redacted telemetry and typed package failures when no compatible provider remains.
+For prompt execution, provider-edge failures are retried against the next eligible provider in `failover_order`. Agent Kit preserves the request schema, tools, provider tools, attachments, timeout, generation options, memory projection, and metadata across attempts.
+
+When no later provider remains eligible, the runtime surfaces a package-owned `RuntimeExecutionException` with provider-failure category and emits the existing failover exhaustion/resolution telemetry.
+
+Streaming uses a conservative policy: failover is creation-only. If the provider stream cannot be created before any chunks are emitted, the runtime may try the next provider. Once chunks are emitted, mid-stream provider errors become one terminal `StreamFailure`; the runtime does not replay the partial stream against another provider.
+
+## Circuit breaker integration
+
+When circuit-breaker failover filtering is enabled, providers with open breakers are skipped by the failover selector. Runtime provider attempts also record provider success/failure against `providers.<provider-name>` so breaker state reflects real runtime outcomes.
 
 ## Agent-specific provider profiles
 

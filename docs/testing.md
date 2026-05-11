@@ -47,6 +47,8 @@ The package includes fakes for common surfaces:
 
 Bind the fake into the Laravel container for the contract your application code depends on.
 
+Facade modality methods such as `AgentKit::embed()`, `AgentKit::transcribe()`, `AgentKit::generateImage()`, `AgentKit::rerank()`, and `AgentKit::generateAudio()` resolve their runtime contracts from the container. Bind a test double for the relevant modality contract when testing application code through the facade.
+
 ## Assertion helpers
 
 The package exposes helper assertions under `CreativeCrafts\LaravelAiAgentKit\Testing\Assertions\PackageAssertions` for common fake-driven checks.
@@ -79,6 +81,8 @@ Do not make live provider calls in package or application tests by default. Avoi
 ## When to use Laravel AI SDK fakes
 
 Use Laravel AI SDK fakes only for tests that specifically validate the internal bridge between Agent Kit and Laravel AI SDK. Application-facing workflow tests should usually stay in package-owned terms.
+
+Use SDK fakes directly when your application intentionally uses direct Laravel AI SDK jobs, provider-native tools, provider-hosted retrieval, or SDK-specific modality behavior outside the Agent Kit envelope.
 
 ## Determinism checklist
 

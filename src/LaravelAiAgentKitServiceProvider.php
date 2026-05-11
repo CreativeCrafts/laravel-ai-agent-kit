@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit;
 
+use Closure;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluation;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluation;
 use CreativeCrafts\LaravelAiAgentKit\Commands\MakeAgentCommand;
@@ -15,10 +16,10 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\AgentRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\BlueprintCompiler;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\BlueprintRunner;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\RuntimeMiddleware;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\StreamingAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\QueuedPipelineDispatcher;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\RuntimeMiddleware;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\StreamingAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationRetentionPurger;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
@@ -39,11 +40,19 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\CircuitBreakerManager;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\RetryPolicyResolver;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\EncryptionService;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\Redactor;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ProviderToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Vector\VectorStoreInterface;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\ContainerAgentRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\ConfigValidator;
+use CreativeCrafts\LaravelAiAgentKit\Core\LaravelAi\LaravelAiFilesService;
+use CreativeCrafts\LaravelAiAgentKit\Core\LaravelAi\LaravelAiStoresService;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkAudioGenerationRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkEmbeddingsRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkImageGenerationRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkRerankingRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkTranscriptionRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\ConfigurableDelegationPolicyEngine;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\DelegationPolicyMode;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\SynchronousAgentOrchestrator;
@@ -57,13 +66,6 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\CompiledBlueprintRunner;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\MiddlewareExecutingAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\PromptBlueprintCompiler;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\RuntimeConversationMemoryBridge;
-use CreativeCrafts\LaravelAiAgentKit\Core\LaravelAi\LaravelAiFilesService;
-use CreativeCrafts\LaravelAiAgentKit\Core\LaravelAi\LaravelAiStoresService;
-use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkAudioGenerationRuntime;
-use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkEmbeddingsRuntime;
-use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkImageGenerationRuntime;
-use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkRerankingRuntime;
-use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkTranscriptionRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\SdkAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationRetentionPurger;
 use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationStore;
@@ -86,12 +88,11 @@ use CreativeCrafts\LaravelAiAgentKit\Security\DefaultRedactor;
 use CreativeCrafts\LaravelAiAgentKit\Security\LaravelEncryptionService;
 use CreativeCrafts\LaravelAiAgentKit\Support\AgentKitManager;
 use CreativeCrafts\LaravelAiAgentKit\Tools\DenyAllToolAuthorizer;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ProviderToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryProviderToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Tools\ProviderToolMaterializer;
-use CreativeCrafts\LaravelAiAgentKit\Tools\SimilaritySearchTool;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
+use CreativeCrafts\LaravelAiAgentKit\Tools\SimilaritySearchTool;
 use CreativeCrafts\LaravelAiAgentKit\Vector\DatabaseVectorStore;
 use CreativeCrafts\LaravelAiAgentKit\Vector\InMemoryVectorStore;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
@@ -111,7 +112,6 @@ use Laravel\Ai\Providers\Tools\WebSearch;
 use RuntimeException;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
-use Closure;
 
 class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 {
@@ -237,6 +237,129 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
                 container: $app,
             );
         });
+    }
+
+    private function delegationPolicyModeConfig(ConfigRepository $config, string $key): DelegationPolicyMode
+    {
+        $value = $config->get($key, DelegationPolicyMode::STATIC_ONLY->value);
+
+        if ($value instanceof DelegationPolicyMode) {
+            return $value;
+        }
+
+        if (!is_string($value) || $value === '') {
+            throw new RuntimeException("Configuration key [{$key}] must be a non-empty string or a delegation policy mode enum.");
+        }
+
+        $mode = DelegationPolicyMode::tryFrom($value);
+
+        if ($mode === null) {
+            throw new RuntimeException(
+                sprintf(
+                    'Configuration key [%s] must be one of [%s].',
+                    $key,
+                    implode(', ', array_map(static fn (DelegationPolicyMode $candidate): string => $candidate->value, DelegationPolicyMode::cases())),
+                ),
+            );
+        }
+
+        return $mode;
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private function delegationPolicyAllowlistConfig(ConfigRepository $config, string $key): array
+    {
+        $allowlist = $this->arrayConfig($config, $key);
+        $normalized = [];
+
+        foreach ($allowlist as $sourceAgentKey => $targets) {
+            if (!is_string($sourceAgentKey) || $sourceAgentKey === '') {
+                throw new RuntimeException("Configuration key [{$key}] must contain non-empty string keys.");
+            }
+
+            if (!is_array($targets)) {
+                throw new RuntimeException(
+                    "Configuration key [{$key}] must contain arrays of non-empty string target agent keys.",
+                );
+            }
+
+            $normalizedTargets = [];
+
+            foreach ($targets as $target) {
+                if (!is_string($target) || $target === '') {
+                    throw new RuntimeException(
+                        "Configuration key [{$key}] must contain arrays of non-empty string target agent keys.",
+                    );
+                }
+
+                $normalizedTargets[] = $target;
+            }
+
+            $normalized[$sourceAgentKey] = $normalizedTargets;
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<int|string, mixed> $default
+     * @return array<int|string, mixed>
+     */
+    private function arrayConfig(ConfigRepository $config, string $key, array $default = []): array
+    {
+        $value = $config->get($key, $default);
+
+        return is_array($value)
+          ? $value
+          : throw new RuntimeException("Configuration key [{$key}] must be an array.");
+    }
+
+    /**
+     * @return array<string, array<string, string>>
+     */
+    private function delegationPolicyRewritesConfig(ConfigRepository $config, string $key): array
+    {
+        $rewrites = $this->arrayConfig($config, $key);
+        $normalized = [];
+
+        foreach ($rewrites as $sourceAgentKey => $mapping) {
+            if (!is_string($sourceAgentKey) || $sourceAgentKey === '') {
+                throw new RuntimeException("Configuration key [{$key}] must contain non-empty string keys.");
+            }
+
+            if (!is_array($mapping)) {
+                throw new RuntimeException(
+                    "Configuration key [{$key}] must contain rewrite maps with non-empty string source and target agent keys.",
+                );
+            }
+
+            $normalizedMapping = [];
+
+            foreach ($mapping as $fromTarget => $toTarget) {
+                if (!is_string($fromTarget) || $fromTarget === '' || !is_string($toTarget) || $toTarget === '') {
+                    throw new RuntimeException(
+                        "Configuration key [{$key}] must contain rewrite maps with non-empty string source and target agent keys.",
+                    );
+                }
+
+                $normalizedMapping[$fromTarget] = $toTarget;
+            }
+
+            $normalized[$sourceAgentKey] = $normalizedMapping;
+        }
+
+        return $normalized;
+    }
+
+    private function positiveIntConfig(ConfigRepository $config, string $key, int $default): int
+    {
+        $value = $config->get($key, $default);
+
+        return is_int($value) && $value >= 1
+          ? $value
+          : throw new RuntimeException("Configuration key [{$key}] must be an integer >= 1.");
     }
 
     private function registerConfigAndProviderBindings(): void
@@ -410,14 +533,14 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             };
 
             if ($this->memoryDriver($config) === 'database'
-                && (bool)$config->get('ai-agent-kit.memory.laravel_ai_legacy.enabled', false)) {
+              && (bool)$config->get('ai-agent-kit.memory.laravel_ai_legacy.enabled', false)) {
                 /** @var DatabaseManager $database */
                 $database = $app->make(DatabaseManager::class);
 
                 $legacyReader = new LegacyLaravelAiDatabaseConversationReader(
                     database: $database,
                     connectionName: $this->nullableStringConfig($config, 'ai-agent-kit.memory.laravel_ai_legacy.connection')
-                        ?? $this->nullableStringConfig($config, 'ai-agent-kit.memory.database.connection'),
+                  ?? $this->nullableStringConfig($config, 'ai-agent-kit.memory.database.connection'),
                     conversationsTable: $this->stringConfig($config, 'ai-agent-kit.memory.laravel_ai_legacy.conversations_table'),
                     messagesTable: $this->stringConfig($config, 'ai-agent-kit.memory.laravel_ai_legacy.messages_table'),
                 );
@@ -477,6 +600,46 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         });
     }
 
+    private function nullableStringConfig(ConfigRepository $config, string $key): ?string
+    {
+        $value = $config->get($key);
+
+        if ($value === null) {
+            return null;
+        }
+
+        return is_string($value) && $value !== ''
+          ? $value
+          : throw new RuntimeException("Configuration key [{$key}] must be null or a non-empty string.");
+    }
+
+    private function stringConfig(ConfigRepository $config, string $key): string
+    {
+        $value = $config->get($key);
+
+        return is_string($value) && $value !== ''
+          ? $value
+          : throw new RuntimeException("Configuration key [{$key}] must be a non-empty string.");
+    }
+
+    private function nullableIntConfig(ConfigRepository $config, string $key): ?int
+    {
+        $value = $config->get($key);
+
+        if ($value === null) {
+            return null;
+        }
+
+        return is_int($value)
+          ? $value
+          : throw new RuntimeException("Configuration key [{$key}] must be null or an integer.");
+    }
+
+    private function memoryDriver(ConfigRepository $config): string
+    {
+        return $this->stringConfig($config, 'ai-agent-kit.memory.default_driver');
+    }
+
     private function registerPromptBindings(): void
     {
         $this->app->singleton(InMemoryPromptRepository::class, function (): InMemoryPromptRepository {
@@ -502,6 +665,11 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
                 default => throw new RuntimeException('Unsupported prompt repository driver.'),
             };
         });
+    }
+
+    private function promptDriver(ConfigRepository $config): string
+    {
+        return $this->stringConfig($config, 'ai-agent-kit.prompts.default_driver');
     }
 
     private function registerToolBindings(): void
@@ -562,480 +730,30 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         });
     }
 
-    private function registerVectorAndLaravelAiFacadeBindings(): void
-    {
-        $this->app->singleton(InMemoryVectorStore::class, function (): InMemoryVectorStore {
-            return new InMemoryVectorStore();
-        });
-
-        $this->app->singleton(DatabaseVectorStore::class, function (Application $app): DatabaseVectorStore {
-            return $this->resolveDatabaseVectorStore($app);
-        });
-
-        $this->app->singleton(VectorStoreInterface::class, function (Application $app): VectorStoreInterface {
-            /** @var ConfigRepository $config */
-            $config = $app->make(ConfigRepository::class);
-
-            return match ($this->stringConfig($config, 'ai-agent-kit.vector.default_driver')) {
-                'in_memory' => $app->make(InMemoryVectorStore::class),
-                'database' => $app->make(DatabaseVectorStore::class),
-                default => throw new RuntimeException('Unsupported vector driver.'),
-            };
-        });
-
-        $this->app->singleton(LaravelAiFilesService::class, function (Application $app): LaravelAiFilesService {
-            return new LaravelAiFilesService(
-                config: $app->make(ConfigRepository::class),
-                events: $app->make(Dispatcher::class),
-            );
-        });
-
-        $this->app->singleton(LaravelAiStoresService::class, function (Application $app): LaravelAiStoresService {
-            return new LaravelAiStoresService(
-                config: $app->make(ConfigRepository::class),
-                events: $app->make(Dispatcher::class),
-            );
-        });
-    }
-
-    private function registerBlueprintRuntimeAndPipelineBindings(): void
-    {
-        $this->app->singleton(SdkToolMaterializer::class, function (Application $app): SdkToolMaterializer {
-            return new SdkToolMaterializer(
-                toolRegistry: $app->make(ToolRegistry::class),
-            );
-        });
-
-        $this->app->singleton(ProviderToolMaterializer::class, function (Application $app): ProviderToolMaterializer {
-            return new ProviderToolMaterializer(
-                providerToolRegistry: $app->make(ProviderToolRegistry::class),
-                authorizer: $app->make(ToolAuthorizer::class),
-            );
-        });
-
-        $this->app->singleton(PromptBlueprintCompiler::class, function (Application $app): PromptBlueprintCompiler {
-            return new PromptBlueprintCompiler(
-                promptExecutionMapper: $app->make(PromptExecutionMapper::class),
-            );
-        });
-
-        $this->app->singleton(BlueprintCompiler::class, function (Application $app): BlueprintCompiler {
-            return $app->make(PromptBlueprintCompiler::class);
-        });
-
-        $this->app->singleton(RuntimeConversationMemoryBridge::class, function (Application $app): RuntimeConversationMemoryBridge {
-            return new RuntimeConversationMemoryBridge(
-                conversationContextManager: $app->make(ConversationContextManager::class),
-                config: $app->make(ConfigRepository::class),
-                events: $app->make(Dispatcher::class),
-            );
-        });
-
-        $this->app->singleton(SdkTelemetryNormalizer::class, function (Application $app): SdkTelemetryNormalizer {
-            return new SdkTelemetryNormalizer(
-                events: $app->make(Dispatcher::class),
-                redactor: $app->make(Redactor::class),
-            );
-        });
-
-        $this->app->singleton(SdkAudioGenerationRuntime::class, static fn (): SdkAudioGenerationRuntime => new SdkAudioGenerationRuntime());
-        $this->app->singleton(SdkEmbeddingsRuntime::class, static fn (): SdkEmbeddingsRuntime => new SdkEmbeddingsRuntime());
-        $this->app->singleton(SdkImageGenerationRuntime::class, static fn (): SdkImageGenerationRuntime => new SdkImageGenerationRuntime());
-        $this->app->singleton(SdkRerankingRuntime::class, static fn (): SdkRerankingRuntime => new SdkRerankingRuntime());
-        $this->app->singleton(SdkTranscriptionRuntime::class, static fn (): SdkTranscriptionRuntime => new SdkTranscriptionRuntime());
-
-        $this->app->singleton(TranscriptionRuntime::class, function (Application $app): TranscriptionRuntime {
-            return $this->resolveModalityRuntime(
-                $app,
-                configKey: 'ai-agent-kit.modalities.transcription',
-                sdk: $app->make(SdkTranscriptionRuntime::class),
-                contract: TranscriptionRuntime::class,
-            );
-        });
-
-        $this->app->singleton(EmbeddingsRuntime::class, function (Application $app): EmbeddingsRuntime {
-            return $this->resolveModalityRuntime(
-                $app,
-                configKey: 'ai-agent-kit.modalities.embeddings',
-                sdk: $app->make(SdkEmbeddingsRuntime::class),
-                contract: EmbeddingsRuntime::class,
-            );
-        });
-
-        $this->app->singleton(ImageGenerationRuntime::class, function (Application $app): ImageGenerationRuntime {
-            return $this->resolveModalityRuntime(
-                $app,
-                configKey: 'ai-agent-kit.modalities.image_generation',
-                sdk: $app->make(SdkImageGenerationRuntime::class),
-                contract: ImageGenerationRuntime::class,
-            );
-        });
-
-        $this->app->singleton(RerankingRuntime::class, function (Application $app): RerankingRuntime {
-            return $this->resolveModalityRuntime(
-                $app,
-                configKey: 'ai-agent-kit.modalities.reranking',
-                sdk: $app->make(SdkRerankingRuntime::class),
-                contract: RerankingRuntime::class,
-            );
-        });
-
-        $this->app->singleton(AudioGenerationRuntime::class, function (Application $app): AudioGenerationRuntime {
-            return $this->resolveModalityRuntime(
-                $app,
-                configKey: 'ai-agent-kit.modalities.audio_generation',
-                sdk: $app->make(SdkAudioGenerationRuntime::class),
-                contract: AudioGenerationRuntime::class,
-            );
-        });
-
-        $this->app->singleton(SdkAiRuntime::class, function (Application $app): SdkAiRuntime {
-            return new SdkAiRuntime(
-                toolMaterializer: $app->make(SdkToolMaterializer::class),
-                providerToolMaterializer: $app->make(ProviderToolMaterializer::class),
-                runtimeConversationMemoryBridge: $app->make(RuntimeConversationMemoryBridge::class),
-                runtimeBudgetEnforcer: $app->make(RuntimeBudgetEnforcer::class),
-                container: $app,
-                events: $app->make(Dispatcher::class),
-                redactor: $app->make(Redactor::class),
-            );
-        });
-
-        $this->app->singleton(AiRuntime::class, function (Application $app): AiRuntime {
-            $inner = $app->make(SdkAiRuntime::class);
-            $middleware = $this->resolveRuntimeMiddlewareStack($app);
-
-            if ($middleware === []) {
-                return $inner;
-            }
-
-            return new MiddlewareExecutingAiRuntime($inner, $middleware);
-        });
-
-        $this->app->singleton(StreamingAiRuntime::class, function (Application $app): StreamingAiRuntime {
-            $runtime = $app->make(AiRuntime::class);
-
-            if (!$runtime instanceof StreamingAiRuntime) {
-                throw new RuntimeException(
-                    sprintf('Resolved %s must implement %s for streaming.', AiRuntime::class, StreamingAiRuntime::class),
-                );
-            }
-
-            return $runtime;
-        });
-
-        $this->app->singleton(CompiledBlueprintRunner::class, function (Application $app): CompiledBlueprintRunner {
-            return new CompiledBlueprintRunner(
-                blueprintCompiler: $app->make(BlueprintCompiler::class),
-                aiRuntime: $app->make(AiRuntime::class),
-            );
-        });
-
-        $this->app->singleton(BlueprintRunner::class, function (Application $app): BlueprintRunner {
-            return $app->make(CompiledBlueprintRunner::class);
-        });
-
-        $this->app->singleton(SynchronousPipelineRunner::class, function (Application $app): SynchronousPipelineRunner {
-            return new SynchronousPipelineRunner(
-                conversationContextManager: $app->make(ConversationContextManager::class),
-                events: $app->make(Dispatcher::class),
-                redactor: $app->make(Redactor::class),
-                budgetEnforcer: $app->make(PipelineBudgetEnforcer::class),
-                retryPolicyResolver: $app->make(RetryPolicyResolver::class),
-            );
-        });
-
-        $this->app->singleton(PipelineRunner::class, function (Application $app): PipelineRunner {
-            return $app->make(SynchronousPipelineRunner::class);
-        });
-
-        $this->registerQueuedPipelineDispatcherBinding();
-    }
-
-    private function registerQueuedPipelineDispatcherBinding(): void
-    {
-        $this->app->singleton(LaravelQueuedPipelineDispatcher::class, function (Application $app): LaravelQueuedPipelineDispatcher {
-            return new LaravelQueuedPipelineDispatcher(
-                config: $app->make(ConfigRepository::class),
-            );
-        });
-
-        $this->app->singleton(QueuedPipelineDispatcher::class, function (Application $app): QueuedPipelineDispatcher {
-            return $app->make(LaravelQueuedPipelineDispatcher::class);
-        });
-    }
-
-    private function registerSummarizationBindings(): void
-    {
-        $this->app->singleton(NullConversationSummarizer::class, function (Application $app): NullConversationSummarizer {
-            /** @var ConfigRepository $config */
-            $config = $app->make(ConfigRepository::class);
-            /** @var int $triggerMessageCount */
-            $triggerMessageCount = $config->get('ai-agent-kit.summarization.trigger_message_count', 20);
-
-            return new NullConversationSummarizer(
-                enabled: (bool)$config->get('ai-agent-kit.summarization.enabled', false),
-                triggerMessageCount: $triggerMessageCount,
-            );
-        });
-
-        $this->app->singleton(ConversationSummarizer::class, function (Application $app): ConversationSummarizer {
-            return $app->make(NullConversationSummarizer::class);
-        });
-    }
-
-    private function delegationPolicyModeConfig(ConfigRepository $config, string $key): DelegationPolicyMode
-    {
-        $value = $config->get($key, DelegationPolicyMode::STATIC_ONLY->value);
-
-        if ($value instanceof DelegationPolicyMode) {
-            return $value;
-        }
-
-        if (!is_string($value) || $value === '') {
-            throw new RuntimeException("Configuration key [{$key}] must be a non-empty string or a delegation policy mode enum.");
-        }
-
-        $mode = DelegationPolicyMode::tryFrom($value);
-
-        if ($mode === null) {
-            throw new RuntimeException(
-                sprintf(
-                    'Configuration key [%s] must be one of [%s].',
-                    $key,
-                    implode(', ', array_map(static fn (DelegationPolicyMode $candidate): string => $candidate->value, DelegationPolicyMode::cases())),
-                ),
-            );
-        }
-
-        return $mode;
-    }
-
-    /**
-     * @return array<string, list<string>>
-     */
-    private function delegationPolicyAllowlistConfig(ConfigRepository $config, string $key): array
-    {
-        $allowlist = $this->arrayConfig($config, $key);
-        $normalized = [];
-
-        foreach ($allowlist as $sourceAgentKey => $targets) {
-            if (!is_string($sourceAgentKey) || $sourceAgentKey === '') {
-                throw new RuntimeException("Configuration key [{$key}] must contain non-empty string keys.");
-            }
-
-            if (!is_array($targets)) {
-                throw new RuntimeException(
-                    "Configuration key [{$key}] must contain arrays of non-empty string target agent keys.",
-                );
-            }
-
-            $normalizedTargets = [];
-
-            foreach ($targets as $target) {
-                if (!is_string($target) || $target === '') {
-                    throw new RuntimeException(
-                        "Configuration key [{$key}] must contain arrays of non-empty string target agent keys.",
-                    );
-                }
-
-                $normalizedTargets[] = $target;
-            }
-
-            $normalized[$sourceAgentKey] = $normalizedTargets;
-        }
-
-        return $normalized;
-    }
-
-    /**
-     * @param array<int|string, mixed> $default
-     * @return array<int|string, mixed>
-     */
-    private function arrayConfig(ConfigRepository $config, string $key, array $default = []): array
-    {
-        $value = $config->get($key, $default);
-
-        return is_array($value)
-          ? $value
-          : throw new RuntimeException("Configuration key [{$key}] must be an array.");
-    }
-
-    /**
-     * @return array<string, array<string, string>>
-     */
-    private function delegationPolicyRewritesConfig(ConfigRepository $config, string $key): array
-    {
-        $rewrites = $this->arrayConfig($config, $key);
-        $normalized = [];
-
-        foreach ($rewrites as $sourceAgentKey => $mapping) {
-            if (!is_string($sourceAgentKey) || $sourceAgentKey === '') {
-                throw new RuntimeException("Configuration key [{$key}] must contain non-empty string keys.");
-            }
-
-            if (!is_array($mapping)) {
-                throw new RuntimeException(
-                    "Configuration key [{$key}] must contain rewrite maps with non-empty string source and target agent keys.",
-                );
-            }
-
-            $normalizedMapping = [];
-
-            foreach ($mapping as $fromTarget => $toTarget) {
-                if (!is_string($fromTarget) || $fromTarget === '' || !is_string($toTarget) || $toTarget === '') {
-                    throw new RuntimeException(
-                        "Configuration key [{$key}] must contain rewrite maps with non-empty string source and target agent keys.",
-                    );
-                }
-
-                $normalizedMapping[$fromTarget] = $toTarget;
-            }
-
-            $normalized[$sourceAgentKey] = $normalizedMapping;
-        }
-
-        return $normalized;
-    }
-
-    private function positiveIntConfig(ConfigRepository $config, string $key, int $default): int
-    {
-        $value = $config->get($key, $default);
-
-        return is_int($value) && $value >= 1
-          ? $value
-          : throw new RuntimeException("Configuration key [{$key}] must be an integer >= 1.");
-    }
-
-    private function nullableStringConfig(ConfigRepository $config, string $key): ?string
-    {
-        $value = $config->get($key);
-
-        if ($value === null) {
-            return null;
-        }
-
-        return is_string($value) && $value !== ''
-          ? $value
-          : throw new RuntimeException("Configuration key [{$key}] must be null or a non-empty string.");
-    }
-
-    private function stringConfig(ConfigRepository $config, string $key): string
-    {
-        $value = $config->get($key);
-
-        return is_string($value) && $value !== ''
-          ? $value
-          : throw new RuntimeException("Configuration key [{$key}] must be a non-empty string.");
-    }
-
-    private function nullableIntConfig(ConfigRepository $config, string $key): ?int
-    {
-        $value = $config->get($key);
-
-        if ($value === null) {
-            return null;
-        }
-
-        return is_int($value)
-          ? $value
-          : throw new RuntimeException("Configuration key [{$key}] must be null or an integer.");
-    }
-
-    private function memoryDriver(ConfigRepository $config): string
-    {
-        return $this->stringConfig($config, 'ai-agent-kit.memory.default_driver');
-    }
-
-    private function maybeWarnEphemeralDrivers(ConfigRepository $config): void
-    {
-        $block = $config->get('ai-agent-kit.ephemeral_driver_warnings', []);
-
-        if (!is_array($block) || !($block['enabled'] ?? false)) {
-            return;
-        }
-
-        $environments = $block['environments'] ?? ['production'];
-        if (!is_array($environments) || $environments === []) {
-            return;
-        }
-
-        $envList = [];
-        foreach ($environments as $name) {
-            if (is_string($name) && $name !== '') {
-                $envList[] = $name;
-            }
-        }
-
-        if ($envList === [] || !app()->environment(...$envList)) {
-            return;
-        }
-
-        $memoryInMemory = $this->memoryDriver($config) === 'in_memory';
-        $vectorInMemory = $this->stringConfig($config, 'ai-agent-kit.vector.default_driver') === 'in_memory';
-
-        if (!$memoryInMemory && !$vectorInMemory) {
-            return;
-        }
-
-        if (self::$ephemeralDriverWarningLogged) {
-            return;
-        }
-
-        self::$ephemeralDriverWarningLogged = true;
-
-        $parts = [];
-        if ($memoryInMemory) {
-            $parts[] = 'memory.default_driver=in_memory';
-        }
-        if ($vectorInMemory) {
-            $parts[] = 'vector.default_driver=in_memory';
-        }
-
-        Log::warning('laravel-ai-agent-kit: in-memory drivers are active; data is not durable across requests or workers.', [
-            'drivers' => $parts,
-        ]);
-    }
-
-    private function promptDriver(ConfigRepository $config): string
-    {
-        return $this->stringConfig($config, 'ai-agent-kit.prompts.default_driver');
-    }
-
-    /**
-     * @return list<RuntimeMiddleware>
-     */
-    private function resolveRuntimeMiddlewareStack(Application $app): array
+    private function registerSimilaritySearchToolIfConfigured(Application $app, InMemoryToolRegistry $registry): void
     {
         /** @var ConfigRepository $config */
         $config = $app->make(ConfigRepository::class);
-        $entries = $config->get('ai-agent-kit.runtime.middleware', []);
+        $section = $config->get('ai-agent-kit.tools.similarity_search', []);
 
-        if (!is_array($entries)) {
-            return [];
+        if (!is_array($section)) {
+            return;
         }
 
-        $middleware = [];
+        $enabled = $section['enabled'] ?? true;
+        $register = $section['register'] ?? true;
 
-        foreach ($entries as $index => $class) {
-            if (!is_string($class) || $class === '') {
-                throw new RuntimeException(
-                    sprintf('Configuration key [ai-agent-kit.runtime.middleware.%s] must be a non-empty class-string.', $index),
-                );
-            }
-
-            $instance = $app->make($class);
-
-            if (!$instance instanceof RuntimeMiddleware) {
-                throw new RuntimeException(
-                    sprintf('Runtime middleware [%s] must implement %s.', $class, RuntimeMiddleware::class),
-                );
-            }
-
-            $middleware[] = $instance;
+        if ($enabled !== true || $register !== true) {
+            return;
         }
 
-        return $middleware;
+        $registry->register(
+            new SimilaritySearchTool(
+                embeddingsRuntime: $app->make(EmbeddingsRuntime::class),
+                vectorStore: $app->make(VectorStoreInterface::class),
+                config: $config,
+            ),
+        );
     }
 
     private function seedProviderToolRegistryFromConfig(
@@ -1155,6 +873,42 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         return static fn (): FileSearch => new FileSearch(stores: $stores, where: $filters);
     }
 
+    private function registerVectorAndLaravelAiFacadeBindings(): void
+    {
+        $this->app->singleton(InMemoryVectorStore::class, function (): InMemoryVectorStore {
+            return new InMemoryVectorStore();
+        });
+
+        $this->app->singleton(DatabaseVectorStore::class, function (Application $app): DatabaseVectorStore {
+            return $this->resolveDatabaseVectorStore($app);
+        });
+
+        $this->app->singleton(VectorStoreInterface::class, function (Application $app): VectorStoreInterface {
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
+            return match ($this->stringConfig($config, 'ai-agent-kit.vector.default_driver')) {
+                'in_memory' => $app->make(InMemoryVectorStore::class),
+                'database' => $app->make(DatabaseVectorStore::class),
+                default => throw new RuntimeException('Unsupported vector driver.'),
+            };
+        });
+
+        $this->app->singleton(LaravelAiFilesService::class, function (Application $app): LaravelAiFilesService {
+            return new LaravelAiFilesService(
+                config: $app->make(ConfigRepository::class),
+                events: $app->make(Dispatcher::class),
+            );
+        });
+
+        $this->app->singleton(LaravelAiStoresService::class, function (Application $app): LaravelAiStoresService {
+            return new LaravelAiStoresService(
+                config: $app->make(ConfigRepository::class),
+                events: $app->make(Dispatcher::class),
+            );
+        });
+    }
+
     private function resolveDatabaseVectorStore(Application $app): DatabaseVectorStore
     {
         /** @var ConfigRepository $config */
@@ -1174,8 +928,8 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         $database = $app->make(DatabaseManager::class);
         $connectionName = $block['connection'] ?? null;
         $connection = is_string($connectionName) && $connectionName !== ''
-            ? $database->connection($connectionName)
-            : $database->connection();
+          ? $database->connection($connectionName)
+          : $database->connection();
 
         $maxScan = $block['max_scan_rows'] ?? null;
         $maxScanRows = null;
@@ -1189,37 +943,163 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         return new DatabaseVectorStore($connection, $table, $maxScanRows);
     }
 
-    private function registerSimilaritySearchToolIfConfigured(Application $app, InMemoryToolRegistry $registry): void
+    private function registerBlueprintRuntimeAndPipelineBindings(): void
     {
-        /** @var ConfigRepository $config */
-        $config = $app->make(ConfigRepository::class);
-        $section = $config->get('ai-agent-kit.tools.similarity_search', []);
+        $this->app->singleton(SdkToolMaterializer::class, function (Application $app): SdkToolMaterializer {
+            return new SdkToolMaterializer(
+                toolRegistry: $app->make(ToolRegistry::class),
+            );
+        });
 
-        if (!is_array($section)) {
-            return;
-        }
+        $this->app->singleton(ProviderToolMaterializer::class, function (Application $app): ProviderToolMaterializer {
+            return new ProviderToolMaterializer(
+                providerToolRegistry: $app->make(ProviderToolRegistry::class),
+                authorizer: $app->make(ToolAuthorizer::class),
+            );
+        });
 
-        $enabled = $section['enabled'] ?? true;
-        $register = $section['register'] ?? true;
+        $this->app->singleton(PromptBlueprintCompiler::class, function (Application $app): PromptBlueprintCompiler {
+            return new PromptBlueprintCompiler(
+                promptExecutionMapper: $app->make(PromptExecutionMapper::class),
+            );
+        });
 
-        if ($enabled !== true || $register !== true) {
-            return;
-        }
+        $this->app->singleton(BlueprintCompiler::class, function (Application $app): BlueprintCompiler {
+            return $app->make(PromptBlueprintCompiler::class);
+        });
 
-        $registry->register(
-            new SimilaritySearchTool(
-                embeddingsRuntime: $app->make(EmbeddingsRuntime::class),
-                vectorStore: $app->make(VectorStoreInterface::class),
-                config: $config,
-            ),
-        );
+        $this->app->singleton(RuntimeConversationMemoryBridge::class, function (Application $app): RuntimeConversationMemoryBridge {
+            return new RuntimeConversationMemoryBridge(
+                conversationContextManager: $app->make(ConversationContextManager::class),
+                config: $app->make(ConfigRepository::class),
+                events: $app->make(Dispatcher::class),
+            );
+        });
+
+        $this->app->singleton(SdkTelemetryNormalizer::class, function (Application $app): SdkTelemetryNormalizer {
+            return new SdkTelemetryNormalizer(
+                events: $app->make(Dispatcher::class),
+                redactor: $app->make(Redactor::class),
+            );
+        });
+
+        $this->app->singleton(SdkAudioGenerationRuntime::class, static fn (): SdkAudioGenerationRuntime => new SdkAudioGenerationRuntime());
+        $this->app->singleton(SdkEmbeddingsRuntime::class, static fn (): SdkEmbeddingsRuntime => new SdkEmbeddingsRuntime());
+        $this->app->singleton(SdkImageGenerationRuntime::class, static fn (): SdkImageGenerationRuntime => new SdkImageGenerationRuntime());
+        $this->app->singleton(SdkRerankingRuntime::class, static fn (): SdkRerankingRuntime => new SdkRerankingRuntime());
+        $this->app->singleton(SdkTranscriptionRuntime::class, static fn (): SdkTranscriptionRuntime => new SdkTranscriptionRuntime());
+
+        $this->app->singleton(TranscriptionRuntime::class, function (Application $app): TranscriptionRuntime {
+            return $this->resolveModalityRuntime(
+                $app,
+                configKey: 'ai-agent-kit.modalities.transcription',
+                sdk: $app->make(SdkTranscriptionRuntime::class),
+                contract: TranscriptionRuntime::class,
+            );
+        });
+
+        $this->app->singleton(EmbeddingsRuntime::class, function (Application $app): EmbeddingsRuntime {
+            return $this->resolveModalityRuntime(
+                $app,
+                configKey: 'ai-agent-kit.modalities.embeddings',
+                sdk: $app->make(SdkEmbeddingsRuntime::class),
+                contract: EmbeddingsRuntime::class,
+            );
+        });
+
+        $this->app->singleton(ImageGenerationRuntime::class, function (Application $app): ImageGenerationRuntime {
+            return $this->resolveModalityRuntime(
+                $app,
+                configKey: 'ai-agent-kit.modalities.image_generation',
+                sdk: $app->make(SdkImageGenerationRuntime::class),
+                contract: ImageGenerationRuntime::class,
+            );
+        });
+
+        $this->app->singleton(RerankingRuntime::class, function (Application $app): RerankingRuntime {
+            return $this->resolveModalityRuntime(
+                $app,
+                configKey: 'ai-agent-kit.modalities.reranking',
+                sdk: $app->make(SdkRerankingRuntime::class),
+                contract: RerankingRuntime::class,
+            );
+        });
+
+        $this->app->singleton(AudioGenerationRuntime::class, function (Application $app): AudioGenerationRuntime {
+            return $this->resolveModalityRuntime(
+                $app,
+                configKey: 'ai-agent-kit.modalities.audio_generation',
+                sdk: $app->make(SdkAudioGenerationRuntime::class),
+                contract: AudioGenerationRuntime::class,
+            );
+        });
+
+        $this->app->singleton(SdkAiRuntime::class, function (Application $app): SdkAiRuntime {
+            return new SdkAiRuntime(
+                toolMaterializer: $app->make(SdkToolMaterializer::class),
+                providerToolMaterializer: $app->make(ProviderToolMaterializer::class),
+                runtimeConversationMemoryBridge: $app->make(RuntimeConversationMemoryBridge::class),
+                runtimeBudgetEnforcer: $app->make(RuntimeBudgetEnforcer::class),
+                container: $app,
+                events: $app->make(Dispatcher::class),
+                redactor: $app->make(Redactor::class),
+            );
+        });
+
+        $this->app->singleton(AiRuntime::class, function (Application $app): AiRuntime {
+            $inner = $app->make(SdkAiRuntime::class);
+            $middleware = $this->resolveRuntimeMiddlewareStack($app);
+
+            if ($middleware === []) {
+                return $inner;
+            }
+
+            return new MiddlewareExecutingAiRuntime($inner, $middleware);
+        });
+
+        $this->app->singleton(StreamingAiRuntime::class, function (Application $app): StreamingAiRuntime {
+            $inner = $app->make(SdkAiRuntime::class);
+            $middleware = $this->resolveRuntimeMiddlewareStack($app);
+
+            if ($middleware === []) {
+                return $inner;
+            }
+
+            return new MiddlewareExecutingAiRuntime($inner, $middleware);
+        });
+
+        $this->app->singleton(CompiledBlueprintRunner::class, function (Application $app): CompiledBlueprintRunner {
+            return new CompiledBlueprintRunner(
+                blueprintCompiler: $app->make(BlueprintCompiler::class),
+                aiRuntime: $app->make(AiRuntime::class),
+            );
+        });
+
+        $this->app->singleton(BlueprintRunner::class, function (Application $app): BlueprintRunner {
+            return $app->make(CompiledBlueprintRunner::class);
+        });
+
+        $this->app->singleton(SynchronousPipelineRunner::class, function (Application $app): SynchronousPipelineRunner {
+            return new SynchronousPipelineRunner(
+                conversationContextManager: $app->make(ConversationContextManager::class),
+                events: $app->make(Dispatcher::class),
+                redactor: $app->make(Redactor::class),
+                budgetEnforcer: $app->make(PipelineBudgetEnforcer::class),
+                retryPolicyResolver: $app->make(RetryPolicyResolver::class),
+            );
+        });
+
+        $this->app->singleton(PipelineRunner::class, function (Application $app): PipelineRunner {
+            return $app->make(SynchronousPipelineRunner::class);
+        });
+
+        $this->registerQueuedPipelineDispatcherBinding();
     }
 
     /**
      * @template T of object
-     *
-     * @param  T  $sdk
-     * @param  class-string<T>  $contract
+     * @param T $sdk
+     * @param class-string<T> $contract
      * @return T
      */
     private function resolveModalityRuntime(Application $app, string $configKey, object $sdk, string $contract): object
@@ -1247,5 +1127,123 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         }
 
         return $resolved;
+    }
+
+    /**
+     * @return list<RuntimeMiddleware>
+     */
+    private function resolveRuntimeMiddlewareStack(Application $app): array
+    {
+        /** @var ConfigRepository $config */
+        $config = $app->make(ConfigRepository::class);
+        $entries = $config->get('ai-agent-kit.runtime.middleware', []);
+
+        if (!is_array($entries)) {
+            return [];
+        }
+
+        $middleware = [];
+
+        foreach ($entries as $index => $class) {
+            if (!is_string($class) || $class === '') {
+                throw new RuntimeException(
+                    sprintf('Configuration key [ai-agent-kit.runtime.middleware.%s] must be a non-empty class-string.', $index),
+                );
+            }
+
+            $instance = $app->make($class);
+
+            if (!$instance instanceof RuntimeMiddleware) {
+                throw new RuntimeException(
+                    sprintf('Runtime middleware [%s] must implement %s.', $class, RuntimeMiddleware::class),
+                );
+            }
+
+            $middleware[] = $instance;
+        }
+
+        return $middleware;
+    }
+
+    private function registerQueuedPipelineDispatcherBinding(): void
+    {
+        $this->app->singleton(LaravelQueuedPipelineDispatcher::class, function (Application $app): LaravelQueuedPipelineDispatcher {
+            return new LaravelQueuedPipelineDispatcher(
+                config: $app->make(ConfigRepository::class),
+            );
+        });
+
+        $this->app->singleton(QueuedPipelineDispatcher::class, function (Application $app): QueuedPipelineDispatcher {
+            return $app->make(LaravelQueuedPipelineDispatcher::class);
+        });
+    }
+
+    private function registerSummarizationBindings(): void
+    {
+        $this->app->singleton(NullConversationSummarizer::class, function (Application $app): NullConversationSummarizer {
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+            /** @var int $triggerMessageCount */
+            $triggerMessageCount = $config->get('ai-agent-kit.summarization.trigger_message_count', 20);
+
+            return new NullConversationSummarizer(
+                enabled: (bool)$config->get('ai-agent-kit.summarization.enabled', false),
+                triggerMessageCount: $triggerMessageCount,
+            );
+        });
+
+        $this->app->singleton(ConversationSummarizer::class, function (Application $app): ConversationSummarizer {
+            return $app->make(NullConversationSummarizer::class);
+        });
+    }
+
+    private function maybeWarnEphemeralDrivers(ConfigRepository $config): void
+    {
+        $block = $config->get('ai-agent-kit.ephemeral_driver_warnings', []);
+
+        if (!is_array($block) || !($block['enabled'] ?? false)) {
+            return;
+        }
+
+        $environments = $block['environments'] ?? ['production'];
+        if (!is_array($environments) || $environments === []) {
+            return;
+        }
+
+        $envList = [];
+        foreach ($environments as $name) {
+            if (is_string($name) && $name !== '') {
+                $envList[] = $name;
+            }
+        }
+
+        if ($envList === [] || !app()->environment(...$envList)) {
+            return;
+        }
+
+        $memoryInMemory = $this->memoryDriver($config) === 'in_memory';
+        $vectorInMemory = $this->stringConfig($config, 'ai-agent-kit.vector.default_driver') === 'in_memory';
+
+        if (!$memoryInMemory && !$vectorInMemory) {
+            return;
+        }
+
+        if (self::$ephemeralDriverWarningLogged) {
+            return;
+        }
+
+        self::$ephemeralDriverWarningLogged = true;
+
+        $parts = [];
+        if ($memoryInMemory) {
+            $parts[] = 'memory.default_driver=in_memory';
+        }
+        if ($vectorInMemory) {
+            $parts[] = 'vector.default_driver=in_memory';
+        }
+
+        Log::warning('laravel-ai-agent-kit: in-memory drivers are active; data is not durable across requests or workers.', [
+          'drivers' => $parts,
+        ]);
     }
 }

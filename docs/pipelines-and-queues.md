@@ -124,6 +124,8 @@ Queued pipelines serialize the `RunContext`. Keep these fields small and seriali
 | `conversationId` | Prefer this over serializing a full conversation. |
 | `conversation` | Use only when the full graph is truly required. |
 
+When using the database memory driver, conversation saves are idempotent by conversation ID and message ID, which prevents common duplicate-key races from queued or multi-worker saves. This is storage-level write idempotence, not semantic merge. If two workers save different conversation histories for the same conversation ID, the final stored rows follow normal last-write-wins database behavior for the rows each save writes.
+
 ## Payload guards
 
 Queued jobs can be rejected before dispatch when the serialized job exceeds `ai-agent-kit.pipeline.queued.max_serialized_job_bytes`.
@@ -156,7 +158,15 @@ Use the production-capable guard when you want dispatch-time protection outside 
 
 ## When to use Laravel AI SDK jobs directly
 
-Use Agent Kit queued pipelines when you need package budgets, memory, result handlers, and redacted telemetry. Use Laravel AI SDK jobs directly only when you intentionally want the SDK queue contract and do not need the package pipeline envelope.
+Use Agent Kit queued pipelines when you need the package pipeline envelope:
+
+- package budgets and retry policy
+- package memory and `RunContext`
+- result handlers
+- redacted package telemetry
+- deterministic package fakes around workflow state
+
+Use Laravel AI SDK jobs directly when you intentionally want the SDK queue contract and do not need the package pipeline envelope. Common direct-SDK cases include SDK broadcast-agent jobs, thin async prompts, or provider-specific modality jobs where your application wants Laravel AI's native job behavior exactly.
 
 ## Testing queues
 

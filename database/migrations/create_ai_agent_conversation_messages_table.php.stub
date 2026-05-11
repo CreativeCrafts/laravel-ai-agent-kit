@@ -14,7 +14,7 @@ return new class () extends Migration {
             $table->foreignId('conversation_record_id')
                 ->constrained('ai_agent_conversations')
                 ->cascadeOnDelete();
-            $table->string('message_id')->unique();
+            $table->string('message_id');
             $table->unsignedInteger('sequence');
             $table->string('role', 32)->index();
             $table->longText('content_ciphertext');
@@ -24,6 +24,10 @@ return new class () extends Migration {
             $table->timestamp('created_at');
             $table->timestamp('updated_at')->nullable();
 
+            $table->unique(
+                ['conversation_record_id', 'message_id'],
+                'ai_agent_conversation_messages_record_message_unique',
+            );
             $table->unique(
                 ['conversation_record_id', 'sequence'],
                 'ai_agent_conversation_messages_record_sequence_unique',

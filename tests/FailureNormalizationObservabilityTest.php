@@ -138,7 +138,11 @@ it('emits provider-failure runtime telemetry when the provider prompt edge fails
           ->and($event->model)->toBe('gpt-4o-mini')
           ->and($event->requestedToolNames)->toBe([])
           ->and($event->inputKeys)->toBe(['[redacted-key]'])
-          ->and($event->metadataKeys)->toBe(['trace_id'])
+          ->and($event->metadataKeys)->toBe([
+              'trace_id',
+              'runtime_provider_attempts',
+              'runtime_failover_exhausted',
+          ])
           ->and($event->projectedMessageCount)->toBe(0)
           ->and($event->failureCategory)->toBe(FailureCategory::ProviderFailure->value)
           ->and($event->exceptionClass)->toBe(RuntimeExecutionException::class)

@@ -135,156 +135,9 @@ final readonly class DatabaseConversationStore implements ConversationStore
         $connection = $this->connection();
 
         $connection->transaction(function () use ($connection, $conversation): void {
-            $existingRecordIdValue = $connection
-              ->table($this->conversationsTable)
-              ->where('conversation_id', $conversation->id->toString())
-              ->value('id');
+            $conversationRecordId = $this->upsertConversationRecord($connection, $conversation);
 
-            $existingRecordId = $existingRecordIdValue === null
-              ? null
-              : $this->normalizeIntValue($existingRecordIdValue, 'conversations.id');
-
-            $conversationPayload = [
-              'conversation_id' => $conversation->id->toString(),
-              'driver' => $this->driverName,
-              'store_conversation' => true,
-              'is_encrypted' => $this->encryptPayloads,
-              'retention_until' => $this->retentionTimestamp($conversation),
-              'last_message_at' => $conversation->latestMessage()?->createdAt->format('Y-m-d H:i:s'),
-              'summary_ciphertext' => null,
-              'metadata_ciphertext' => $this->encodeArrayPayload('conversations.metadata_ciphertext', $conversation->metadata),
-              'created_at' => $conversation->createdAt->format('Y-m-d H:i:s'),
-              'updated_at' => $conversation->updatedAt->format('Y-m-d H:i:s'),
-              'deleted_at' => null,
-            ];
-
-            if ($existingRecordId === null) {
-                $conversationRecordId = $this->normalizeIntValue(
-                    $connection
-                    ->table($this->conversationsTable)
-                    ->insertGetId($conversationPayload),
-                    'conversations.id',
-                );
-            } else {
-                $connection
-                  ->table($this->conversationsTable)
-                  ->where('id', $existingRecordId)
-                  ->update($conversationPayload);
-
-                $conversationRecordId = $existingRecordId;
-            }
-
-            $existingMessages = $connection
-              ->table($this->messagesTable)
-              ->where('conversation_record_id', $conversationRecordId)
-              ->get()
-              ->keyBy('message_id');
-
-            $incomingMessageIds = [];
-            $newRows = [];
-            $updates = [];
-
-            foreach ($conversation->messages as $index => $message) {
-                $messageId = $message->id->toString();
-                $incomingMessageIds[] = $messageId;
-                $sequence = $index + 1;
-                $contentCiphertext = $this->encodeStringPayload('messages.content_ciphertext', $message->content);
-                [$metadataForStorage, $attachmentsList] = $this->splitMessageMetadataAndAttachments($message->metadata);
-                $metadataCiphertext = $this->encodeArrayPayload('messages.metadata_ciphertext', $metadataForStorage);
-                $attachmentsCiphertext = $this->encodeArrayPayload(
-                    'messages.attachments_ciphertext',
-                    $attachmentsList === [] ? [] : ['attachments' => $attachmentsList],
-                );
-
-                $existing = $existingMessages->get($messageId);
-
-                if ($existing !== null) {
-                    $existingSequence = $this->normalizeIntValue($existing->sequence ?? null, 'messages.sequence');
-                    $existingRole = $this->requireStringValue($existing, 'role');
-                    $existingContentCiphertext = $this->requireStringValue($existing, 'content_ciphertext');
-                    $existingMetadataCiphertext = $existing->metadata_ciphertext ?? null;
-                    if ($existingMetadataCiphertext !== null && !is_string($existingMetadataCiphertext)) {
-                        throw ConversationStoreException::payloadDecodingFailed(
-                            'messages.metadata_ciphertext',
-                            new RuntimeException('Record field [messages.metadata_ciphertext] must be a string or null.'),
-                        );
-                    }
-
-                    $existingAttachmentsCiphertext = $existing->attachments_ciphertext ?? null;
-                    if ($existingAttachmentsCiphertext !== null && !is_string($existingAttachmentsCiphertext)) {
-                        throw ConversationStoreException::payloadDecodingFailed(
-                            'messages.attachments_ciphertext',
-                            new RuntimeException('Record field [messages.attachments_ciphertext] must be a string or null.'),
-                        );
-                    }
-
-                    $shouldUpdate = $existingSequence !== $sequence
-                      || $existingRole !== $message->role->value
-                      || $existingContentCiphertext !== $contentCiphertext
-                      || ($existingMetadataCiphertext ?? '') !== ($metadataCiphertext ?? '')
-                      || ($existingAttachmentsCiphertext ?? '') !== ($attachmentsCiphertext ?? '');
-
-                    if ($shouldUpdate) {
-                        $updates[] = [
-                          'message_id' => $messageId,
-                          'payload' => [
-                            'sequence' => $sequence,
-                            'role' => $message->role->value,
-                            'content_ciphertext' => $contentCiphertext,
-                            'metadata_ciphertext' => $metadataCiphertext,
-                            'attachments_ciphertext' => $attachmentsCiphertext,
-                            'token_count' => null,
-                            'updated_at' => $message->createdAt->format('Y-m-d H:i:s'),
-                          ],
-                        ];
-                    }
-
-                    continue;
-                }
-
-                $newRows[] = [
-                  'conversation_record_id' => $conversationRecordId,
-                  'message_id' => $messageId,
-                  'sequence' => $sequence,
-                  'role' => $message->role->value,
-                  'content_ciphertext' => $contentCiphertext,
-                  'metadata_ciphertext' => $metadataCiphertext,
-                  'attachments_ciphertext' => $attachmentsCiphertext,
-                  'token_count' => null,
-                  'created_at' => $message->createdAt->format('Y-m-d H:i:s'),
-                  'updated_at' => null,
-                ];
-            }
-
-            foreach ($updates as $update) {
-                $connection
-                  ->table($this->messagesTable)
-                  ->where('conversation_record_id', $conversationRecordId)
-                  ->where('message_id', $update['message_id'])
-                  ->update($update['payload']);
-            }
-
-            /** @var list<string> $existingMessageIds */
-            $existingMessageIds = array_values(
-                array_filter(
-                    $existingMessages->keys()->all(),
-                    static fn (mixed $id): bool => is_string($id) && $id !== '',
-                ),
-            );
-
-            $messageIdsToDelete = array_values(array_diff($existingMessageIds, $incomingMessageIds));
-
-            if ($messageIdsToDelete !== []) {
-                $connection
-                  ->table($this->messagesTable)
-                  ->where('conversation_record_id', $conversationRecordId)
-                  ->whereIn('message_id', $messageIdsToDelete)
-                  ->delete();
-            }
-
-            if ($newRows !== []) {
-                $connection->table($this->messagesTable)->insert($newRows);
-            }
+            $this->upsertConversationMessages($connection, $conversationRecordId, $conversation);
         });
     }
 
@@ -303,6 +156,135 @@ final readonly class DatabaseConversationStore implements ConversationStore
     private function connection(): Connection
     {
         return $this->database->connection($this->connectionName);
+    }
+
+    /**
+     * @throws DateMalformedStringException
+     */
+    private function upsertConversationRecord(Connection $connection, Conversation $conversation): int
+    {
+        $conversationPayload = [
+          'conversation_id' => $conversation->id->toString(),
+          'driver' => $this->driverName,
+          'store_conversation' => true,
+          'is_encrypted' => $this->encryptPayloads,
+          'retention_until' => $this->retentionTimestamp($conversation),
+          'last_message_at' => $conversation->latestMessage()?->createdAt->format('Y-m-d H:i:s'),
+          'summary_ciphertext' => null,
+          'metadata_ciphertext' => $this->encodeArrayPayload('conversations.metadata_ciphertext', $conversation->metadata),
+          'created_at' => $conversation->createdAt->format('Y-m-d H:i:s'),
+          'updated_at' => $conversation->updatedAt->format('Y-m-d H:i:s'),
+          'deleted_at' => null,
+        ];
+
+        $connection
+            ->table($this->conversationsTable)
+            ->upsert(
+                [$conversationPayload],
+                ['conversation_id'],
+                [
+                    'driver',
+                    'store_conversation',
+                    'is_encrypted',
+                    'retention_until',
+                    'last_message_at',
+                    'summary_ciphertext',
+                    'metadata_ciphertext',
+                    'updated_at',
+                    'deleted_at',
+                ],
+            );
+
+        return $this->normalizeIntValue(
+            $connection
+                ->table($this->conversationsTable)
+                ->where('conversation_id', $conversation->id->toString())
+                ->value('id'),
+            'conversations.id',
+        );
+    }
+
+    private function upsertConversationMessages(Connection $connection, int $conversationRecordId, Conversation $conversation): void
+    {
+        if ($conversation->messages === []) {
+            $connection
+                ->table($this->messagesTable)
+                ->where('conversation_record_id', $conversationRecordId)
+                ->delete();
+
+            return;
+        }
+
+        $incomingMessageIds = [];
+        $rows = [];
+
+        foreach ($conversation->messages as $index => $message) {
+            $messageId = $message->id->toString();
+            $incomingMessageIds[] = $messageId;
+            [$metadataForStorage, $attachmentsList] = $this->splitMessageMetadataAndAttachments($message->metadata);
+
+            $rows[] = [
+              'conversation_record_id' => $conversationRecordId,
+              'message_id' => $messageId,
+              'sequence' => $index + 1,
+              'role' => $message->role->value,
+              'content_ciphertext' => $this->encodeStringPayload('messages.content_ciphertext', $message->content),
+              'metadata_ciphertext' => $this->encodeArrayPayload('messages.metadata_ciphertext', $metadataForStorage),
+              'attachments_ciphertext' => $this->encodeArrayPayload(
+                  'messages.attachments_ciphertext',
+                  $attachmentsList === [] ? [] : ['attachments' => $attachmentsList],
+              ),
+              'token_count' => null,
+              'created_at' => $message->createdAt->format('Y-m-d H:i:s'),
+              'updated_at' => $message->createdAt->format('Y-m-d H:i:s'),
+            ];
+        }
+
+        $this->moveExistingMessageSequencesOutOfIncomingRange($connection, $conversationRecordId, count($rows));
+
+        $connection
+            ->table($this->messagesTable)
+            ->where('conversation_record_id', $conversationRecordId)
+            ->whereNotIn('message_id', $incomingMessageIds)
+            ->delete();
+
+        $connection
+            ->table($this->messagesTable)
+            ->upsert(
+                $rows,
+                ['conversation_record_id', 'message_id'],
+                [
+                    'sequence',
+                    'role',
+                    'content_ciphertext',
+                    'metadata_ciphertext',
+                    'attachments_ciphertext',
+                    'token_count',
+                    'updated_at',
+                ],
+            );
+    }
+
+    private function moveExistingMessageSequencesOutOfIncomingRange(
+        Connection $connection,
+        int $conversationRecordId,
+        int $incomingMessageCount,
+    ): void {
+        $temporarySequence = $incomingMessageCount + 1000000;
+        $recordIds = $connection
+            ->table($this->messagesTable)
+            ->where('conversation_record_id', $conversationRecordId)
+            ->orderByDesc('sequence')
+            ->pluck('id');
+
+        foreach ($recordIds as $recordId) {
+            $connection
+                ->table($this->messagesTable)
+                ->where('id', $recordId)
+                ->update(['sequence' => $temporarySequence]);
+
+            $temporarySequence++;
+        }
     }
 
     private function requireStringValue(object $record, string $field): string

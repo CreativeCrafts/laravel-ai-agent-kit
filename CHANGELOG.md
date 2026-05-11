@@ -6,6 +6,25 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Added
 
+- Laravel AI SDK parity governance:
+  - expanded maintainer SDK capability and async inventories for the supported `laravel/ai ^0.6` range;
+  - added maintainer event and provider-tool inventory with package-normalized, direct-SDK, deferred, and out-of-scope classifications;
+  - public docs now clarify Agent Kit versus direct Laravel AI SDK usage, SDK jobs versus Agent Kit queued pipelines, SDK vector stores versus Agent Kit vectors, and fake/testing guidance for direct-SDK escape hatches.
+- Database conversation store atomic persistence:
+  - database conversation rows now use atomic write semantics keyed by `conversation_id`;
+  - database message rows are persisted idempotently per conversation record and message ID;
+  - saving a soft-deleted database conversation restores it by clearing `deleted_at`;
+  - database memory docs now clarify that atomic persistence prevents storage-level duplicate-key races but does not merge divergent concurrent conversation histories.
+- Redis memory hardening:
+  - `memory.redis.encrypt_payloads` encrypts Redis conversation payloads by default using the package encryption service;
+  - Redis memory can read existing plaintext Redis payloads for compatibility while writing the currently configured format;
+  - Redis memory writes native Redis key TTLs when `memory.redis.retention_days` is configured and retains lazy expiration checks as a safety net.
+- Runtime provider failover execution:
+  - runtime requests that omit a provider now resolve the configured default provider before SDK execution;
+  - prompt execution retries provider-edge failures through configured `failover_order` until success or exhaustion;
+  - stream execution supports creation-only failover before any chunks are emitted;
+  - runtime results include provider attempt metadata such as attempted providers, final provider, and whether failover occurred;
+  - provider success/failure attempts are recorded against provider circuit breakers.
 - Security, correctness, and reliability hardening from the audit pass:
   - stream creation failures are normalized into terminal `StreamFailure` values with redacted `RuntimeStreamFailed` telemetry;
   - custom tool input validation now recursively enforces the supported schema subset, including nested objects, array item schemas, `additionalProperties: false`, nullable fields, and scalar enum values;

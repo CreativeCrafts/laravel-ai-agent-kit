@@ -44,31 +44,7 @@ it('binds the database conversation store and retention purger contracts', funct
 
 it('persists and reloads conversations through the database-backed store', function (): void {
     $store = app(ConversationStore::class);
-    $startedAt = new DateTimeImmutable('2026-03-14T09:00:00+00:00');
-    $updatedAt = new DateTimeImmutable('2026-03-14T09:05:00+00:00');
-
-    $conversation = new Conversation(
-        id: new ConversationId('conv-database'),
-        createdAt: $startedAt,
-        updatedAt: $updatedAt,
-        messages: [
-        new ConversationMessage(
-            id: new MessageId('msg-001'),
-            role: ConversationMessageRole::User,
-            content: 'Summarize the meeting notes.',
-            createdAt: $startedAt,
-            metadata: ['channel' => 'web'],
-        ),
-        new ConversationMessage(
-            id: new MessageId('msg-002'),
-            role: ConversationMessageRole::Assistant,
-            content: 'Here is the summary.',
-            createdAt: $updatedAt,
-            metadata: ['model' => 'null'],
-        ),
-      ],
-        metadata: ['tenant' => 'creativecrafts'],
-    );
+    $conversation = databaseConversation('conv-database');
 
     $store->save($conversation);
 
@@ -148,6 +124,57 @@ it('persists plaintext payloads when database encryption is explicitly disabled'
       ->toBeInstanceOf(Conversation::class)
       ->and($reloaded?->latestMessage()?->content)->toBe('Plaintext content')
       ->and($reloaded?->metadataValue('tenant'))->toBe('internal');
+});
+
+it('saves the same conversation idempotently without duplicate conversation or message rows', function (): void {
+    $store = app(ConversationStore::class);
+    $conversation = databaseConversation('conv-idempotent');
+
+    $store->save($conversation);
+    $store->save($conversation);
+    $store->save($conversation);
+
+    $conversationRow = DB::table('ai_agent_conversations')
+        ->where('conversation_id', 'conv-idempotent')
+        ->first();
+
+    expect(DB::table('ai_agent_conversations')->where('conversation_id', 'conv-idempotent')->count())->toBe(1)
+        ->and(DB::table('ai_agent_conversation_messages')->where('conversation_record_id', $conversationRow?->id)->count())->toBe(2)
+        ->and(DB::table('ai_agent_conversation_messages')->where('conversation_record_id', $conversationRow?->id)->where('message_id', 'msg-001')->count())->toBe(1)
+        ->and(DB::table('ai_agent_conversation_messages')->where('conversation_record_id', $conversationRow?->id)->where('message_id', 'msg-002')->count())->toBe(1);
+});
+
+it('preserves the original conversation created_at when saving an existing row', function (): void {
+    $store = app(ConversationStore::class);
+    $createdAt = new DateTimeImmutable('2026-03-14T09:00:00+00:00');
+    $updatedAt = new DateTimeImmutable('2026-03-14T10:00:00+00:00');
+    $conversationId = new ConversationId('conv-created-at-preserved');
+
+    $store->save(databaseConversation('conv-created-at-preserved', $createdAt, $createdAt));
+    $store->save(databaseConversation('conv-created-at-preserved', new DateTimeImmutable('2030-01-01T00:00:00+00:00'), $updatedAt));
+
+    $row = DB::table('ai_agent_conversations')->where('conversation_id', $conversationId->toString())->first();
+    $reloaded = $store->find($conversationId);
+
+    expect((string)$row?->created_at)->toBe('2026-03-14 09:00:00')
+        ->and($reloaded?->createdAt->format('Y-m-d H:i:s'))->toBe('2026-03-14 09:00:00')
+        ->and($reloaded?->updatedAt->format('Y-m-d H:i:s'))->toBe('2026-03-14 10:00:00');
+});
+
+it('restores a soft-deleted conversation when it is saved again', function (): void {
+    $store = app(ConversationStore::class);
+    $conversationId = new ConversationId('conv-restore');
+
+    $store->save(databaseConversation('conv-restore'));
+    $store->delete($conversationId);
+
+    expect($store->find($conversationId))->toBeNull()
+        ->and(DB::table('ai_agent_conversations')->where('conversation_id', 'conv-restore')->whereNotNull('deleted_at')->exists())->toBeTrue();
+
+    $store->save(databaseConversation('conv-restore', updatedAt: new DateTimeImmutable('2026-03-14T10:00:00+00:00')));
+
+    expect($store->find($conversationId))->toBeInstanceOf(Conversation::class)
+        ->and(DB::table('ai_agent_conversations')->where('conversation_id', 'conv-restore')->whereNull('deleted_at')->exists())->toBeTrue();
 });
 
 it('updates existing conversations and preserves delete semantics through the contract', function (): void {
@@ -260,6 +287,136 @@ it('persists existing messages incrementally instead of rewriting unchanged rows
       ->and(DB::table('ai_agent_conversation_messages')->where('conversation_record_id', $stableRowAfter?->conversation_record_id)->count())->toBe(2);
 });
 
+it('updates message sequence content metadata and attachments using the existing message row', function (): void {
+    config()->set('ai-agent-kit.memory.database.encrypt_payloads', false);
+
+    $store = app(ConversationStore::class);
+    $startedAt = new DateTimeImmutable('2026-03-14T09:00:00+00:00');
+    $updatedAt = new DateTimeImmutable('2026-03-14T09:10:00+00:00');
+    $conversationId = new ConversationId('conv-message-update');
+
+    $store->save(
+        new Conversation(
+            id: $conversationId,
+            createdAt: $startedAt,
+            updatedAt: $startedAt,
+            messages: [
+                new ConversationMessage(
+                    id: new MessageId('msg-a'),
+                    role: ConversationMessageRole::User,
+                    content: 'First content',
+                    createdAt: $startedAt,
+                    metadata: ['phase' => 'one'],
+                ),
+                new ConversationMessage(
+                    id: new MessageId('msg-b'),
+                    role: ConversationMessageRole::Assistant,
+                    content: 'Second content',
+                    createdAt: $updatedAt,
+                    metadata: ['phase' => 'two'],
+                ),
+            ],
+        ),
+    );
+
+    $rowBefore = DB::table('ai_agent_conversation_messages')->where('message_id', 'msg-a')->first();
+
+    $store->save(
+        new Conversation(
+            id: $conversationId,
+            createdAt: $startedAt,
+            updatedAt: $updatedAt,
+            messages: [
+                new ConversationMessage(
+                    id: new MessageId('msg-b'),
+                    role: ConversationMessageRole::Assistant,
+                    content: 'Second content',
+                    createdAt: $updatedAt,
+                    metadata: ['phase' => 'two'],
+                ),
+                new ConversationMessage(
+                    id: new MessageId('msg-a'),
+                    role: ConversationMessageRole::Assistant,
+                    content: 'Changed content',
+                    createdAt: $startedAt,
+                    metadata: [
+                        'phase' => 'changed',
+                        'attachments' => [['type' => 'provider-document', 'id' => 'file-123']],
+                    ],
+                ),
+            ],
+        ),
+    );
+
+    $rowAfter = DB::table('ai_agent_conversation_messages')->where('message_id', 'msg-a')->first();
+    $reloaded = $store->find($conversationId);
+    $updatedMessage = $reloaded?->messages[1] ?? null;
+
+    expect($rowBefore)->not->toBeNull()
+        ->and($rowAfter)->not->toBeNull()
+        ->and($rowAfter?->id)->toBe($rowBefore?->id)
+        ->and($rowAfter?->sequence)->toBe(2)
+        ->and($rowAfter?->role)->toBe(ConversationMessageRole::Assistant->value)
+        ->and((string)$rowAfter?->content_ciphertext)->toBe('Changed content')
+        ->and((string)$rowAfter?->metadata_ciphertext)->toContain('changed')
+        ->and((string)$rowAfter?->attachments_ciphertext)->toContain('file-123')
+        ->and($updatedMessage?->id->toString())->toBe('msg-a')
+        ->and($updatedMessage?->metadataValue('phase'))->toBe('changed')
+        ->and($updatedMessage?->metadataValue('attachments'))->toBe([['type' => 'provider-document', 'id' => 'file-123']]);
+});
+
+it('stores message ids uniquely per conversation record rather than globally', function (): void {
+    $store = app(ConversationStore::class);
+    $startedAt = new DateTimeImmutable('2026-03-14T09:00:00+00:00');
+
+    $store->save(
+        new Conversation(
+            id: new ConversationId('conv-message-scope-a'),
+            createdAt: $startedAt,
+            updatedAt: $startedAt,
+            messages: [
+                new ConversationMessage(
+                    id: new MessageId('shared-message-id'),
+                    role: ConversationMessageRole::User,
+                    content: 'A content',
+                    createdAt: $startedAt,
+                ),
+            ],
+        ),
+    );
+
+    $store->save(
+        new Conversation(
+            id: new ConversationId('conv-message-scope-b'),
+            createdAt: $startedAt,
+            updatedAt: $startedAt,
+            messages: [
+                new ConversationMessage(
+                    id: new MessageId('shared-message-id'),
+                    role: ConversationMessageRole::User,
+                    content: 'B content',
+                    createdAt: $startedAt,
+                ),
+            ],
+        ),
+    );
+
+    expect(DB::table('ai_agent_conversation_messages')->where('message_id', 'shared-message-id')->count())->toBe(2)
+        ->and($store->find(new ConversationId('conv-message-scope-a'))?->latestMessage()?->content)->toBe('A content')
+        ->and($store->find(new ConversationId('conv-message-scope-b'))?->latestMessage()?->content)->toBe('B content');
+});
+
+it('preserves retention timestamp behavior during atomic saves', function (): void {
+    $store = app(ConversationStore::class);
+    $updatedAt = new DateTimeImmutable('2026-03-14T09:05:00+00:00');
+
+    $store->save(databaseConversation('conv-retention', updatedAt: $updatedAt));
+
+    $row = DB::table('ai_agent_conversations')->where('conversation_id', 'conv-retention')->first();
+
+    expect((string)$row?->retention_until)->toBe('2026-04-13 09:05:00');
+});
+
 it('purges expired conversations according to the configured retention window', function (): void {
     $store = app(ConversationStore::class);
     $purger = app(ConversationRetentionPurger::class);
@@ -311,3 +468,38 @@ it('purges expired conversations according to the configured retention window', 
           ->count(),
       )->toBe(0);
 });
+
+function databaseConversation(
+    string $id,
+    ?DateTimeImmutable $createdAt = null,
+    ?DateTimeImmutable $updatedAt = null,
+): Conversation {
+    $createdAt ??= new DateTimeImmutable('2026-03-14T09:00:00+00:00');
+    $updatedAt ??= new DateTimeImmutable('2026-03-14T09:05:00+00:00');
+
+    return new Conversation(
+        id: new ConversationId($id),
+        createdAt: $createdAt,
+        updatedAt: $updatedAt,
+        messages: [
+            new ConversationMessage(
+                id: new MessageId('msg-001'),
+                role: ConversationMessageRole::User,
+                content: 'Summarize the meeting notes.',
+                createdAt: $createdAt,
+                metadata: [
+                    'channel' => 'web',
+                    'attachments' => [['type' => 'provider-document', 'id' => 'file-a']],
+                ],
+            ),
+            new ConversationMessage(
+                id: new MessageId('msg-002'),
+                role: ConversationMessageRole::Assistant,
+                content: 'Here is the summary.',
+                createdAt: $updatedAt,
+                metadata: ['model' => 'null'],
+            ),
+        ],
+        metadata: ['tenant' => 'creativecrafts'],
+    );
+}

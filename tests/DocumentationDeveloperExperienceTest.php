@@ -90,6 +90,7 @@ it('keeps maintainer documentation under the maintainer docs path', function ():
         'docs/maintainers/release-verification.md',
         'docs/maintainers/sdk-capability-matrix.md',
         'docs/maintainers/sdk-async-inventory.md',
+        'docs/maintainers/sdk-events-provider-tools-inventory.md',
         'docs/maintainers/testing-strategy.md',
     ] as $path) {
         expect(file_exists(repositoryPath($path)))->toBeTrue($path . ' should exist.');
@@ -99,6 +100,25 @@ it('keeps maintainer documentation under the maintainer docs path', function ():
       ->toContain('docs/maintainers/ci-matrix.md')
       ->toContain('docs/maintainers/release-verification.md')
       ->toContain('docs/maintainers/testing-strategy.md');
+});
+
+it('documents Agent Kit versus direct Laravel AI SDK usage decisions', function (): void {
+    expect(documentationContents('docs/getting-started.md'))
+        ->toContain('## Agent Kit versus direct Laravel AI SDK usage')
+        ->toContain('Use Agent Kit when your workflow needs package-owned behavior')
+        ->toContain('Use the Laravel AI SDK directly when the application intentionally wants SDK-native behavior');
+
+    expect(documentationContents('docs/pipelines-and-queues.md'))
+        ->toContain('Use Agent Kit queued pipelines when you need the package pipeline envelope')
+        ->toContain('Use Laravel AI SDK jobs directly when you intentionally want the SDK queue contract');
+
+    expect(documentationContents('docs/vectors-and-retrieval.md'))
+        ->toContain('## SDK vector stores versus Agent Kit vectors')
+        ->toContain('Provider-native vector/store semantics');
+
+    expect(documentationContents('docs/testing.md'))
+        ->toContain('Facade modality methods such as `AgentKit::embed()`')
+        ->toContain('Use SDK fakes directly when your application intentionally uses direct Laravel AI SDK jobs');
 });
 
 it('keeps internal implementation-history markers out of public developer docs', function (): void {
