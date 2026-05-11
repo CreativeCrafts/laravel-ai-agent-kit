@@ -35,8 +35,8 @@
 
 ## 6. Validation
 
-- [ ] 6.1 Run `openspec validate make-conversation-store-persistence-atomic`.
-- [ ] 6.2 Run formatting checks.
-- [ ] 6.3 Run PHPStan/static analysis.
-- [ ] 6.4 Run database memory test subset.
-- [ ] 6.5 Run the full test suite if feasible.
+- [x] 6.1 Run `openspec validate make-conversation-store-persistence-atomic`.
+- [x] 6.2 Run formatting checks.
+- [x] 6.3 Run PHPStan/static analysis.
+- [x] 6.4 Run database memory test subset.
+- [x] 6.5 Run the full test suite if feasible.
