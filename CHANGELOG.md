@@ -6,6 +6,11 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Added
 
+- Database conversation store atomic persistence:
+  - database conversation rows now use atomic write semantics keyed by `conversation_id`;
+  - database message rows are persisted idempotently per conversation record and message ID;
+  - saving a soft-deleted database conversation restores it by clearing `deleted_at`;
+  - database memory docs now clarify that atomic persistence prevents storage-level duplicate-key races but does not merge divergent concurrent conversation histories.
 - Redis memory hardening:
   - `memory.redis.encrypt_payloads` encrypts Redis conversation payloads by default using the package encryption service;
   - Redis memory can read existing plaintext Redis payloads for compatibility while writing the currently configured format;
