@@ -15,7 +15,7 @@ Configure the default memory driver in `config/ai-agent-kit.php`:
 Available drivers:
 
 - `in_memory`: process-local, non-persistent, useful for tests and local development.
-- `database`: persistent storage with encrypted payload support and retention behavior.
+- `database`: persistent storage with encrypted payload support, retention behavior, and idempotent writes.
 - `redis`: shared ephemeral memory across workers, with encrypted payload support and Redis-native expiration.
 
 ## Store a conversation message
@@ -73,6 +73,12 @@ Prefer passing a conversation ID when queued work can reload state in the worker
 ## Persistence and encryption
 
 Use the database driver when you need durable conversation state. When database encryption is enabled, message payloads are encrypted before storage.
+
+Database conversation persistence is idempotent by conversation ID. Saving the same `Conversation` repeatedly updates the existing conversation row instead of inserting duplicates. Message rows are idempotent per database conversation record and message ID, so saving the same message IDs again updates those rows instead of duplicating them.
+
+Database writes use atomic database write semantics for the conversation row and message rows inside the save transaction. This prevents common unique-key races under queued or multi-worker workloads. It does not merge divergent histories automatically: if two workers save different conversation graphs for the same conversation ID, the final stored conversation follows normal last-write-wins database behavior for the rows each save writes.
+
+Saving a previously soft-deleted database conversation restores it by clearing `deleted_at`.
 
 Redis memory encrypts the full stored conversation payload by default:
 
