@@ -16,7 +16,7 @@ Available drivers:
 
 - `in_memory`: process-local, non-persistent, useful for tests and local development.
 - `database`: persistent storage with encrypted payload support and retention behavior.
-- `redis`: shared ephemeral memory across workers without database persistence.
+- `redis`: shared ephemeral memory across workers, with encrypted payload support and Redis-native expiration.
 
 ## Store a conversation message
 
@@ -74,11 +74,41 @@ Prefer passing a conversation ID when queued work can reload state in the worker
 
 Use the database driver when you need durable conversation state. When database encryption is enabled, message payloads are encrypted before storage.
 
+Redis memory encrypts the full stored conversation payload by default:
+
+~~~php
+'memory' => [
+    'redis' => [
+        'encrypt_payloads' => true,
+    ],
+],
+~~~
+
+The Redis encrypted value uses a small wrapper that identifies encrypted payloads and stores the encrypted JSON payload. The encrypted JSON contains the same conversation structure that plaintext Redis payloads used previously.
+
+For compatibility, Redis memory can still read existing plaintext payloads written by earlier package versions. New writes use the configured mode. Set `encrypt_payloads` to `false` only when you explicitly accept that prompt content, assistant output, metadata, and attachment references are readable in Redis.
+
+Applications sharing Redis keys must use the same application encryption key to read encrypted payloads. Prefer separate Redis prefixes per application and environment.
+
 Make sure production deployments have stable key management and retention policies that match your application requirements.
 
 ## Retention and purge
 
 Retention is explicit and driver-specific. Database and Redis drivers support retention-oriented behavior; in-memory state disappears with the process.
+
+Redis memory keeps the logical `retention_until` value in the stored payload and, when `memory.redis.retention_days` is configured, writes the Redis key with native expiration:
+
+~~~php
+'memory' => [
+    'redis' => [
+        'retention_days' => 30,
+    ],
+],
+~~~
+
+The Redis TTL is derived from `conversation.updatedAt + retention_days`. If a saved conversation is already past its computed expiration, Agent Kit writes a minimum one-second TTL. When Redis retention is `null`, keys are written without native expiration.
+
+Lazy expiration remains in place as a safety net. If an expired Redis payload is read before Redis removes the key, `find()` deletes it and returns `null`; `purgeExpired()` also continues to scan and remove expired payloads.
 
 Use retention defaults deliberately and document any application-specific purge expectations.
 
@@ -90,7 +120,9 @@ Do not put secrets into conversation metadata. Telemetry should see keys and saf
 
 ## Attachments and legacy conversations
 
-Optional attachment replay and Laravel AI legacy table fallback are advanced database-memory features. Enable them only when your application needs continued conversations across those surfaces and you have reviewed the privacy implications.
+Optional attachment replay and Laravel AI legacy table fallback are advanced database-memory features. Redis memory still stores attachment replay payloads inside the conversation payload when they are present, so leave Redis encryption enabled when attachment references or serialized attachment payloads may be sensitive.
+
+Enable legacy table fallback only when your application needs continued conversations across that database surface and you have reviewed the privacy implications.
 
 ## Testing memory
 
