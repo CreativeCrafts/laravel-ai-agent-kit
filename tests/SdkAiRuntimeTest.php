@@ -36,6 +36,12 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Tools\ProviderToolMaterializer;
 use Laravel\Ai\Responses\StructuredAgentResponse;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredFailoverProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
 
 it('binds the ai runtime contract to the sdk ai runtime', function () {
     app()->register(AiServiceProvider::class);
@@ -662,12 +668,12 @@ it('wraps sdk runtime failures in a typed runtime execution exception', function
 
 function refreshRuntimeProviderBindings(): void
 {
-    app()->forgetInstance(\CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry::class);
-    app()->forgetInstance(\CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry::class);
-    app()->forgetInstance(\CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector::class);
-    app()->forgetInstance(\CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector::class);
-    app()->forgetInstance(\CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredFailoverProviderSelector::class);
-    app()->forgetInstance(\CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector::class);
+    app()->forgetInstance(ConfiguredProviderRegistry::class);
+    app()->forgetInstance(ProviderRegistry::class);
+    app()->forgetInstance(DefaultProviderSelector::class);
+    app()->forgetInstance(ProviderSelector::class);
+    app()->forgetInstance(ConfiguredFailoverProviderSelector::class);
+    app()->forgetInstance(FailoverProviderSelector::class);
     app()->forgetInstance(SdkAiRuntime::class);
     app()->forgetInstance(AiRuntime::class);
 }
