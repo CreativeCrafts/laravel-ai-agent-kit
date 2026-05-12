@@ -8,19 +8,19 @@
 
 ## 2. Streaming provider health accounting
 
-- [ ] 2.1 Add tests proving stream creation alone does not record provider success.
-- [ ] 2.2 Add tests proving terminal `StreamError` records provider failure and not provider success.
-- [ ] 2.3 Add tests proving stream iteration exceptions classified as provider failures record provider failure.
-- [ ] 2.4 Add tests proving successful stream completion records provider success exactly once.
-- [ ] 2.5 Implement terminal-outcome provider accounting in `SdkAiRuntime::executeStream()`.
-- [ ] 2.6 Ensure package-local stream completion failures do not incorrectly record provider failure.
+- [x] 2.1 Add tests proving stream creation alone does not record provider success.
+- [x] 2.2 Add tests proving terminal `StreamError` records provider failure and not provider success.
+- [x] 2.3 Add tests proving stream iteration exceptions classified as provider failures record provider failure.
+- [x] 2.4 Add tests proving successful stream completion records provider success exactly once.
+- [x] 2.5 Implement terminal-outcome provider accounting in `SdkAiRuntime::executeStream()`.
+- [x] 2.6 Ensure package-local stream completion failures do not incorrectly record provider failure.
 
 ## 3. Documentation and changelog
 
 - [x] 3.1 Update `docs/memory.md` with upgrade migration guidance for existing message indexes.
 - [x] 3.2 Update `docs/production.md` with deployment guidance for the message-index migration.
-- [ ] 3.3 Update `docs/streaming-and-modalities.md` or `docs/providers.md` with streaming provider health accounting behavior.
-- [ ] 3.4 Update `CHANGELOG.md` with both post-merge review fixes.
+- [x] 3.3 Update `docs/streaming-and-modalities.md` or `docs/providers.md` with streaming provider health accounting behavior.
+- [x] 3.4 Update `CHANGELOG.md` with both post-merge review fixes.
 
 ## 4. Validation
 
