@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Blueprints\Agents;
 
-use CreativeCrafts\LaravelAiAgentKit\Blueprints\Support\StructuredEvaluationOutputNormalizationResult;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\Exceptions\TextToStructuredEvaluationException;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\Support\StructuredEvaluationOutputNormalizationResult;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\Support\StructuredEvaluationOutputNormalizer;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\Agent;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
@@ -58,6 +58,7 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
         }
 
         $variables = $this->promptVariables($context);
+        $customSchema = (bool)$context->payloadValue('custom_evaluation_schema', false);
 
         $request = $this->promptExecutionMapper->mapToExecutionRequest(
             name: $promptName,
@@ -73,14 +74,48 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
             metadata: [
             'orchestration_id' => $context->orchestrationId,
             'agent_key' => $context->agent->key,
+            'audio_evaluation_stage' => 'evaluation',
+            'custom_evaluation_schema' => $customSchema,
           ],
             conversationId: $this->conversationIdValue($context),
             storeConversation: (bool)$context->payloadValue('store_conversation', false),
             continueConversation: (bool)$context->payloadValue('continue_conversation', false),
-            schema: StructuredEvaluationJsonSchema::objectSchema(),
+            schema: $customSchema ? $context->payloadValue('evaluation_schema') : StructuredEvaluationJsonSchema::objectSchema(),
         );
 
         $runtimeResult = $this->aiRuntime->execute($request);
+
+        if ($customSchema) {
+            $structured = $runtimeResult->structuredOutput;
+
+            if (!is_array($structured) || $structured === []) {
+                throw TextToStructuredEvaluationException::invalidSpecialistPayload(
+                    'evaluation stage expected non-empty structured output for the custom audio evaluation schema.',
+                );
+            }
+
+            return new AgentExecutionResult(
+                kind: AgentExecutionResult::KIND_COMPLETE,
+                output: [
+                  'summary' => $this->summaryFromStructuredOutput($structured),
+                  'recommended_action' => $this->recommendedActionFromStructuredOutput($structured),
+                  'confidence' => $this->confidenceFromStructuredOutput($structured),
+                  'dimensions' => $this->dimensionsFromStructuredOutput($structured),
+                  'structured_output' => $structured,
+                  'metadata' => [
+                    'structured_evaluation_path' => 'structured_output',
+                    'custom_evaluation_schema' => true,
+                  ],
+                  'evaluation_provider' => $runtimeResult->provider,
+                  'evaluation_model' => $runtimeResult->model,
+                  'usage' => [
+                    'prompt_tokens' => $runtimeResult->promptTokens,
+                    'completion_tokens' => $runtimeResult->completionTokens,
+                  ],
+                ],
+                summary: 'TextToStructuredEvaluation specialist completed custom schema analysis.',
+            );
+        }
 
         $structured = $runtimeResult->structuredOutput;
         $usedStructuredPrimaryPath = false;
@@ -110,8 +145,20 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
             'recommended_action' => $parsed['recommended_action'],
             'confidence' => $parsed['confidence'],
             'dimensions' => $parsed['dimensions'],
+            'structured_output' => $parsed,
+            'metadata' => [
+              'structured_evaluation_path' => $usedStructuredPrimaryPath ? 'structured_output' : 'text_normalization',
+              'structured_evaluation_repaired' => $repaired,
+              'custom_evaluation_schema' => false,
+            ],
             'structured_evaluation_path' => $usedStructuredPrimaryPath ? 'structured_output' : 'text_normalization',
             'structured_evaluation_repaired' => $repaired,
+            'evaluation_provider' => $runtimeResult->provider,
+            'evaluation_model' => $runtimeResult->model,
+            'usage' => [
+              'prompt_tokens' => $runtimeResult->promptTokens,
+              'completion_tokens' => $runtimeResult->completionTokens,
+            ],
           ],
             summary: 'TextToStructuredEvaluation specialist completed structured analysis.',
         );
@@ -274,5 +321,115 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
         }
 
         return new ConversationId($conversationId);
+    }
+
+    /**
+     * @param array<string, mixed> $structured
+     */
+    private function summaryFromStructuredOutput(array $structured): string
+    {
+        $summary = $structured['summary'] ?? $structured['analysis'] ?? $structured['result'] ?? 'Custom structured audio evaluation completed.';
+
+        if (!is_string($summary) || $summary === '') {
+            return 'Custom structured audio evaluation completed.';
+        }
+
+        return $summary;
+    }
+
+    /**
+     * @param array<string, mixed> $structured
+     */
+    private function recommendedActionFromStructuredOutput(array $structured): string
+    {
+        $action = $structured['recommended_action'] ?? $structured['recommendedAction'] ?? 'Review structured_output for the schema-specific result.';
+
+        if (!is_string($action) || $action === '') {
+            return 'Review structured_output for the schema-specific result.';
+        }
+
+        return $action;
+    }
+
+    /**
+     * @param array<string, mixed> $structured
+     */
+    private function confidenceFromStructuredOutput(array $structured): float
+    {
+        $confidence = $structured['confidence'] ?? 1.0;
+
+        if (!is_int($confidence) && !is_float($confidence)) {
+            return 1.0;
+        }
+
+        return max(0.0, min(1.0, (float)$confidence));
+    }
+
+    /**
+     * @param array<string, mixed> $structured
+     * @return array<string, array{name:string,score:int,summary:string,evidence:list<string>}>
+     */
+    private function dimensionsFromStructuredOutput(array $structured): array
+    {
+        $dimensions = $structured['dimensions'] ?? null;
+
+        if (!is_array($dimensions) || $dimensions === []) {
+            return [
+                'custom_schema' => [
+                    'name' => 'custom_schema',
+                    'score' => 1,
+                    'summary' => 'Custom schema structured output was returned.',
+                    'evidence' => ['structured_output'],
+                ],
+            ];
+        }
+
+        $resolved = [];
+
+        foreach ($dimensions as $name => $payload) {
+            if (!is_string($name) || $name === '' || !is_array($payload)) {
+                continue;
+            }
+
+            $score = $payload['score'] ?? 1;
+            $summary = $payload['summary'] ?? 'Custom schema dimension returned.';
+            $evidence = $payload['evidence'] ?? ['structured_output'];
+
+            if (!is_int($score)) {
+                $score = 1;
+            }
+
+            if (!is_string($summary) || $summary === '') {
+                $summary = 'Custom schema dimension returned.';
+            }
+
+            if (!is_array($evidence)) {
+                $evidence = ['structured_output'];
+            }
+
+            $resolvedEvidence = [];
+
+            foreach ($evidence as $item) {
+                if (is_string($item) && $item !== '') {
+                    $resolvedEvidence[] = $item;
+                }
+            }
+
+            $resolved[$name] = [
+                'name' => $name,
+                'score' => $score,
+                'summary' => $summary,
+                'evidence' => $resolvedEvidence !== [] ? $resolvedEvidence : ['structured_output'],
+            ];
+        }
+
+        return $resolved !== [] ? $resolved : [
+            'custom_schema' => [
+                'name' => 'custom_schema',
+                'score' => 1,
+                'summary' => 'Custom schema structured output was returned.',
+                'evidence' => ['structured_output'],
+            ],
+        ];
     }
 }
