@@ -137,10 +137,7 @@ final readonly class AudioToTextToEvaluationTranscriptionAgent implements Agent
                 'segments' => [],
                 'transcription_provider' => $aiRuntimeResult->provider,
                 'transcription_model' => $aiRuntimeResult->model,
-                'usage' => [
-                    'prompt_tokens' => $aiRuntimeResult->promptTokens,
-                    'completion_tokens' => $aiRuntimeResult->completionTokens,
-                ],
+                'usage' => $aiRuntimeResult->usage,
             ],
             summary: 'AudioToTextToEvaluation transcription specialist completed the transcript.',
         );
