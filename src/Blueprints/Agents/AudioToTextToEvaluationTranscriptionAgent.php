@@ -286,8 +286,8 @@ final readonly class AudioToTextToEvaluationTranscriptionAgent implements Agent
             $text = trim($result->transcript);
 
             return $text !== '' ? $text : null;
-        } catch (UnsupportedTranscriptionPromptException) {
-            throw;
+        } catch (UnsupportedTranscriptionPromptException $exception) {
+            throw $exception;
         } catch (Throwable) {
             return null;
         }
