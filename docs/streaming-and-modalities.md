@@ -84,12 +84,54 @@ Configure per modality:
 
 You may replace a modality driver with a class that implements the corresponding package contract.
 
+## Transcription prompts
+
+Use `TranscriptionRequest::$prompt` when the transcription stage must preserve domain-specific spoken features such as pauses, hesitations, false starts, grammar mistakes, uncertainty markers, locale-specific characters, or verbatim phrasing.
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\TranscriptionRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionRequest;
+
+final class TranscribeLanguageTestAudio
+{
+    public function __construct(
+        private TranscriptionRuntime $runtime,
+    ) {
+    }
+
+    public function handle(string $base64Audio): string
+    {
+        $result = $this->runtime->transcribe(
+            new TranscriptionRequest(
+                runId: 'transcription-001',
+                base64Audio: $base64Audio,
+                mimeType: 'audio/mpeg',
+                language: 'sv',
+                provider: 'openai',
+                model: 'gpt-4o-transcribe',
+                prompt: 'Transcribe verbatim. Preserve pauses, hesitations, false starts, and Swedish characters.',
+            ),
+        );
+
+        return $result->transcript;
+    }
+}
+~~~
+
+Prompt support depends on the installed Laravel AI SDK/provider path. Agent Kit forwards prompts through Laravel AI SDK transcription provider options when supported. If a prompted transcription request cannot be honored by the installed SDK path, Agent Kit fails fast instead of silently dropping the prompt.
+
+OpenAI does not support `prompt` for diarized transcription. Use unprompted diarized transcription, or keep diarized/provider-specific option support separate from prompt-driven transcription.
+
 ## Blueprint integration
 
 `AudioToTextToEvaluation` uses the transcription runtime when the audio reference is raw base64 or a `data:*;base64,...` URI. Opaque references such as `s3://...` may still flow through prompt/runtime paths depending on the configured workflow.
 
+When the blueprint uses `TranscriptionRuntime`, it renders the configured transcription prompt and passes that rendered prompt into `TranscriptionRequest::$prompt`. Prompt name and version remain in request metadata for observability.
+
 ## Testing
 
 Use package fakes for runtime and modality behavior. Do not call real provider APIs in tests.
+
+For transcription prompt tests, fake the Laravel AI transcription gateway and assert that the prompt appears in transcription provider options.
 
 See [Testing](testing.md).
