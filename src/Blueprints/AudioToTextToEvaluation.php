@@ -46,6 +46,8 @@ final readonly class AudioToTextToEvaluation
               'conversation_id' => $request->conversationId?->toString(),
               'transcription_model' => $request->transcriptionModel,
               'evaluation_model' => $request->evaluationModel,
+              'evaluation_schema' => $request->schema,
+              'custom_evaluation_schema' => $request->hasCustomSchema(),
             ],
                 metadata: $request->metadata,
                 conversationId: $request->conversationId,
@@ -199,6 +201,14 @@ final readonly class AudioToTextToEvaluation
             orchestrationSummary: $result->summary,
             finalAgent: $result->finalAgent,
             trace: $result->trace,
+            structuredOutput: $this->arrayPayloadValue($payload['structured_output'] ?? [], 'structured_output'),
+            segments: $this->listPayloadValue($payload['segments'] ?? [], 'segments'),
+            metadata: $this->arrayPayloadValue($payload['metadata'] ?? [], 'metadata'),
+            transcriptionProvider: $this->nullableStringPayloadValue($payload['transcription_provider'] ?? null, 'transcription_provider'),
+            transcriptionModel: $this->nullableStringPayloadValue($payload['transcription_model'] ?? null, 'transcription_model'),
+            evaluationProvider: $this->nullableStringPayloadValue($payload['evaluation_provider'] ?? null, 'evaluation_provider'),
+            evaluationModel: $this->nullableStringPayloadValue($payload['evaluation_model'] ?? null, 'evaluation_model'),
+            usage: $this->arrayPayloadValue($payload['usage'] ?? [], 'usage'),
         );
     }
 
@@ -232,5 +242,72 @@ final readonly class AudioToTextToEvaluation
         }
 
         return $value;
+    }
+
+    private function nullableStringPayloadValue(mixed $value, string $field): ?string
+    {
+        return $this->requireNullableString($value, $field);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function arrayPayloadValue(mixed $value, string $field): array
+    {
+        if (!is_array($value)) {
+            throw AudioToTextToEvaluationException::invalidPayload(
+                sprintf('final %s must be an array.', $field),
+            );
+        }
+
+        return $value;
+    }
+
+    /**
+     * @return list<array{text:string,speaker:string,start_seconds:float,end_seconds:float}>
+     */
+    private function listPayloadValue(mixed $value, string $field): array
+    {
+        if (!is_array($value)) {
+            throw AudioToTextToEvaluationException::invalidPayload(
+                sprintf('final %s must be a list.', $field),
+            );
+        }
+
+        $resolved = [];
+
+        foreach ($value as $item) {
+            if (!is_array($item)) {
+                throw AudioToTextToEvaluationException::invalidPayload(
+                    sprintf('final %s entries must be arrays.', $field),
+                );
+            }
+
+            $text = $this->requireString($item['text'] ?? null, $field.'.text');
+            $speaker = $this->requireString($item['speaker'] ?? null, $field.'.speaker');
+            $startSeconds = $item['start_seconds'] ?? null;
+            $endSeconds = $item['end_seconds'] ?? null;
+
+            if (!is_int($startSeconds) && !is_float($startSeconds)) {
+                throw AudioToTextToEvaluationException::invalidPayload(
+                    sprintf('final %s start_seconds must be numeric.', $field),
+                );
+            }
+
+            if (!is_int($endSeconds) && !is_float($endSeconds)) {
+                throw AudioToTextToEvaluationException::invalidPayload(
+                    sprintf('final %s end_seconds must be numeric.', $field),
+                );
+            }
+
+            $resolved[] = [
+                'text' => $text,
+                'speaker' => $speaker,
+                'start_seconds' => (float)$startSeconds,
+                'end_seconds' => (float)$endSeconds,
+            ];
+        }
+
+        return $resolved;
     }
 }
