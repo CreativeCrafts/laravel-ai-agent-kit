@@ -101,14 +101,23 @@ it('raises SchemaResolutionException when the schema class-string does not imple
     /** @var AiRuntime $runtime */
     $runtime = app(AiRuntime::class);
 
-    expect(fn () => $runtime->execute(
-        new ExecutionRequest(
-            runId: 'run-structured-class-mismatch',
-            prompt: 'Try a class that does not implement the contract.',
-            provider: 'openai',
-            schema: TestStructuredOutputBadSchema::class,
-        ),
-    ))->toThrow(SchemaResolutionException::class, TestStructuredOutputBadSchema::class);
+    try {
+        $runtime->execute(
+            new ExecutionRequest(
+                runId: 'run-structured-class-mismatch',
+                prompt: 'Try a class that does not implement the contract.',
+                provider: 'openai',
+                schema: TestStructuredOutputBadSchema::class,
+            ),
+        );
+
+        $this->fail('Expected schema resolution to fail.');
+    } catch (Throwable $throwable) {
+        expect($throwable->getMessage())
+          ->toContain('AI runtime execution failed for run [run-structured-class-mismatch]')
+          ->and($throwable->getPrevious())->toBeInstanceOf(SchemaResolutionException::class)
+          ->and($throwable->getPrevious()?->getMessage())->toContain(TestStructuredOutputBadSchema::class);
+    }
 });
 
 final class TestStructuredOutputSchema implements HasStructuredOutput
