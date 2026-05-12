@@ -1,0 +1,88 @@
+## 1. SDK verification
+
+- [ ] 1.1 Verify the installed `laravel/ai ^0.6` source exposes transcription constructors for base64, local path, storage, and upload.
+- [ ] 1.2 Verify whether the installed SDK/provider path supports remote URL audio transcription; document the result and defer URL execution if unsupported.
+- [ ] 1.3 Verify the installed SDK image abstraction supports URL, base64, local path, storage, and upload image inputs for runtime attachments.
+- [ ] 1.4 Verify structured execution still maps schema-backed SDK responses into `ExecutionResult::$structuredOutput`.
+- [ ] 1.5 Record verification notes in the design or maintainer SDK capability matrix.
+
+## 2. Transcription audio source API
+
+- [ ] 2.1 Add `TranscriptionAudioSourceKind` enum.
+- [ ] 2.2 Add immutable `TranscriptionAudioSource` DTO with factories for base64, path, storage, upload, and URL.
+- [ ] 2.3 Add validation for non-empty payloads, MIME type, disk, URL shape, and upload instances.
+- [ ] 2.4 Extend `TranscriptionRequest` to accept `TranscriptionAudioSource` while preserving existing base64 constructor compatibility.
+- [ ] 2.5 Add `TranscriptionRequest::fromAudioSource(...)` named constructor.
+- [ ] 2.6 Fail fast when both legacy `base64Audio` and explicit `audioSource` are provided.
+- [ ] 2.7 Update PHPDoc and static-analysis annotations.
+
+## 3. SDK transcription runtime mapping
+
+- [ ] 3.1 Refactor `SdkTranscriptionRuntime` to create pending transcription requests from source kind.
+- [ ] 3.2 Map base64 sources to `Transcription::fromBase64(...)`.
+- [ ] 3.3 Map local path sources to `Transcription::fromPath(...)`.
+- [ ] 3.4 Map storage sources to `Transcription::fromStorage(...)`.
+- [ ] 3.5 Map upload sources to `Transcription::fromUpload(...)`.
+- [ ] 3.6 For URL sources, either implement verified SDK/provider support or throw `UnsupportedTranscriptionAudioSourceException` before provider dispatch.
+- [ ] 3.7 Preserve prompt, provider options, language, diarization, timeout, provider/model, result mapping, usage mapping, segments, and metadata.
+
+## 4. Transcription fakes and observability
+
+- [ ] 4.1 Update transcription fake recording to include audio source kind and safe source metadata.
+- [ ] 4.2 Ensure base64 content and upload contents are never logged or emitted in full.
+- [ ] 4.3 Add fake assertions for source kind, disk/path, MIME type, prompt, provider, and model.
+- [ ] 4.4 Add event/redaction tests for source metadata.
+
+## 5. Multimodal evaluation input API
+
+- [ ] 5.1 Add `EvaluationImageInputKind` enum.
+- [ ] 5.2 Add immutable `EvaluationImageInput` DTO with factories for URL, base64, path, storage, and upload.
+- [ ] 5.3 Add validation for image source payloads.
+- [ ] 5.4 Add internal mapper from `EvaluationImageInput` to Laravel AI SDK image attachment objects.
+- [ ] 5.5 Ensure SDK image objects remain internal to Agent Kit bridge code.
+
+## 6. Audio-image structured evaluation workflow
+
+- [ ] 6.1 Add `AudioImageStructuredEvaluationRequest` DTO.
+- [ ] 6.2 Add `AudioImageStructuredEvaluationResult` DTO.
+- [ ] 6.3 Add package exceptions for unsupported provider capability, unsupported audio source, unsupported image source, and empty transcript.
+- [ ] 6.4 Implement `AudioImageStructuredEvaluation` blueprint/workflow using `TranscriptionRuntime` and `AiRuntime`.
+- [ ] 6.5 Build evaluation-stage `ExecutionRequest` with transcript text, instructions, caller schema, generation options, provider/model, metadata, and image attachment.
+- [ ] 6.6 Prefer `ExecutionResult::$structuredOutput` and expose raw output as secondary metadata.
+- [ ] 6.7 Include stage metadata for transcription and evaluation providers/models/usage/source kinds.
+- [ ] 6.8 Add `allowEmptyTranscript` request option and enforce default rejection.
+
+## 7. Provider capability validation
+
+- [ ] 7.1 Define canonical capability names for audio transcription, image input/vision, and structured output.
+- [ ] 7.2 Add provider capability checker or extend existing provider selector validation.
+- [ ] 7.3 Fail closed before dispatch when configured provider metadata proves unsupported capability.
+- [ ] 7.4 Document fallback behavior when provider capability metadata is unavailable.
+- [ ] 7.5 Add tests for supported provider, unsupported transcription provider, unsupported image provider, and unknown capability metadata.
+
+## 8. Pipeline and queued-pipeline integration
+
+- [ ] 8.1 Add direct facade/manager entry point for audio-image structured evaluation if consistent with existing Agent Kit facade ergonomics.
+- [ ] 8.2 Add pipeline step definitions or a queued pipeline wrapper for the workflow.
+- [ ] 8.3 Ensure queued payloads serialize only Agent Kit DTOs/scalars and not Laravel AI SDK objects.
+- [ ] 8.4 Add tests for synchronous blueprint execution.
+- [ ] 8.5 Add tests for queued pipeline dispatch payload shape.
+
+## 9. Documentation
+
+- [ ] 9.1 Update transcription modality docs with `TranscriptionAudioSource` examples for base64, path, storage, upload, and URL behavior.
+- [ ] 9.2 Update multimodal/blueprint docs with audio-image structured evaluation examples.
+- [ ] 9.3 Document OpenAI-style provider requirements without hard-coding OpenAI-only APIs into public package contracts.
+- [ ] 9.4 Update testing docs with fakes/assertions for source transcription and multimodal evaluation.
+- [ ] 9.5 Update maintainer SDK capability matrix to mark richer transcription sources and multimodal audio-image structured evaluation as package-owned supported surfaces.
+- [ ] 9.6 Update `CHANGELOG.md` and `UPGRADE.md` with additive API notes.
+
+## 10. Validation
+
+- [ ] 10.1 Run `openspec validate support-audio-sources-and-multimodal-audio-image-evaluation`.
+- [ ] 10.2 Run `composer pint` or package formatting command.
+- [ ] 10.3 Run static analysis.
+- [ ] 10.4 Run modality/transcription runtime tests.
+- [ ] 10.5 Run blueprint/workflow tests.
+- [ ] 10.6 Run queued pipeline tests.
+- [ ] 10.7 Run full test suite if feasible.
