@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Blueprints;
 
+use Closure;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use InvalidArgumentException;
+use Laravel\Ai\ObjectSchema;
 
 final readonly class AudioToTextToEvaluationRequest
 {
@@ -32,6 +34,7 @@ final readonly class AudioToTextToEvaluationRequest
         public bool $continueConversation = false,
         public ?string $transcriptionModel = null,
         public ?string $evaluationModel = null,
+        public Closure|ObjectSchema|string|null $schema = null,
     ) {
         if ($this->subject === '') {
             throw new InvalidArgumentException('AudioToTextToEvaluation requests require a non-empty subject.');
@@ -58,6 +61,18 @@ final readonly class AudioToTextToEvaluationRequest
                         'AudioToTextToEvaluation request field [%s] must be null or a non-empty string.',
                         $field,
                     ),
+                );
+            }
+        }
+
+        if (is_string($this->schema)) {
+            if ($this->schema === '') {
+                throw new InvalidArgumentException('AudioToTextToEvaluation request schema class-string must be non-empty.');
+            }
+
+            if (!class_exists($this->schema)) {
+                throw new InvalidArgumentException(
+                    sprintf('AudioToTextToEvaluation request schema class-string [%s] does not exist.', $this->schema),
                 );
             }
         }
@@ -91,5 +106,10 @@ final readonly class AudioToTextToEvaluationRequest
     public function dimensionList(): array
     {
         return $this->enabledDimensions;
+    }
+
+    public function hasCustomSchema(): bool
+    {
+        return $this->schema !== null;
     }
 }
