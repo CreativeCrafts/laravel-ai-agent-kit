@@ -62,6 +62,37 @@ PackageAssertions::assertLastRuntimeRequest($fakeRuntime, function ($request): v
 });
 ~~~
 
+## Testing transcription prompts
+
+When testing the Agent Kit to Laravel AI SDK transcription bridge, use Laravel AI SDK transcription fakes and assert that prompted transcription appears in provider options. This proves the prompt was not silently dropped before provider dispatch.
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\TranscriptionRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionRequest;
+use Laravel\Ai\Prompts\TranscriptionPrompt;
+use Laravel\Ai\Transcription;
+
+Transcription::fake(function (TranscriptionPrompt $prompt): string {
+    expect($prompt->providerOptions['prompt'] ?? null)
+        ->toBe('Transcribe verbatim and preserve pauses.');
+
+    return 'fake transcript';
+})->preventStrayTranscriptions();
+
+$result = app(TranscriptionRuntime::class)->transcribe(
+    new TranscriptionRequest(
+        runId: 'test-transcription-001',
+        base64Audio: base64_encode('audio'),
+        mimeType: 'audio/mpeg',
+        provider: 'openai',
+        model: 'gpt-4o-transcribe',
+        prompt: 'Transcribe verbatim and preserve pauses.',
+    ),
+);
+~~~
+
+For application-facing tests that do not care about the SDK bridge, bind your own `TranscriptionRuntime` fake or test double and assert the received `TranscriptionRequest::$prompt` directly.
+
 ## What to test with package fakes
 
 Use package fakes for:
