@@ -6,6 +6,9 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Added
 
+- Post-merge review fixes:
+  - added an upgrade migration for existing conversation message tables so installs using the old global `message_id` unique index can move to the required `conversation_record_id` + `message_id` unique identity;
+  - streaming runtime provider health is now recorded from the terminal stream outcome: provider failures during stream creation/iteration are recorded as failures, while provider success is recorded only after successful stream completion.
 - Laravel AI SDK parity governance:
   - expanded maintainer SDK capability and async inventories for the supported `laravel/ai ^0.6` range;
   - added maintainer event and provider-tool inventory with package-normalized, direct-SDK, deferred, and out-of-scope classifications;
