@@ -14,6 +14,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionContext;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StructuredEvaluationJsonSchema;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptExecutionMapper;
@@ -108,10 +109,7 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
                   ],
                   'evaluation_provider' => $runtimeResult->provider,
                   'evaluation_model' => $runtimeResult->model,
-                  'usage' => [
-                    'prompt_tokens' => $runtimeResult->promptTokens,
-                    'completion_tokens' => $runtimeResult->completionTokens,
-                  ],
+                  'usage' => $this->usagePayload($runtimeResult),
                 ],
                 summary: 'TextToStructuredEvaluation specialist completed custom schema analysis.',
             );
@@ -155,10 +153,7 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
             'structured_evaluation_repaired' => $repaired,
             'evaluation_provider' => $runtimeResult->provider,
             'evaluation_model' => $runtimeResult->model,
-            'usage' => [
-              'prompt_tokens' => $runtimeResult->promptTokens,
-              'completion_tokens' => $runtimeResult->completionTokens,
-            ],
+            'usage' => $this->usagePayload($runtimeResult),
           ],
             summary: 'TextToStructuredEvaluation specialist completed structured analysis.',
         );
@@ -321,6 +316,14 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
         }
 
         return new ConversationId($conversationId);
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function usagePayload(ExecutionResult $result): array
+    {
+        return $result->usage;
     }
 
     /**
