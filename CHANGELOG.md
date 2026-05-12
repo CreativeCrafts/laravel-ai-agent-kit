@@ -6,6 +6,11 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Added
 
+- Diarized transcription provider options:
+  - added `TranscriptionProviderOptions` as a controlled provider-options DTO for transcription requests;
+  - added `chunkingStrategy=auto` support for diarized transcription requests such as OpenAI `gpt-4o-transcribe-diarize`;
+  - transcription requests now reject chunking options unless `diarize` is enabled;
+  - `SdkTranscriptionRuntime` forwards controlled provider options through Laravel AI SDK transcription provider options when supported, and fails fast when the installed SDK path cannot honor them.
 - Transcription prompts:
   - `TranscriptionRequest` now accepts an optional non-empty `prompt` field;
   - `SdkTranscriptionRuntime` forwards prompted transcription through Laravel AI SDK transcription provider options when supported;
