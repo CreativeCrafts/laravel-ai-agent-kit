@@ -60,6 +60,7 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
 
         $variables = $this->promptVariables($context);
         $customSchema = (bool)$context->payloadValue('custom_evaluation_schema', false);
+        $enabledDimensions = $this->enabledDimensions($context);
 
         $request = $this->promptExecutionMapper->mapToExecutionRequest(
             name: $promptName,
@@ -101,7 +102,7 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
                   'summary' => $this->summaryFromStructuredOutput($structured),
                   'recommended_action' => $this->recommendedActionFromStructuredOutput($structured),
                   'confidence' => $this->confidenceFromStructuredOutput($structured),
-                  'dimensions' => $this->dimensionsFromStructuredOutput($structured),
+                  'dimensions' => $this->dimensionsFromStructuredOutput($structured, $enabledDimensions),
                   'structured_output' => $structured,
                   'metadata' => [
                     'structured_evaluation_path' => 'structured_output',
@@ -370,69 +371,66 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
 
     /**
      * @param array<string, mixed> $structured
+     * @param list<string> $enabledDimensions
      * @return array<string, array{name:string,score:int,summary:string,evidence:list<string>}>
      */
-    private function dimensionsFromStructuredOutput(array $structured): array
+    private function dimensionsFromStructuredOutput(array $structured, array $enabledDimensions): array
     {
-        $dimensions = $structured['dimensions'] ?? null;
-
-        if (!is_array($dimensions) || $dimensions === []) {
-            return [
-                'custom_schema' => [
-                    'name' => 'custom_schema',
-                    'score' => 1,
-                    'summary' => 'Custom schema structured output was returned.',
-                    'evidence' => ['structured_output'],
-                ],
-            ];
-        }
-
+        $dimensions = $structured['dimensions'] ?? [];
         $resolved = [];
 
-        foreach ($dimensions as $name => $payload) {
-            if (!is_string($name) || $name === '' || !is_array($payload)) {
+        if (is_array($dimensions)) {
+            foreach ($dimensions as $name => $payload) {
+                if (!is_string($name) || $name === '' || !is_array($payload)) {
+                    continue;
+                }
+
+                $score = $payload['score'] ?? 1;
+                $summary = $payload['summary'] ?? 'Custom schema dimension returned.';
+                $evidence = $payload['evidence'] ?? ['structured_output'];
+
+                if (!is_int($score)) {
+                    $score = 1;
+                }
+
+                if (!is_string($summary) || $summary === '') {
+                    $summary = 'Custom schema dimension returned.';
+                }
+
+                if (!is_array($evidence)) {
+                    $evidence = ['structured_output'];
+                }
+
+                $resolvedEvidence = [];
+
+                foreach ($evidence as $item) {
+                    if (is_string($item) && $item !== '') {
+                        $resolvedEvidence[] = $item;
+                    }
+                }
+
+                $resolved[$name] = [
+                    'name' => $name,
+                    'score' => $score,
+                    'summary' => $summary,
+                    'evidence' => $resolvedEvidence !== [] ? $resolvedEvidence : ['structured_output'],
+                ];
+            }
+        }
+
+        foreach ($enabledDimensions as $dimension) {
+            if (array_key_exists($dimension, $resolved)) {
                 continue;
             }
 
-            $score = $payload['score'] ?? 1;
-            $summary = $payload['summary'] ?? 'Custom schema dimension returned.';
-            $evidence = $payload['evidence'] ?? ['structured_output'];
-
-            if (!is_int($score)) {
-                $score = 1;
-            }
-
-            if (!is_string($summary) || $summary === '') {
-                $summary = 'Custom schema dimension returned.';
-            }
-
-            if (!is_array($evidence)) {
-                $evidence = ['structured_output'];
-            }
-
-            $resolvedEvidence = [];
-
-            foreach ($evidence as $item) {
-                if (is_string($item) && $item !== '') {
-                    $resolvedEvidence[] = $item;
-                }
-            }
-
-            $resolved[$name] = [
-                'name' => $name,
-                'score' => $score,
-                'summary' => $summary,
-                'evidence' => $resolvedEvidence !== [] ? $resolvedEvidence : ['structured_output'],
-            ];
-        }
-
-        return $resolved !== [] ? $resolved : [
-            'custom_schema' => [
-                'name' => 'custom_schema',
+            $resolved[$dimension] = [
+                'name' => $dimension,
                 'score' => 1,
                 'summary' => 'Custom schema structured output was returned.',
                 'evidence' => ['structured_output'],
-            ],
-        ];
+            ];
+        }
+
+        return $resolved;
     }
 }
