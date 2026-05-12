@@ -122,6 +122,34 @@ Prompt support depends on the installed Laravel AI SDK/provider path. Agent Kit 
 
 OpenAI does not support `prompt` for diarized transcription. Use unprompted diarized transcription, or keep diarized/provider-specific option support separate from prompt-driven transcription.
 
+## Diarized transcription provider options
+
+Use `TranscriptionProviderOptions` for controlled provider-specific transcription options. The first supported option is `chunkingStrategy=auto`, intended for OpenAI diarized transcription models such as `gpt-4o-transcribe-diarize` when longer audio requires automatic chunking.
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\TranscriptionRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionProviderOptions;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionRequest;
+
+$result = app(TranscriptionRuntime::class)->transcribe(
+    new TranscriptionRequest(
+        runId: 'diarized-transcription-001',
+        base64Audio: $base64Audio,
+        mimeType: 'audio/mpeg',
+        diarize: true,
+        provider: 'openai',
+        model: 'gpt-4o-transcribe-diarize',
+        providerOptions: new TranscriptionProviderOptions(
+            chunkingStrategy: TranscriptionProviderOptions::CHUNKING_STRATEGY_AUTO,
+        ),
+    ),
+);
+~~~
+
+Agent Kit validates controlled options before provider dispatch. Unsupported chunking strategy values fail during `TranscriptionProviderOptions` construction. `chunkingStrategy` also requires `diarize: true` on the transcription request.
+
+Provider-option support depends on the installed Laravel AI SDK transcription pending object. If the SDK path cannot honor provider options, Agent Kit fails fast instead of silently dropping `chunking_strategy`.
+
 ## Blueprint integration
 
 `AudioToTextToEvaluation` uses the transcription runtime when the audio reference is raw base64 or a `data:*;base64,...` URI. Opaque references such as `s3://...` may still flow through prompt/runtime paths depending on the configured workflow.
@@ -132,6 +160,6 @@ When the blueprint uses `TranscriptionRuntime`, it renders the configured transc
 
 Use package fakes for runtime and modality behavior. Do not call real provider APIs in tests.
 
-For transcription prompt tests, fake the Laravel AI transcription gateway and assert that the prompt appears in transcription provider options.
+For transcription prompt tests, fake the Laravel AI transcription gateway and assert that the prompt appears in transcription provider options. For controlled provider-option tests, assert `chunking_strategy` appears in the same provider-options payload when the installed SDK supports provider options; otherwise assert the package fail-fast exception.
 
 See [Testing](testing.md).
