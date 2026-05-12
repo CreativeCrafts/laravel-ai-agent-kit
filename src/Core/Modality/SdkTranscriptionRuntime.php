@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Modality;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\TranscriptionRuntime;
-use Laravel\Ai\Transcription;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\Exceptions\UnsupportedTranscriptionPromptException;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
+use Laravel\Ai\Transcription;
 
 final readonly class SdkTranscriptionRuntime implements TranscriptionRuntime
 {
@@ -16,6 +17,16 @@ final readonly class SdkTranscriptionRuntime implements TranscriptionRuntime
 
         if ($request->language !== null) {
             $pending = $pending->language($request->language);
+        }
+
+        if ($request->prompt !== null) {
+            if (!method_exists($pending, 'providerOptions')) {
+                throw UnsupportedTranscriptionPromptException::forInstalledSdk();
+            }
+
+            $pending = $pending->providerOptions([
+                'prompt' => $request->prompt,
+            ]);
         }
 
         if ($request->diarize) {
