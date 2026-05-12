@@ -2,26 +2,22 @@
 
 declare(strict_types=1);
 
-use CreativeCrafts\LaravelAiAgentKit\Blueprints\Agents\AudioToTextToEvaluationCoordinatorAgent;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\Agents\TextToStructuredEvaluationSpecialistAgent;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluation;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\Support\StructuredEvaluationOutputNormalizer;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\Agent;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\AgentRegistry;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionContext;
-use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationRequest;
-use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationResult;
-use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ProviderDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\InMemoryPromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptExecutionMapper;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAiRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\AudioEvaluation\RecordingSchemaDrivenAudioOrchestrator;
+use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\AudioEvaluation\SchemaDrivenAudioEvaluationSchema;
+use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\AudioEvaluation\SchemaDrivenNoopAgentRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\AudioEvaluation\SchemaDrivenProviderRegistry;
 use Laravel\Ai\ObjectSchema;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
 
 it('passes caller provided schemas through the audio evaluation orchestration request', function (mixed $schema): void {
     $orchestrator = new RecordingSchemaDrivenAudioOrchestrator([
@@ -169,91 +165,3 @@ it('sends custom audio evaluation schemas to the runtime and returns raw structu
         ->and($result->output['dimensions']['custom_schema']['summary'])->toBe('Custom schema structured output was returned.')
         ->and($result->output['usage']['completion_tokens'])->toBe(11);
 });
-
-final class SchemaDrivenAudioEvaluationSchema
-{
-}
-
-final class RecordingSchemaDrivenAudioOrchestrator implements AgentOrchestrator
-{
-    /** @var list<OrchestrationRequest> */
-    public array $requests = [];
-
-    /**
-     * @param array<string, mixed> $finalOutput
-     */
-    public function __construct(private readonly array $finalOutput)
-    {
-    }
-
-    public function run(OrchestrationRequest $request): OrchestrationResult
-    {
-        $this->requests[] = $request;
-
-        return new OrchestrationResult(
-            orchestrationId: 'orch-schema-driven-001',
-            status: OrchestrationResult::STATUS_COMPLETED,
-            finalAgent: AudioToTextToEvaluationCoordinatorAgent::KEY,
-            finalExecutionId: 'exec-schema-driven-final',
-            finalOutput: $this->finalOutput,
-            summary: 'Schema-driven audio evaluation completed.',
-        );
-    }
-}
-
-final class SchemaDrivenNoopAgentRegistry implements AgentRegistry
-{
-    /** @param class-string<Agent> $agentClass */
-    public function register(string $agentClass): void
-    {
-    }
-
-    /** @param iterable<class-string<Agent>> $agentClasses */
-    public function registerMany(iterable $agentClasses): void
-    {
-    }
-
-    public function has(string $agentKey): bool
-    {
-        return true;
-    }
-
-    public function get(string $agentKey): Agent
-    {
-        throw new RuntimeException('Schema-driven no-op registry does not resolve agents.');
-    }
-
-    public function all(): array
-    {
-        return [];
-    }
-}
-
-final class SchemaDrivenProviderRegistry implements ProviderRegistry
-{
-    public function has(string $providerName): bool
-    {
-        return $providerName === 'openai';
-    }
-
-    public function get(string $providerName): ProviderDefinition
-    {
-        if ($providerName !== 'openai') {
-            throw new RuntimeException('Unknown provider.');
-        }
-
-        return new ProviderDefinition(
-            name: 'openai',
-            driver: 'openai',
-            enabled: true,
-            capabilities: ['text_generation', 'structured_output'],
-        );
-    }
-
-    public function all(): array
-    {
-        return [
-            'openai' => $this->get('openai'),
-        ];
-    }
-}
