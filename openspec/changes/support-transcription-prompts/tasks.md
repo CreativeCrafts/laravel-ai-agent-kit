@@ -39,9 +39,9 @@
 
 ## 6. Validation
 
-- [ ] 6.1 Run `openspec validate support-transcription-prompts`.
-- [ ] 6.2 Run formatting checks.
-- [ ] 6.3 Run static analysis.
-- [ ] 6.4 Run modality/transcription runtime tests.
-- [ ] 6.5 Run blueprint tests affected by audio transcription.
-- [ ] 6.6 Run the full test suite if feasible.
+- [x] 6.1 Run `openspec validate support-transcription-prompts`.
+- [x] 6.2 Run formatting checks.
+- [x] 6.3 Run static analysis.
+- [x] 6.4 Run modality/transcription runtime tests.
+- [x] 6.5 Run blueprint tests affected by audio transcription.
+- [x] 6.6 Run the full test suite if feasible.
