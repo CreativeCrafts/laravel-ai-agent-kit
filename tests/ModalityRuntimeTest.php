@@ -13,6 +13,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Modality\EmbeddingsRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\Exceptions\UnsupportedTranscriptionPromptException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\ImageGenerationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\RerankingRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionProviderOptions;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionResult;
 use Illuminate\Support\Facades\Config;
@@ -90,6 +91,24 @@ it('stores transcription prompts on the request and rejects blank prompts', func
     );
 })->throws(InvalidArgumentException::class, 'Transcription request prompt must be null or a non-empty string.');
 
+it('stores automatic chunking provider options and rejects unsupported chunking strategies', function (): void {
+    $options = new TranscriptionProviderOptions(chunkingStrategy: TranscriptionProviderOptions::CHUNKING_STRATEGY_AUTO);
+
+    expect($options->chunkingStrategy)->toBe('auto')
+        ->and($options->toProviderOptions())->toBe(['chunking_strategy' => 'auto']);
+
+    new TranscriptionProviderOptions(chunkingStrategy: 'manual');
+})->throws(InvalidArgumentException::class, 'Unsupported transcription chunking strategy [manual].');
+
+it('rejects chunking provider options when diarization is disabled', function (): void {
+    new TranscriptionRequest(
+        runId: 'mod-tx-chunking-without-diarize',
+        base64Audio: base64_encode('fake-audio-bytes'),
+        diarize: false,
+        providerOptions: new TranscriptionProviderOptions(chunkingStrategy: 'auto'),
+    );
+})->throws(InvalidArgumentException::class, 'Transcription request chunkingStrategy is only supported when diarize is true.');
+
 it('forwards transcription prompts through sdk provider options when supported or fails fast otherwise', function (): void {
     $supportsProviderOptions = method_exists(
         Transcription::fromBase64(base64_encode('fake-audio-bytes'), 'audio/wav'),
@@ -134,6 +153,53 @@ it('forwards transcription prompts through sdk provider options when supported o
     $result = $runtime->transcribe($request);
 
     expect($result->transcript)->toBe('prompted transcript');
+});
+
+it('forwards diarized automatic chunking through sdk provider options when supported or fails fast otherwise', function (): void {
+    $supportsProviderOptions = method_exists(
+        Transcription::fromBase64(base64_encode('fake-audio-bytes'), 'audio/wav'),
+        'providerOptions',
+    );
+
+    Transcription::fake(function (TranscriptionPrompt $prompt) use ($supportsProviderOptions): string {
+        if ($supportsProviderOptions) {
+            $providerOptions = property_exists($prompt, 'providerOptions')
+                ? $prompt->providerOptions
+                : [];
+
+            expect($providerOptions)
+                ->toHaveKey('chunking_strategy')
+                ->and($providerOptions['chunking_strategy'])->toBe('auto');
+        }
+
+        return 'diarized transcript';
+    })->preventStrayTranscriptions();
+
+    app()->forgetInstance(TranscriptionRuntime::class);
+
+    /** @var TranscriptionRuntime $runtime */
+    $runtime = app(TranscriptionRuntime::class);
+
+    $request = new TranscriptionRequest(
+        runId: 'mod-tx-diarized-chunking',
+        base64Audio: base64_encode('fake-audio-bytes'),
+        mimeType: 'audio/wav',
+        diarize: true,
+        provider: 'openai',
+        model: 'gpt-4o-transcribe-diarize',
+        providerOptions: new TranscriptionProviderOptions(chunkingStrategy: 'auto'),
+    );
+
+    if (!$supportsProviderOptions) {
+        expect(fn () => $runtime->transcribe($request))
+            ->toThrow(UnsupportedTranscriptionPromptException::class);
+
+        return;
+    }
+
+    $result = $runtime->transcribe($request);
+
+    expect($result->transcript)->toBe('diarized transcript');
 });
 
 it('preserves unprompted transcription provider options as empty', function (): void {
