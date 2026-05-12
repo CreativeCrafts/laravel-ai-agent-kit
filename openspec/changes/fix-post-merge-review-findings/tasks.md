@@ -24,9 +24,9 @@
 
 ## 4. Validation
 
-- [ ] 4.1 Run `openspec validate fix-post-merge-review-findings`.
-- [ ] 4.2 Run formatting checks.
-- [ ] 4.3 Run PHPStan/static analysis.
-- [ ] 4.4 Run database memory migration/store test subset.
-- [ ] 4.5 Run streaming runtime test subset.
-- [ ] 4.6 Run full test suite if feasible.
+- [x] 4.1 Run `openspec validate fix-post-merge-review-findings`.
+- [x] 4.2 Run formatting checks.
+- [x] 4.3 Run PHPStan/static analysis.
+- [x] 4.4 Run database memory migration/store test subset.
+- [x] 4.5 Run streaming runtime test subset.
+- [x] 4.6 Run full test suite if feasible.
