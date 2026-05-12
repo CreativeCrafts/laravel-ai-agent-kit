@@ -9,7 +9,6 @@ use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\Support\StructuredEvaluationOutputNormalizer;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\Agent;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\AgentRegistry;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionContext;
@@ -97,7 +96,7 @@ it('passes caller provided schemas through the audio evaluation orchestration re
         ->and($result->toArray()['structured_output']['resolved'])->toBeTrue();
 })->with([
     'object schema' => [new ObjectSchema([], name: 'support_call_schema')],
-    'closure schema' => [static fn (): array => ['type' => 'object']],
+    'closure schema' => [fn (): array => ['type' => 'object']],
     'class-string schema' => [SchemaDrivenAudioEvaluationSchema::class],
 ]);
 
