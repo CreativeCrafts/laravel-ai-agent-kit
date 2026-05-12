@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Blueprints;
 
-use Closure;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use InvalidArgumentException;
 
@@ -33,7 +32,7 @@ final readonly class AudioToTextToEvaluationRequest
         public bool $continueConversation = false,
         public ?string $transcriptionModel = null,
         public ?string $evaluationModel = null,
-        public Closure|object|string|null $schema = null,
+        public object|string|null $schema = null,
     ) {
         if ($this->subject === '') {
             throw new InvalidArgumentException('AudioToTextToEvaluation requests require a non-empty subject.');

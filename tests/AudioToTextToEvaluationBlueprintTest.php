@@ -106,9 +106,8 @@ it('transcribes and evaluates audio through one orchestration call', function ()
       ->and($result->trace[1]->providerProfile)->toBe('openai-transcription')
       ->and($result->trace[2]->targetAgent)->toBe(TextToStructuredEvaluationCoordinatorAgent::KEY)
       ->and($result->trace[3]->targetAgent)->toBe(TextToStructuredEvaluationSpecialistAgent::KEY)
-      ->and($result->trace[4]->providerProfile)->toBe('openai-structured');
-
-    expect($fakeRuntime->requests())->toHaveCount(2);
+      ->and($result->trace[4]->providerProfile)->toBe('openai-structured')
+      ->and($fakeRuntime->requests())->toHaveCount(2);
 
     $requests = $fakeRuntime->requests();
 

@@ -27,7 +27,7 @@ it('passes caller provided object schemas to the evaluation runtime request', fu
 });
 
 it('passes caller provided closure schemas to the evaluation runtime request', function (): void {
-    $schema = fn(): array => ['type' => 'object'];
+    $schema = fn (): array => ['type' => 'object'];
 
     $requests = runSchemaDrivenAudioEvaluationSpecialist($schema);
 
@@ -83,12 +83,12 @@ function schemaDrivenAudioEvaluationRuntime(): FakeAiRuntime
 {
     return new FakeAiRuntime([
       new ExecutionResult(
-        runId: 'schema-driven-evaluation-001',
-        output: '',
-        provider: 'openai',
-        model: 'gpt-4o-mini',
-        usage: ['completion_tokens' => 11],
-        structuredOutput: [
+          runId: 'schema-driven-evaluation-001',
+          output: '',
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          usage: ['completion_tokens' => 11],
+          structuredOutput: [
           'resolved' => true,
           'risk_level' => 'low',
           'confidence' => 0.88,
@@ -106,7 +106,7 @@ function schemaDrivenAudioEvaluationSpecialist(FakeAiRuntime $fakeRuntime): Text
     ]);
 
     return new TextToStructuredEvaluationSpecialistAgent(
-      providerRegistry: new class implements ProviderRegistry {
+        providerRegistry: new class () implements ProviderRegistry {
           public function has(string $providerName): bool
           {
               return $providerName === 'openai';
@@ -119,10 +119,10 @@ function schemaDrivenAudioEvaluationSpecialist(FakeAiRuntime $fakeRuntime): Text
               }
 
               return new ProviderDefinition(
-                name: 'openai',
-                driver: 'openai',
-                enabled: true,
-                capabilities: ['text_generation', 'structured_output'],
+                  name: 'openai',
+                  driver: 'openai',
+                  enabled: true,
+                  capabilities: ['text_generation', 'structured_output'],
               );
           }
 
@@ -134,28 +134,28 @@ function schemaDrivenAudioEvaluationSpecialist(FakeAiRuntime $fakeRuntime): Text
               ];
           }
       },
-      promptRepository: $promptRepository,
-      promptExecutionMapper: new PromptExecutionMapper($promptRepository),
-      aiRuntime: $fakeRuntime,
-      structuredEvaluationOutputNormalizer: new StructuredEvaluationOutputNormalizer(),
+        promptRepository: $promptRepository,
+        promptExecutionMapper: new PromptExecutionMapper($promptRepository),
+        aiRuntime: $fakeRuntime,
+        structuredEvaluationOutputNormalizer: new StructuredEvaluationOutputNormalizer(),
     );
 }
 
 function schemaDrivenAudioEvaluationContext(mixed $schema): AgentExecutionContext
 {
     return new AgentExecutionContext(
-      orchestrationId: 'orch-schema-driven-001',
-      executionId: 'schema-driven-evaluation-001',
-      parentExecutionId: null,
-      agent: new AgentDefinition(
-        key: TextToStructuredEvaluationSpecialistAgent::KEY,
-        displayName: 'Specialist',
-        requiredCapabilities: ['text_generation', 'structured_output'],
-        primaryProviderProfile: 'openai',
-      ),
-      providerProfile: 'openai',
-      task: 'Evaluate transcript.',
-      payload: [
+        orchestrationId: 'orch-schema-driven-001',
+        executionId: 'schema-driven-evaluation-001',
+        parentExecutionId: null,
+        agent: new AgentDefinition(
+            key: TextToStructuredEvaluationSpecialistAgent::KEY,
+            displayName: 'Specialist',
+            requiredCapabilities: ['text_generation', 'structured_output'],
+            primaryProviderProfile: 'openai',
+        ),
+        providerProfile: 'openai',
+        task: 'Evaluate transcript.',
+        payload: [
         'subject' => 'support call',
         'text' => 'The issue is resolved.',
         'enabled_dimensions' => ['custom_schema'],

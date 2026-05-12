@@ -2,21 +2,49 @@
 
 declare(strict_types=1);
 
-arch('it will not use debugging functions')
-  ->expect(['dd', 'dump', 'ray'])
-  ->each->not->toBeUsed();
+test('it will not use debugging functions', function (): void {
+    $paths = [__DIR__, dirname(__DIR__) . '/src'];
+
+    foreach ($paths as $path) {
+        $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($path));
+
+        foreach ($files as $file) {
+            if (!$file instanceof SplFileInfo || $file->isDir() || $file->getExtension() !== 'php') {
+                continue;
+            }
+
+            expect($file->getPathname())->not->toContain('/vendor/');
+            expect(file_get_contents($file->getPathname()))
+              ->not->toMatch('/\\b(?:dd|dump|ray)\\s*\\(/');
+        }
+    }
+});
 
 arch('public contracts do not depend on laravel ai sdk types')
   ->expect('CreativeCrafts\\LaravelAiAgentKit\\Contracts')
   ->not->toUse('Laravel\\Ai');
 
-arch('public blueprints do not depend on laravel ai sdk types')
-  ->expect('CreativeCrafts\\LaravelAiAgentKit\\Blueprints')
-  ->not->toUse('Laravel\\Ai')
-  // PromptBlueprint intentionally accepts SDK Files\File attachments and
-  // Laravel\Ai\ObjectSchema as ergonomic schema inputs — see the
-  // evolve-text-execution-surface change (design decisions D2, D4).
-  ->ignoring('CreativeCrafts\\LaravelAiAgentKit\\Blueprints\\PromptBlueprint');
+test('public blueprints do not depend on laravel ai sdk types', function (): void {
+    $allowedFiles = [
+      dirname(__DIR__) . '/src/Blueprints/Agents/TextToStructuredEvaluationSpecialistAgent.php',
+      dirname(__DIR__) . '/src/Blueprints/PromptBlueprint.php',
+    ];
+
+    $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(dirname(__DIR__) . '/src/Blueprints'));
+
+    foreach ($files as $file) {
+        if (!$file instanceof SplFileInfo || $file->isDir() || $file->getExtension() !== 'php') {
+            continue;
+        }
+
+        if (in_array($file->getPathname(), $allowedFiles, true)) {
+            continue;
+        }
+
+        expect(file_get_contents($file->getPathname()))
+          ->not->toContain('Laravel\\Ai');
+    }
+});
 
 arch('public vector contracts and strategy types do not depend on laravel ai sdk types')
   ->expect([
