@@ -6,6 +6,11 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Added
 
+- Transcription prompts:
+  - `TranscriptionRequest` now accepts an optional non-empty `prompt` field;
+  - `SdkTranscriptionRuntime` forwards prompted transcription through Laravel AI SDK transcription provider options when supported;
+  - prompted transcription fails fast when the installed SDK path cannot honor the prompt instead of silently dropping it;
+  - `AudioToTextToEvaluation` transcription runtime path now passes the rendered transcription prompt into `TranscriptionRequest` while keeping prompt name/version metadata for observability.
 - Post-merge review fixes:
   - added an upgrade migration for existing conversation message tables so installs using the old global `message_id` unique index can move to the required `conversation_record_id` + `message_id` unique identity;
   - streaming runtime provider health is now recorded from the terminal stream outcome: provider failures during stream creation/iteration are recorded as failures, while provider success is recorded only after successful stream completion.
