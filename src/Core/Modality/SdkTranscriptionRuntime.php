@@ -6,9 +6,7 @@ namespace CreativeCrafts\LaravelAiAgentKit\Core\Modality;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\TranscriptionRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\Exceptions\UnsupportedTranscriptionPromptException;
-use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
-use Laravel\Ai\Responses\TranscriptionResponse;
 use Laravel\Ai\Transcription;
 use ReflectionMethod;
 
@@ -16,7 +14,6 @@ final readonly class SdkTranscriptionRuntime implements TranscriptionRuntime
 {
     public function transcribe(TranscriptionRequest $request): TranscriptionResult
     {
-        /** @var PendingTranscriptionGeneration $pending */
         $pending = Transcription::fromBase64($request->base64Audio, $request->mimeType);
         $providerOptions = [];
 
@@ -49,7 +46,6 @@ final readonly class SdkTranscriptionRuntime implements TranscriptionRuntime
             $pending = $pending->timeout($request->timeout);
         }
 
-        /** @var TranscriptionResponse $response */
         $response = $pending->generate($request->provider, $request->model);
 
         $segments = [];
