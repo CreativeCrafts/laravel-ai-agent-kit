@@ -24,6 +24,7 @@ final readonly class TranscriptionRequest
         public ?string $provider = null,
         public ?string $model = null,
         public array $metadata = [],
+        public ?string $prompt = null,
     ) {
         if ($this->runId === '') {
             throw new InvalidArgumentException('Transcription requests require a non-empty runId.');
@@ -35,6 +36,10 @@ final readonly class TranscriptionRequest
 
         if ($this->timeout !== null && $this->timeout < 1) {
             throw new InvalidArgumentException('Transcription request timeout must be null or >= 1.');
+        }
+
+        if ($this->prompt !== null && trim($this->prompt) === '') {
+            throw new InvalidArgumentException('Transcription request prompt must be null or a non-empty string.');
         }
     }
 }
