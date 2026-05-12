@@ -6,21 +6,25 @@ use CreativeCrafts\LaravelAiAgentKit\Blueprints\Agents\TextToStructuredEvaluatio
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluation;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\Support\StructuredEvaluationOutputNormalizer;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\Agent;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\AgentRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionContext;
+use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ProviderDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\InMemoryPromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptExecutionMapper;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAiRuntime;
-use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\AudioEvaluation\RecordingSchemaDrivenAudioOrchestrator;
-use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\AudioEvaluation\SchemaDrivenAudioEvaluationSchema;
-use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\AudioEvaluation\SchemaDrivenNoopAgentRegistry;
-use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\AudioEvaluation\SchemaDrivenProviderRegistry;
 use Laravel\Ai\ObjectSchema;
+use RuntimeException;
 
-it('passes caller provided schemas through the audio evaluation orchestration request', function (mixed $schema): void {
-    $orchestrator = new RecordingSchemaDrivenAudioOrchestrator([
+$assertAudioEvaluationSchemaIsPassedThrough = function (mixed $schema): void {
+    $orchestrator = new class([
         'subject' => 'support call',
         'audio_reference' => 's3://bucket/audio/support-call.wav',
         'transcript' => 'The customer says the issue is resolved.',
@@ -60,11 +64,61 @@ it('passes caller provided schemas through the audio evaluation orchestration re
         'transcription_prompt_version' => '1.0.0',
         'evaluation_prompt_name' => 'text-to-structured-evaluation.specialist',
         'evaluation_prompt_version' => '1.0.0',
-    ]);
+    ]) implements AgentOrchestrator {
+        /** @var list<OrchestrationRequest> */
+        public array $requests = [];
+
+        /**
+         * @param array<string, mixed> $finalOutput
+         */
+        public function __construct(private readonly array $finalOutput)
+        {
+        }
+
+        public function run(OrchestrationRequest $request): OrchestrationResult
+        {
+            $this->requests[] = $request;
+
+            return new OrchestrationResult(
+                orchestrationId: 'orch-schema-driven-001',
+                status: OrchestrationResult::STATUS_COMPLETED,
+                finalAgent: 'audio-to-text-to-evaluation.coordinator',
+                finalExecutionId: 'exec-schema-driven-final',
+                finalOutput: $this->finalOutput,
+                summary: 'Schema-driven audio evaluation completed.',
+            );
+        }
+    };
 
     $blueprint = new AudioToTextToEvaluation(
         agentOrchestrator: $orchestrator,
-        agentRegistry: new SchemaDrivenNoopAgentRegistry(),
+        agentRegistry: new class implements AgentRegistry {
+            /** @param class-string<Agent> $agentClass */
+            public function register(string $agentClass): void
+            {
+            }
+
+            /** @param iterable<class-string<Agent>> $agentClasses */
+            public function registerMany(iterable $agentClasses): void
+            {
+            }
+
+            public function has(string $agentKey): bool
+            {
+                return true;
+            }
+
+            public function get(string $agentKey): Agent
+            {
+                throw new RuntimeException('Schema-driven no-op registry does not resolve agents.');
+            }
+
+            /** @return array<string, Agent> */
+            public function all(): array
+            {
+                return [];
+            }
+        },
     );
 
     $result = $blueprint->evaluate(
@@ -79,7 +133,8 @@ it('passes caller provided schemas through the audio evaluation orchestration re
         ),
     );
 
-    expect($orchestrator->requests)->toHaveCount(1)
+    expect($orchestrator->requests)
+        ->toHaveCount(1)
         ->and($orchestrator->requests[0]->input['evaluation_schema'])->toBe($schema)
         ->and($orchestrator->requests[0]->input['custom_evaluation_schema'])->toBeTrue()
         ->and($result->structuredOutput)->toBe([
@@ -91,11 +146,19 @@ it('passes caller provided schemas through the audio evaluation orchestration re
         ->and($result->evaluationModel)->toBe('gpt-4o-mini')
         ->and($result->usage['evaluation']['completion_tokens'])->toBe(9)
         ->and($result->toArray()['structured_output']['resolved'])->toBeTrue();
-})->with([
-    'object schema' => [new ObjectSchema([], name: 'support_call_schema')],
-    'closure schema' => [fn (): array => ['type' => 'object']],
-    'class-string schema' => [SchemaDrivenAudioEvaluationSchema::class],
-]);
+};
+
+it('passes caller provided object schemas through the audio evaluation orchestration request', function () use ($assertAudioEvaluationSchemaIsPassedThrough): void {
+    $assertAudioEvaluationSchemaIsPassedThrough(new ObjectSchema([], name: 'support_call_schema'));
+});
+
+it('passes caller provided closure schemas through the audio evaluation orchestration request', function () use ($assertAudioEvaluationSchemaIsPassedThrough): void {
+    $assertAudioEvaluationSchemaIsPassedThrough(fn (): array => ['type' => 'object']);
+});
+
+it('passes caller provided class-string schemas through the audio evaluation orchestration request', function () use ($assertAudioEvaluationSchemaIsPassedThrough): void {
+    $assertAudioEvaluationSchemaIsPassedThrough(TextToStructuredEvaluationSpecialistAgent::class);
+});
 
 it('sends custom audio evaluation schemas to the runtime and returns raw structured output', function (): void {
     $promptRepository = new InMemoryPromptRepository([
@@ -119,7 +182,34 @@ it('sends custom audio evaluation schemas to the runtime and returns raw structu
     ]);
     $schema = new ObjectSchema([], name: 'support_call_schema');
     $agent = new TextToStructuredEvaluationSpecialistAgent(
-        providerRegistry: new SchemaDrivenProviderRegistry(),
+        providerRegistry: new class implements ProviderRegistry {
+            public function has(string $providerName): bool
+            {
+                return $providerName === 'openai';
+            }
+
+            public function get(string $providerName): ProviderDefinition
+            {
+                if ($providerName !== 'openai') {
+                    throw new RuntimeException('Unknown provider.');
+                }
+
+                return new ProviderDefinition(
+                    name: 'openai',
+                    driver: 'openai',
+                    enabled: true,
+                    capabilities: ['text_generation', 'structured_output'],
+                );
+            }
+
+            /** @return array<string, ProviderDefinition> */
+            public function all(): array
+            {
+                return [
+                    'openai' => $this->get('openai'),
+                ];
+            }
+        },
         promptRepository: $promptRepository,
         promptExecutionMapper: new PromptExecutionMapper($promptRepository),
         aiRuntime: $fakeRuntime,
@@ -154,7 +244,8 @@ it('sends custom audio evaluation schemas to the runtime and returns raw structu
 
     $requests = $fakeRuntime->requests();
 
-    expect($requests)->toHaveCount(1)
+    expect($requests)
+        ->toHaveCount(1)
         ->and($requests[0])->toBeInstanceOf(ExecutionRequest::class)
         ->and($requests[0]->schema)->toBe($schema)
         ->and($result->output['structured_output'])->toBe([
