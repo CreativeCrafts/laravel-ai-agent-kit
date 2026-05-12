@@ -8,6 +8,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\TranscriptionRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\Exceptions\UnsupportedTranscriptionPromptException;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Transcription;
+use ReflectionMethod;
 
 final readonly class SdkTranscriptionRuntime implements TranscriptionRuntime
 {
@@ -24,8 +25,9 @@ final readonly class SdkTranscriptionRuntime implements TranscriptionRuntime
                 throw UnsupportedTranscriptionPromptException::forInstalledSdk();
             }
 
-            $pending = $pending->providerOptions([
-                'prompt' => $request->prompt,
+            $providerOptionsMethod = new ReflectionMethod($pending, 'providerOptions');
+            $providerOptionsMethod->invoke($pending, [
+              'prompt' => $request->prompt,
             ]);
         }
 

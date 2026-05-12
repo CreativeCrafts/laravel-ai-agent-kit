@@ -22,6 +22,8 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionContext;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\ContainerAgentRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionResult;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\SynchronousAgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\AuditedProviderCapabilityMatrix;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredAgentProviderProfileSelector;
@@ -34,7 +36,6 @@ use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptExecutionMapper;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAiRuntime;
 use Illuminate\Support\Facades\Config;
 use Laravel\Ai\AiServiceProvider;
-use Laravel\Ai\Transcription;
 
 beforeEach(function (): void {
     bootAudioToTextToEvaluationBlueprintTestbed(
@@ -126,44 +127,45 @@ it('uses the modality transcription runtime when audio_reference is decodable ba
     app()->register(AiServiceProvider::class);
 
     /** @var array<string, mixed> $ai */
-    $ai = require __DIR__.'/../vendor/laravel/ai/config/ai.php';
+    $ai = require __DIR__ . '/../vendor/laravel/ai/config/ai.php';
     Config::set('ai', $ai);
     Config::set('ai.default', 'openai');
     Config::set('ai.default_for_transcription', 'openai');
     Config::set('ai.providers', [
-        'openai' => [
-            'driver' => 'openai',
-            'key' => 'test-key-for-ci',
-        ],
-        'openai-transcription' => [
-            'driver' => 'openai',
-            'key' => 'test-key-for-ci',
-        ],
+      'openai' => [
+        'driver' => 'openai',
+        'key' => 'test-key-for-ci',
+      ],
+      'openai-transcription' => [
+        'driver' => 'openai',
+        'key' => 'test-key-for-ci',
+      ],
     ]);
 
-    Transcription::fake(['modality transcript line'])->preventStrayTranscriptions();
-    app()->forgetInstance(TranscriptionRuntime::class);
+    // Remove Transcription::fake(['modality transcript line'])->preventStrayTranscriptions();
+    $transcriptionRuntime = new AudioBlueprintRecordingTranscriptionRuntime('modality transcript line');
+    app()->instance(TranscriptionRuntime::class, $transcriptionRuntime);
 
     $evaluationJson = json_encode([
-        'summary' => 'ok',
-        'recommended_action' => 'act',
-        'confidence' => 0.9,
-        'dimensions' => [
-            'clarity' => [
-                'score' => 5,
-                'summary' => 'clear',
-                'evidence' => ['e'],
-            ],
+      'summary' => 'ok',
+      'recommended_action' => 'act',
+      'confidence' => 0.9,
+      'dimensions' => [
+        'clarity' => [
+          'score' => 5,
+          'summary' => 'clear',
+          'evidence' => ['e'],
         ],
+      ],
     ], JSON_THROW_ON_ERROR);
 
     $fakeRuntime = new FakeAiRuntime([
-        new ExecutionResult(
-            runId: 'audio-run-eval-only',
-            output: $evaluationJson,
-            provider: 'openai-structured',
-            model: 'gpt-structured-test',
-        ),
+      new ExecutionResult(
+          runId: 'audio-run-eval-only',
+          output: $evaluationJson,
+          provider: 'openai-structured',
+          model: 'gpt-structured-test',
+      ),
     ]);
 
     app()->instance(AiRuntime::class, $fakeRuntime);
@@ -179,8 +181,15 @@ it('uses the modality transcription runtime when audio_reference is decodable ba
         ),
     );
 
-    expect($result->transcript)->toBe('modality transcript line')
-        ->and($fakeRuntime->requests())->toHaveCount(1);
+    expect($result->transcript)
+      ->toBe('modality transcript line')
+      ->and($fakeRuntime->requests())->toHaveCount(1)
+      ->and($transcriptionRuntime->requests)->toHaveCount(1)
+      ->and($transcriptionRuntime->requests[0]->prompt)->toContain('Transcribe the following audio for base64 clip.')
+      ->and($transcriptionRuntime->requests[0]->metadata['transcription_prompt_name'] ?? null)
+      ->toBe('audio-to-text-to-evaluation.transcription')
+      ->and($transcriptionRuntime->requests[0]->metadata['transcription_prompt_version'] ?? null)
+      ->toBe('1.0.0');
 });
 
 it('preserves the same package-owned result semantics across mixed-provider stage combinations that satisfy the audited capability matrix', function (): void {
@@ -574,6 +583,32 @@ it('fails fast on malformed delegated transcription payload', function (): void 
     expect(fn () => $coordinator->handle($context))
       ->toThrow(AudioToTextToEvaluationException::class, 'transcription delegated result must contain a non-empty transcript');
 });
+
+
+final class AudioBlueprintRecordingTranscriptionRuntime implements TranscriptionRuntime
+{
+    /** @var list<TranscriptionRequest> */
+    public array $requests = [];
+
+    public function __construct(private readonly string $transcript)
+    {
+    }
+
+    public function transcribe(TranscriptionRequest $request): TranscriptionResult
+    {
+        $this->requests[] = $request;
+
+        return new TranscriptionResult(
+            runId: $request->runId,
+            transcript: $this->transcript,
+            provider: $request->provider ?? 'openai',
+            model: $request->model ?? 'gpt-4o-transcribe',
+            promptTokens: 0,
+            completionTokens: 0,
+            metadata: $request->metadata,
+        );
+    }
+}
 
 function refreshAudioToTextToEvaluationBindings(): void
 {
