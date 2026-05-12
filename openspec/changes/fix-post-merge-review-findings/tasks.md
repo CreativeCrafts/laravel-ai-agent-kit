@@ -1,10 +1,10 @@
 ## 1. Database migration compatibility
 
-- [ ] 1.1 Add tests that recreate the legacy message table index state with global `message_id` uniqueness and no composite message identity index.
-- [ ] 1.2 Add an upgrade migration stub that drops the old global `message_id` unique index when present.
-- [ ] 1.3 Add the composite unique index on `conversation_record_id` + `message_id` when missing.
-- [ ] 1.4 Ensure the migration is defensive when the composite index already exists.
-- [ ] 1.5 Verify database conversation saves support the same `message_id` in different conversations after migration.
+- [x] 1.1 Add tests that recreate the legacy message table index state with global `message_id` uniqueness and no composite message identity index.
+- [x] 1.2 Add an upgrade migration stub that drops the old global `message_id` unique index when present.
+- [x] 1.3 Add the composite unique index on `conversation_record_id` + `message_id` when missing.
+- [x] 1.4 Ensure the migration is defensive when the composite index already exists.
+- [x] 1.5 Verify database conversation saves support the same `message_id` in different conversations after migration.
 
 ## 2. Streaming provider health accounting
 
@@ -17,8 +17,8 @@
 
 ## 3. Documentation and changelog
 
-- [ ] 3.1 Update `docs/memory.md` with upgrade migration guidance for existing message indexes.
-- [ ] 3.2 Update `docs/production.md` with deployment guidance for the message-index migration.
+- [x] 3.1 Update `docs/memory.md` with upgrade migration guidance for existing message indexes.
+- [x] 3.2 Update `docs/production.md` with deployment guidance for the message-index migration.
 - [ ] 3.3 Update `docs/streaming-and-modalities.md` or `docs/providers.md` with streaming provider health accounting behavior.
 - [ ] 3.4 Update `CHANGELOG.md` with both post-merge review fixes.
 
