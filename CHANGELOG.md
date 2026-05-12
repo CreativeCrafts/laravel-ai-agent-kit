@@ -6,6 +6,11 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Added
 
+- Schema-driven audio evaluation:
+  - `AudioToTextToEvaluationRequest` now accepts an optional caller-provided `schema` for custom transcript evaluation output;
+  - audio evaluation forwards custom schemas into the transcript evaluation runtime request;
+  - `AudioToTextToEvaluationResult` now exposes raw `structuredOutput`, transcription segments, stage provider/model metadata, and usage metadata while preserving existing no-schema compatibility fields;
+  - custom schema evaluation requires non-empty structured output and fails fast when the evaluation stage cannot produce it.
 - Diarized transcription provider options:
   - added `TranscriptionProviderOptions` as a controlled provider-options DTO for transcription requests;
   - added `chunkingStrategy=auto` support for diarized transcription requests such as OpenAI `gpt-4o-transcribe-diarize`;
