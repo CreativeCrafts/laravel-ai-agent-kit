@@ -25,6 +25,7 @@ final readonly class TranscriptionRequest
         public ?string $model = null,
         public array $metadata = [],
         public ?string $prompt = null,
+        public ?TranscriptionProviderOptions $providerOptions = null,
     ) {
         if ($this->runId === '') {
             throw new InvalidArgumentException('Transcription requests require a non-empty runId.');
@@ -40,6 +41,10 @@ final readonly class TranscriptionRequest
 
         if ($this->prompt !== null && trim($this->prompt) === '') {
             throw new InvalidArgumentException('Transcription request prompt must be null or a non-empty string.');
+        }
+
+        if ($this->providerOptions?->hasChunkingStrategy() === true && !$this->diarize) {
+            throw new InvalidArgumentException('Transcription request chunkingStrategy is only supported when diarize is true.');
         }
     }
 }
