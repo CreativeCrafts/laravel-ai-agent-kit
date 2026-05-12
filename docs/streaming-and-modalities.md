@@ -43,6 +43,17 @@ Applications consuming `executeStream()` should handle three event families:
 
 Failure telemetry is emitted through redacted `RuntimeStreamFailed` events when an event dispatcher is available.
 
+## Provider health accounting
+
+Streaming provider health is recorded from the terminal stream outcome, not stream creation alone.
+
+- Stream creation failures record provider failure and may fail over before any chunks are emitted.
+- Terminal provider stream errors and provider-failure iteration exceptions record provider failure.
+- Successful stream completion records provider success once, after completion processing succeeds.
+- Package-local completion failures, such as budget or memory reconciliation failures, do not count as provider failures unless they are normalized as provider failures.
+
+Mid-stream failures remain terminal and are not replayed against another provider.
+
 ## Optional broadcast telemetry
 
 Set `runtime.streaming.broadcast_channel` or request metadata `streaming_broadcast_channel` to emit redacted streaming events for public Echo channels. Payloads contain safe identifiers, counts, and lengths, not raw prompt content.
