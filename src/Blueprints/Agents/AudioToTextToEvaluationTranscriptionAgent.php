@@ -13,6 +13,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionContext;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionResult;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\Exceptions\UnsupportedTranscriptionPromptException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptExecutionMapper;
@@ -62,6 +63,8 @@ final readonly class AudioToTextToEvaluationTranscriptionAgent implements Agent
 
         $audioReference = $this->stringPayloadValue($context, 'audio_reference');
         $audioMimeType = $this->nullableStringPayloadValue($context, 'audio_mime_type');
+        $promptVariables = $this->promptVariables($context);
+        $renderedPrompt = $this->promptRepository->render($promptName, $promptVariables, $promptVersion);
 
         $transcript = $this->tryTranscriptionRuntimeTranscript(
             context: $context,
@@ -69,6 +72,7 @@ final readonly class AudioToTextToEvaluationTranscriptionAgent implements Agent
             audioMimeType: $audioMimeType,
             promptName: $promptName,
             promptVersion: $promptVersion,
+            renderedPrompt: $renderedPrompt,
             providerProfile: $context->providerProfile,
             transcriptionModel: $this->nullableStringPayloadValue($context, 'transcription_model'),
         );
@@ -77,20 +81,20 @@ final readonly class AudioToTextToEvaluationTranscriptionAgent implements Agent
             $request = $this->promptExecutionMapper->mapToExecutionRequest(
                 name: $promptName,
                 runId: $context->executionId,
-                variables: $this->promptVariables($context),
+                variables: $promptVariables,
                 version: $promptVersion,
                 provider: $context->providerProfile,
                 model: $this->nullableStringPayloadValue($context, 'transcription_model'),
                 input: [
-                'subject' => $context->payloadValue('subject'),
-                'audio_reference' => $context->payloadValue('audio_reference'),
-                'audio_mime_type' => $context->payloadValue('audio_mime_type'),
-              ],
+                    'subject' => $context->payloadValue('subject'),
+                    'audio_reference' => $context->payloadValue('audio_reference'),
+                    'audio_mime_type' => $context->payloadValue('audio_mime_type'),
+                ],
                 metadata: [
-                'orchestration_id' => $context->orchestrationId,
-                'agent_key' => $context->agent->key,
-                'transcription_stage' => true,
-              ],
+                    'orchestration_id' => $context->orchestrationId,
+                    'agent_key' => $context->agent->key,
+                    'transcription_stage' => true,
+                ],
                 conversationId: $this->conversationIdValue($context),
                 storeConversation: (bool)$context->payloadValue('store_conversation', false),
                 continueConversation: (bool)$context->payloadValue('continue_conversation', false),
@@ -107,8 +111,8 @@ final readonly class AudioToTextToEvaluationTranscriptionAgent implements Agent
         return new AgentExecutionResult(
             kind: AgentExecutionResult::KIND_COMPLETE,
             output: [
-            'transcript' => $transcript,
-          ],
+                'transcript' => $transcript,
+            ],
             summary: 'AudioToTextToEvaluation transcription specialist completed the transcript.',
         );
     }
@@ -249,6 +253,7 @@ final readonly class AudioToTextToEvaluationTranscriptionAgent implements Agent
         ?string $audioMimeType,
         string $promptName,
         ?string $promptVersion,
+        string $renderedPrompt,
         string $providerProfile,
         ?string $transcriptionModel,
     ): ?string {
@@ -274,12 +279,15 @@ final readonly class AudioToTextToEvaluationTranscriptionAgent implements Agent
                         'transcription_prompt_name' => $promptName,
                         'transcription_prompt_version' => $promptVersion,
                     ],
+                    prompt: $renderedPrompt,
                 ),
             );
 
             $text = trim($result->transcript);
 
             return $text !== '' ? $text : null;
+        } catch (UnsupportedTranscriptionPromptException) {
+            throw;
         } catch (Throwable) {
             return null;
         }
