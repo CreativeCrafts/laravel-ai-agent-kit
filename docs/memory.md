@@ -80,6 +80,8 @@ Database writes use atomic database write semantics for the conversation row and
 
 Saving a previously soft-deleted database conversation restores it by clearing `deleted_at`.
 
+Existing applications that published and ran the earlier conversation message migration must also run the package upgrade migration `update_ai_agent_conversation_messages_message_identity_index`. It removes the old global `message_id` unique index when present and adds the required unique index on `conversation_record_id` + `message_id`. New installs already receive the composite message identity from the current migration stub.
+
 Redis memory encrypts the full stored conversation payload by default:
 
 ~~~php
