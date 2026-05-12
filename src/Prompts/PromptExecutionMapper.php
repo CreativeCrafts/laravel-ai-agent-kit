@@ -9,6 +9,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Prompts\PromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\GenerationOptions;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
+use InvalidArgumentException;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\ObjectSchema;
 
@@ -82,6 +83,21 @@ final readonly class PromptExecutionMapper
             schema: $schema,
             attachments: $attachments,
             providerToolNames: $providerToolNames,
+        );
+    }
+
+    public function normalizeSchema(mixed $schema): Closure|ObjectSchema|string|null
+    {
+        if ($schema === null || $schema instanceof Closure || $schema instanceof ObjectSchema) {
+            return $schema;
+        }
+
+        if (is_string($schema) && $schema !== '') {
+            return $schema;
+        }
+
+        throw new InvalidArgumentException(
+            'schema must be null, a Closure, an ObjectSchema, or a non-empty class-string.',
         );
     }
 }
