@@ -19,6 +19,7 @@ use Laravel\Ai\AiServiceProvider;
 use Laravel\Ai\Audio;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Image;
+use Laravel\Ai\Prompts\TranscriptionPrompt;
 use Laravel\Ai\Reranking;
 use Laravel\Ai\Responses\Data\RankedDocument;
 use Laravel\Ai\Transcription;
@@ -69,6 +70,74 @@ it('transcribes base64 audio through the sdk transcription runtime', function ()
     expect($result->transcript)->toBe('hello modality')
         ->and($result->runId)->toBe('mod-tx-1')
         ->and($result->provider)->not->toBe('');
+});
+
+it('stores transcription prompts on the request and rejects blank prompts', function (): void {
+    $request = new TranscriptionRequest(
+        runId: 'mod-tx-prompt-request',
+        base64Audio: base64_encode('fake-audio-bytes'),
+        prompt: 'Preserve hesitations and pauses exactly.',
+    );
+
+    expect($request->prompt)->toBe('Preserve hesitations and pauses exactly.');
+
+    new TranscriptionRequest(
+        runId: 'mod-tx-blank-prompt',
+        base64Audio: base64_encode('fake-audio-bytes'),
+        prompt: '   ',
+    );
+})->throws(InvalidArgumentException::class, 'Transcription request prompt must be null or a non-empty string.');
+
+it('forwards transcription prompts through sdk provider options', function (): void {
+    Transcription::fake(function (TranscriptionPrompt $prompt): string {
+        expect($prompt->providerOptions)->toHaveKey('prompt')
+            ->and($prompt->providerOptions['prompt'])->toBe('Transcribe verbatim and preserve pauses.');
+
+        return 'prompted transcript';
+    })->preventStrayTranscriptions();
+
+    app()->forgetInstance(TranscriptionRuntime::class);
+
+    /** @var TranscriptionRuntime $runtime */
+    $runtime = app(TranscriptionRuntime::class);
+
+    $result = $runtime->transcribe(
+        new TranscriptionRequest(
+            runId: 'mod-tx-prompt-forwarded',
+            base64Audio: base64_encode('fake-audio-bytes'),
+            mimeType: 'audio/wav',
+            provider: 'openai',
+            model: 'gpt-4o-transcribe',
+            prompt: 'Transcribe verbatim and preserve pauses.',
+        ),
+    );
+
+    expect($result->transcript)->toBe('prompted transcript');
+});
+
+it('preserves unprompted transcription provider options as empty', function (): void {
+    Transcription::fake(function (TranscriptionPrompt $prompt): string {
+        expect($prompt->providerOptions)->toBe([]);
+
+        return 'unprompted transcript';
+    })->preventStrayTranscriptions();
+
+    app()->forgetInstance(TranscriptionRuntime::class);
+
+    /** @var TranscriptionRuntime $runtime */
+    $runtime = app(TranscriptionRuntime::class);
+
+    $result = $runtime->transcribe(
+        new TranscriptionRequest(
+            runId: 'mod-tx-unprompted',
+            base64Audio: base64_encode('fake-audio-bytes'),
+            mimeType: 'audio/wav',
+            provider: 'openai',
+            model: 'gpt-4o-transcribe',
+        ),
+    );
+
+    expect($result->transcript)->toBe('unprompted transcript');
 });
 
 it('preserves embeddings batch input order', function (): void {
