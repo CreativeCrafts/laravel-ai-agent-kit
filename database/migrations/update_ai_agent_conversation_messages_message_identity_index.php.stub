@@ -1,0 +1,109 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+return new class () extends Migration {
+    private string $table = 'ai_agent_conversation_messages';
+
+    private string $legacyMessageIdIndex = 'ai_agent_conversation_messages_message_id_unique';
+
+    private string $recordMessageIndex = 'ai_agent_conversation_messages_record_message_unique';
+
+    public function up(): void
+    {
+        if (!Schema::hasTable($this->table)) {
+            return;
+        }
+
+        if ($this->indexExists($this->recordMessageIndex)) {
+            $this->dropIndexIfExists($this->legacyMessageIdIndex);
+
+            return;
+        }
+
+        $this->dropIndexIfExists($this->legacyMessageIdIndex);
+
+        Schema::table($this->table, function (Blueprint $table): void {
+            $table->unique(
+                ['conversation_record_id', 'message_id'],
+                $this->recordMessageIndex,
+            );
+        });
+    }
+
+    public function down(): void
+    {
+        if (!Schema::hasTable($this->table)) {
+            return;
+        }
+
+        $this->dropIndexIfExists($this->recordMessageIndex);
+
+        if (!$this->indexExists($this->legacyMessageIdIndex)) {
+            Schema::table($this->table, function (Blueprint $table): void {
+                $table->unique('message_id', $this->legacyMessageIdIndex);
+            });
+        }
+    }
+
+    private function dropIndexIfExists(string $indexName): void
+    {
+        if (!$this->indexExists($indexName)) {
+            return;
+        }
+
+        Schema::table($this->table, function (Blueprint $table) use ($indexName): void {
+            $table->dropUnique($indexName);
+        });
+    }
+
+    private function indexExists(string $indexName): bool
+    {
+        $driver = Schema::getConnection()->getDriverName();
+
+        return match ($driver) {
+            'sqlite' => $this->sqliteIndexExists($indexName),
+            'pgsql' => $this->pgsqlIndexExists($indexName),
+            'mysql', 'mariadb' => $this->mysqlIndexExists($indexName),
+            default => false,
+        };
+    }
+
+    private function sqliteIndexExists(string $indexName): bool
+    {
+        $indexes = DB::select(sprintf('PRAGMA index_list(%s)', $this->table));
+
+        foreach ($indexes as $index) {
+            if (($index->name ?? null) === $indexName) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function pgsqlIndexExists(string $indexName): bool
+    {
+        return DB::table('pg_indexes')
+            ->where('schemaname', 'public')
+            ->where('tablename', $this->table)
+            ->where('indexname', $indexName)
+            ->exists();
+    }
+
+    private function mysqlIndexExists(string $indexName): bool
+    {
+        $databaseName = DB::getDatabaseName();
+
+        return DB::table('information_schema.statistics')
+            ->where('table_schema', $databaseName)
+            ->where('table_name', $this->table)
+            ->where('index_name', $indexName)
+            ->exists();
+    }
+};
