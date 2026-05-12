@@ -12,6 +12,10 @@ final readonly class AudioToTextToEvaluationResult
     /**
      * @param list<string> $enabledDimensions
      * @param array<string, TextToStructuredEvaluationDimensionResult> $dimensions
+     * @param array<string, mixed> $structuredOutput
+     * @param list<array{text:string,speaker:string,start_seconds:float,end_seconds:float}> $segments
+     * @param array<string, mixed> $metadata
+     * @param array<string, mixed> $usage
      * @param list<ExecutionTraceRecord> $trace
      */
     public function __construct(
@@ -31,6 +35,14 @@ final readonly class AudioToTextToEvaluationResult
         public string $orchestrationSummary,
         public string $finalAgent,
         public array $trace = [],
+        public array $structuredOutput = [],
+        public array $segments = [],
+        public array $metadata = [],
+        public ?string $transcriptionProvider = null,
+        public ?string $transcriptionModel = null,
+        public ?string $evaluationProvider = null,
+        public ?string $evaluationModel = null,
+        public array $usage = [],
     ) {
         foreach (
           [
@@ -60,6 +72,10 @@ final readonly class AudioToTextToEvaluationResult
           [
             'transcriptionPromptVersion' => $this->transcriptionPromptVersion,
             'evaluationPromptVersion' => $this->evaluationPromptVersion,
+            'transcriptionProvider' => $this->transcriptionProvider,
+            'transcriptionModel' => $this->transcriptionModel,
+            'evaluationProvider' => $this->evaluationProvider,
+            'evaluationModel' => $this->evaluationModel,
           ] as $field => $value
         ) {
             if ($value === '') {
@@ -108,23 +124,7 @@ final readonly class AudioToTextToEvaluationResult
     }
 
     /**
-     * @return array{
-     *   orchestration_id:string,
-     *   subject:string,
-     *   audio_reference:string,
-     *   transcript:string,
-     *   summary:string,
-     *   recommended_action:string,
-     *   confidence:float,
-     *   enabled_dimensions:list<string>,
-     *   dimensions:array<string, array{name:string,score:int,summary:string,evidence:list<string>}>,
-     *   transcription_prompt_name:string,
-     *   transcription_prompt_version:?string,
-     *   evaluation_prompt_name:string,
-     *   evaluation_prompt_version:?string,
-     *   orchestration_summary:string,
-     *   final_agent:string
-     * }
+     * @return array<string, mixed>
      */
     public function toArray(): array
     {
@@ -142,6 +142,14 @@ final readonly class AudioToTextToEvaluationResult
           'confidence' => $this->confidence,
           'enabled_dimensions' => $this->enabledDimensions,
           'dimensions' => $dimensions,
+          'structured_output' => $this->structuredOutput,
+          'segments' => $this->segments,
+          'metadata' => $this->metadata,
+          'transcription_provider' => $this->transcriptionProvider,
+          'transcription_model' => $this->transcriptionModel,
+          'evaluation_provider' => $this->evaluationProvider,
+          'evaluation_model' => $this->evaluationModel,
+          'usage' => $this->usage,
           'transcription_prompt_name' => $this->transcriptionPromptName,
           'transcription_prompt_version' => $this->transcriptionPromptVersion,
           'evaluation_prompt_name' => $this->evaluationPromptName,
