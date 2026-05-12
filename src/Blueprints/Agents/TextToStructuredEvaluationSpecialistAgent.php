@@ -18,6 +18,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StructuredEvaluationJsonSchema;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptExecutionMapper;
+use InvalidArgumentException;
 
 final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
 {
@@ -62,6 +63,14 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
         $customSchema = (bool)$context->payloadValue('custom_evaluation_schema', false);
         $enabledDimensions = $this->enabledDimensions($context);
 
+        try {
+            $evaluationSchema = $customSchema
+                ? $this->promptExecutionMapper->normalizeSchema($context->payloadValue('evaluation_schema'))
+                : StructuredEvaluationJsonSchema::objectSchema();
+        } catch (InvalidArgumentException $exception) {
+            throw TextToStructuredEvaluationException::invalidSpecialistPayload($exception->getMessage());
+        }
+
         $request = $this->promptExecutionMapper->mapToExecutionRequest(
             name: $promptName,
             runId: $context->executionId,
@@ -82,7 +91,7 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
             conversationId: $this->conversationIdValue($context),
             storeConversation: (bool)$context->payloadValue('store_conversation', false),
             continueConversation: (bool)$context->payloadValue('continue_conversation', false),
-            schema: $customSchema ? $context->payloadValue('evaluation_schema') : StructuredEvaluationJsonSchema::objectSchema(),
+            schema: $evaluationSchema,
         );
 
         $runtimeResult = $this->aiRuntime->execute($request);
