@@ -17,19 +17,20 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\OrchestrationResult;
 final readonly class AudioToTextToEvaluation
 {
     public function __construct(
-      private AgentOrchestrator $agentOrchestrator,
-      private AgentRegistry $agentRegistry,
-    ) {}
+        private AgentOrchestrator $agentOrchestrator,
+        private AgentRegistry $agentRegistry,
+    ) {
+    }
 
     public function evaluate(AudioToTextToEvaluationRequest $request): AudioToTextToEvaluationResult
     {
         $this->ensurePackageAgentsRegistered();
 
         $result = $this->agentOrchestrator->run(
-          new OrchestrationRequest(
-            entryAgent: AudioToTextToEvaluationCoordinatorAgent::KEY,
-            task: sprintf('Transcribe and evaluate audio for subject [%s].', $request->subject),
-            input: [
+            new OrchestrationRequest(
+                entryAgent: AudioToTextToEvaluationCoordinatorAgent::KEY,
+                task: sprintf('Transcribe and evaluate audio for subject [%s].', $request->subject),
+                input: [
               'subject' => $request->subject,
               'audio_reference' => $request->audioReference,
               'audio_mime_type' => $request->audioMimeType,
@@ -48,9 +49,9 @@ final readonly class AudioToTextToEvaluation
               'evaluation_schema' => $request->schema,
               'custom_evaluation_schema' => $request->hasCustomSchema(),
             ],
-            metadata: $request->metadata,
-            conversationId: $request->conversationId,
-          ),
+                metadata: $request->metadata,
+                conversationId: $request->conversationId,
+            ),
         );
 
         return $this->mapResult($result);
@@ -122,10 +123,10 @@ final readonly class AudioToTextToEvaluation
 
             if (!is_array($dimensionPayload)) {
                 throw AudioToTextToEvaluationException::invalidPayload(
-                  sprintf(
-                    'dimension [%s] must be an object.',
-                    $name,
-                  ),
+                    sprintf(
+                        'dimension [%s] must be an object.',
+                        $name,
+                    ),
                 );
             }
 
@@ -135,28 +136,28 @@ final readonly class AudioToTextToEvaluation
 
             if (!is_int($score)) {
                 throw AudioToTextToEvaluationException::invalidPayload(
-                  sprintf(
-                    'dimension [%s] score must be an integer.',
-                    $name,
-                  ),
+                    sprintf(
+                        'dimension [%s] score must be an integer.',
+                        $name,
+                    ),
                 );
             }
 
             if (!is_string($dimensionSummary) || $dimensionSummary === '') {
                 throw AudioToTextToEvaluationException::invalidPayload(
-                  sprintf(
-                    'dimension [%s] summary must be a non-empty string.',
-                    $name,
-                  ),
+                    sprintf(
+                        'dimension [%s] summary must be a non-empty string.',
+                        $name,
+                    ),
                 );
             }
 
             if (!is_array($evidence)) {
                 throw AudioToTextToEvaluationException::invalidPayload(
-                  sprintf(
-                    'dimension [%s] evidence must be a list of strings.',
-                    $name,
-                  ),
+                    sprintf(
+                        'dimension [%s] evidence must be a list of strings.',
+                        $name,
+                    ),
                 );
             }
 
@@ -165,10 +166,10 @@ final readonly class AudioToTextToEvaluation
             foreach ($evidence as $item) {
                 if (!is_string($item) || $item === '') {
                     throw AudioToTextToEvaluationException::invalidPayload(
-                      sprintf(
-                        'dimension [%s] evidence entries must be non-empty strings.',
-                        $name,
-                      ),
+                        sprintf(
+                            'dimension [%s] evidence entries must be non-empty strings.',
+                            $name,
+                        ),
                     );
                 }
 
@@ -176,38 +177,38 @@ final readonly class AudioToTextToEvaluation
             }
 
             $resolvedDimensions[$name] = new TextToStructuredEvaluationDimensionResult(
-              name: $name,
-              score: $score,
-              summary: $dimensionSummary,
-              evidence: $resolvedEvidence,
+                name: $name,
+                score: $score,
+                summary: $dimensionSummary,
+                evidence: $resolvedEvidence,
             );
         }
 
         return new AudioToTextToEvaluationResult(
-          orchestrationId: $result->orchestrationId,
-          subject: $subject,
-          audioReference: $audioReference,
-          transcript: $transcript,
-          summary: $summary,
-          recommendedAction: $recommendedAction,
-          confidence: (float)$confidence,
-          enabledDimensions: $resolvedEnabledDimensions,
-          dimensions: $resolvedDimensions,
-          transcriptionPromptName: $transcriptionPromptName,
-          transcriptionPromptVersion: $transcriptionPromptVersion,
-          evaluationPromptName: $evaluationPromptName,
-          evaluationPromptVersion: $evaluationPromptVersion,
-          orchestrationSummary: $result->summary,
-          finalAgent: $result->finalAgent,
-          trace: $result->trace,
-          structuredOutput: $this->arrayPayloadValue($payload['structured_output'] ?? [], 'structured_output'),
-          segments: $this->listPayloadValue($payload['segments'] ?? [], 'segments'),
-          metadata: $this->arrayPayloadValue($payload['metadata'] ?? [], 'metadata'),
-          transcriptionProvider: $this->nullableStringPayloadValue($payload['transcription_provider'] ?? null, 'transcription_provider'),
-          transcriptionModel: $this->nullableStringPayloadValue($payload['transcription_model'] ?? null, 'transcription_model'),
-          evaluationProvider: $this->nullableStringPayloadValue($payload['evaluation_provider'] ?? null, 'evaluation_provider'),
-          evaluationModel: $this->nullableStringPayloadValue($payload['evaluation_model'] ?? null, 'evaluation_model'),
-          usage: $this->arrayPayloadValue($payload['usage'] ?? [], 'usage'),
+            orchestrationId: $result->orchestrationId,
+            subject: $subject,
+            audioReference: $audioReference,
+            transcript: $transcript,
+            summary: $summary,
+            recommendedAction: $recommendedAction,
+            confidence: (float)$confidence,
+            enabledDimensions: $resolvedEnabledDimensions,
+            dimensions: $resolvedDimensions,
+            transcriptionPromptName: $transcriptionPromptName,
+            transcriptionPromptVersion: $transcriptionPromptVersion,
+            evaluationPromptName: $evaluationPromptName,
+            evaluationPromptVersion: $evaluationPromptVersion,
+            orchestrationSummary: $result->summary,
+            finalAgent: $result->finalAgent,
+            trace: $result->trace,
+            structuredOutput: $this->arrayPayloadValue($payload['structured_output'] ?? [], 'structured_output'),
+            segments: $this->listPayloadValue($payload['segments'] ?? [], 'segments'),
+            metadata: $this->arrayPayloadValue($payload['metadata'] ?? [], 'metadata'),
+            transcriptionProvider: $this->nullableStringPayloadValue($payload['transcription_provider'] ?? null, 'transcription_provider'),
+            transcriptionModel: $this->nullableStringPayloadValue($payload['transcription_model'] ?? null, 'transcription_model'),
+            evaluationProvider: $this->nullableStringPayloadValue($payload['evaluation_provider'] ?? null, 'evaluation_provider'),
+            evaluationModel: $this->nullableStringPayloadValue($payload['evaluation_model'] ?? null, 'evaluation_model'),
+            usage: $this->arrayPayloadValue($payload['usage'] ?? [], 'usage'),
         );
     }
 
@@ -215,10 +216,10 @@ final readonly class AudioToTextToEvaluation
     {
         if (!is_string($value) || $value === '') {
             throw AudioToTextToEvaluationException::invalidPayload(
-              sprintf(
-                'final %s must be a non-empty string.',
-                $field,
-              ),
+                sprintf(
+                    'final %s must be a non-empty string.',
+                    $field,
+                ),
             );
         }
 
@@ -233,10 +234,10 @@ final readonly class AudioToTextToEvaluation
 
         if (!is_string($value) || $value === '') {
             throw AudioToTextToEvaluationException::invalidPayload(
-              sprintf(
-                'final %s must be null or a non-empty string.',
-                $field,
-              ),
+                sprintf(
+                    'final %s must be null or a non-empty string.',
+                    $field,
+                ),
             );
         }
 
@@ -250,7 +251,7 @@ final readonly class AudioToTextToEvaluation
     {
         if (!is_array($value)) {
             throw AudioToTextToEvaluationException::invalidPayload(
-              sprintf('final %s must be an array.', $field),
+                sprintf('final %s must be an array.', $field),
             );
         }
 
@@ -259,7 +260,7 @@ final readonly class AudioToTextToEvaluation
         foreach ($value as $key => $item) {
             if (!is_string($key) || $key === '') {
                 throw AudioToTextToEvaluationException::invalidPayload(
-                  sprintf('final %s keys must be non-empty strings.', $field),
+                    sprintf('final %s keys must be non-empty strings.', $field),
                 );
             }
 
@@ -276,7 +277,7 @@ final readonly class AudioToTextToEvaluation
     {
         if (!is_array($value)) {
             throw AudioToTextToEvaluationException::invalidPayload(
-              sprintf('final %s must be a list.', $field),
+                sprintf('final %s must be a list.', $field),
             );
         }
 
@@ -285,7 +286,7 @@ final readonly class AudioToTextToEvaluation
         foreach ($value as $item) {
             if (!is_array($item)) {
                 throw AudioToTextToEvaluationException::invalidPayload(
-                  sprintf('final %s entries must be arrays.', $field),
+                    sprintf('final %s entries must be arrays.', $field),
                 );
             }
 
@@ -296,13 +297,13 @@ final readonly class AudioToTextToEvaluation
 
             if (!is_int($startSeconds) && !is_float($startSeconds)) {
                 throw AudioToTextToEvaluationException::invalidPayload(
-                  sprintf('final %s start_seconds must be numeric.', $field),
+                    sprintf('final %s start_seconds must be numeric.', $field),
                 );
             }
 
             if (!is_int($endSeconds) && !is_float($endSeconds)) {
                 throw AudioToTextToEvaluationException::invalidPayload(
-                  sprintf('final %s end_seconds must be numeric.', $field),
+                    sprintf('final %s end_seconds must be numeric.', $field),
                 );
             }
 

@@ -26,12 +26,13 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
     public const string KEY = 'text-to-structured-evaluation.specialist';
 
     public function __construct(
-      private ProviderRegistry $providerRegistry,
-      private PromptRepository $promptRepository,
-      private PromptExecutionMapper $promptExecutionMapper,
-      private AiRuntime $aiRuntime,
-      private StructuredEvaluationOutputNormalizer $structuredEvaluationOutputNormalizer,
-    ) {}
+        private ProviderRegistry $providerRegistry,
+        private PromptRepository $promptRepository,
+        private PromptExecutionMapper $promptExecutionMapper,
+        private AiRuntime $aiRuntime,
+        private StructuredEvaluationOutputNormalizer $structuredEvaluationOutputNormalizer,
+    ) {
+    }
 
     public function definition(): AgentDefinition
     {
@@ -40,11 +41,125 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
         $fallbackProfiles = $this->fallbackProfiles($primaryProfile, $requiredCapabilities);
 
         return new AgentDefinition(
-          key: self::KEY,
-          displayName: 'Text To Structured Evaluation Specialist',
-          requiredCapabilities: $requiredCapabilities,
-          primaryProviderProfile: $primaryProfile,
-          fallbackProviderProfiles: $fallbackProfiles,
+            key: self::KEY,
+            displayName: 'Text To Structured Evaluation Specialist',
+            requiredCapabilities: $requiredCapabilities,
+            primaryProviderProfile: $primaryProfile,
+            fallbackProviderProfiles: $fallbackProfiles,
+        );
+    }
+
+    public function handle(AgentExecutionContext $context): AgentExecutionResult
+    {
+        $promptName = $this->stringPayloadValue($context, 'prompt_name');
+        $promptVersion = $this->nullableStringPayloadValue($context, 'prompt_version');
+
+        if (!$this->promptRepository->has($promptName, $promptVersion)) {
+            throw TextToStructuredEvaluationException::invalidSpecialistPayload(
+                sprintf('prompt [%s] with version [%s] is not registered.', $promptName, $promptVersion ?? 'latest'),
+            );
+        }
+
+        $variables = $this->promptVariables($context);
+        $customSchema = (bool)$context->payloadValue('custom_evaluation_schema', false);
+        $enabledDimensions = $this->enabledDimensions($context);
+        $evaluationSchema = $customSchema ? $this->evaluationSchema($context) : StructuredEvaluationJsonSchema::objectSchema();
+
+        $request = $this->promptExecutionMapper->mapToExecutionRequest(
+            name: $promptName,
+            runId: $context->executionId,
+            variables: $variables,
+            version: $promptVersion,
+            provider: $context->providerProfile,
+            model: $this->nullableStringPayloadValue($context, 'model'),
+            input: [
+            'subject' => $context->payloadValue('subject'),
+            'enabled_dimensions' => $context->payloadValue('enabled_dimensions', []),
+          ],
+            metadata: [
+            'orchestration_id' => $context->orchestrationId,
+            'agent_key' => $context->agent->key,
+            'audio_evaluation_stage' => 'evaluation',
+            'custom_evaluation_schema' => $customSchema,
+          ],
+            conversationId: $this->conversationIdValue($context),
+            storeConversation: (bool)$context->payloadValue('store_conversation', false),
+            continueConversation: (bool)$context->payloadValue('continue_conversation', false),
+            schema: $evaluationSchema,
+        );
+
+        $runtimeResult = $this->aiRuntime->execute($request);
+
+        if ($customSchema) {
+            $structured = $runtimeResult->structuredOutput;
+
+            if (!is_array($structured) || $structured === []) {
+                throw TextToStructuredEvaluationException::invalidSpecialistPayload(
+                    'evaluation stage expected non-empty structured output for the custom audio evaluation schema.',
+                );
+            }
+
+            return new AgentExecutionResult(
+                kind: AgentExecutionResult::KIND_COMPLETE,
+                output: [
+                'summary' => $this->summaryFromStructuredOutput($structured),
+                'recommended_action' => $this->recommendedActionFromStructuredOutput($structured),
+                'confidence' => $this->confidenceFromStructuredOutput($structured),
+                'dimensions' => $this->dimensionsFromStructuredOutput($structured, $enabledDimensions),
+                'structured_output' => $structured,
+                'metadata' => [
+                  'structured_evaluation_path' => 'structured_output',
+                  'custom_evaluation_schema' => true,
+                ],
+                'evaluation_provider' => $runtimeResult->provider,
+                'evaluation_model' => $runtimeResult->model,
+                'usage' => $this->usagePayload($runtimeResult),
+              ],
+                summary: 'TextToStructuredEvaluation specialist completed custom schema analysis.',
+            );
+        }
+
+        $structured = $runtimeResult->structuredOutput;
+        $usedStructuredPrimaryPath = false;
+        $normalizedOutput = null;
+
+        if (is_array($structured) && $structured !== []) {
+            try {
+                $normalizedOutput = $this->structuredEvaluationOutputNormalizer->normalizeFromDecodedArray($structured);
+                $usedStructuredPrimaryPath = true;
+            } catch (TextToStructuredEvaluationException) {
+                $normalizedOutput = null;
+            }
+        }
+
+        if (!$normalizedOutput instanceof StructuredEvaluationOutputNormalizationResult) {
+            $normalizedOutput = $this->structuredEvaluationOutputNormalizer->normalize($runtimeResult->output);
+        }
+
+        $parsed = $normalizedOutput->payload;
+
+        $repaired = !$usedStructuredPrimaryPath && $normalizedOutput->wasRepaired();
+
+        return new AgentExecutionResult(
+            kind: AgentExecutionResult::KIND_COMPLETE,
+            output: [
+            'summary' => $parsed['summary'],
+            'recommended_action' => $parsed['recommended_action'],
+            'confidence' => $parsed['confidence'],
+            'dimensions' => $parsed['dimensions'],
+            'structured_output' => $parsed,
+            'metadata' => [
+              'structured_evaluation_path' => $usedStructuredPrimaryPath ? 'structured_output' : 'text_normalization',
+              'structured_evaluation_repaired' => $repaired,
+              'custom_evaluation_schema' => false,
+            ],
+            'structured_evaluation_path' => $usedStructuredPrimaryPath ? 'structured_output' : 'text_normalization',
+            'structured_evaluation_repaired' => $repaired,
+            'evaluation_provider' => $runtimeResult->provider,
+            'evaluation_model' => $runtimeResult->model,
+            'usage' => $this->usagePayload($runtimeResult),
+          ],
+            summary: 'TextToStructuredEvaluation specialist completed structured analysis.',
         );
     }
 
@@ -64,10 +179,10 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
         }
 
         throw TextToStructuredEvaluationException::invalidSpecialistPayload(
-          sprintf(
-            'No enabled provider supports required capabilities [%s].',
-            implode(', ', $requiredCapabilities),
-          ),
+            sprintf(
+                'No enabled provider supports required capabilities [%s].',
+                implode(', ', $requiredCapabilities),
+            ),
         );
     }
 
@@ -104,127 +219,13 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
         return $fallbackProfiles;
     }
 
-    public function handle(AgentExecutionContext $context): AgentExecutionResult
-    {
-        $promptName = $this->stringPayloadValue($context, 'prompt_name');
-        $promptVersion = $this->nullableStringPayloadValue($context, 'prompt_version');
-
-        if (!$this->promptRepository->has($promptName, $promptVersion)) {
-            throw TextToStructuredEvaluationException::invalidSpecialistPayload(
-              sprintf('prompt [%s] with version [%s] is not registered.', $promptName, $promptVersion ?? 'latest'),
-            );
-        }
-
-        $variables = $this->promptVariables($context);
-        $customSchema = (bool)$context->payloadValue('custom_evaluation_schema', false);
-        $enabledDimensions = $this->enabledDimensions($context);
-        $evaluationSchema = $customSchema ? $this->evaluationSchema($context) : StructuredEvaluationJsonSchema::objectSchema();
-
-        $request = $this->promptExecutionMapper->mapToExecutionRequest(
-          name: $promptName,
-          runId: $context->executionId,
-          variables: $variables,
-          version: $promptVersion,
-          provider: $context->providerProfile,
-          model: $this->nullableStringPayloadValue($context, 'model'),
-          input: [
-            'subject' => $context->payloadValue('subject'),
-            'enabled_dimensions' => $context->payloadValue('enabled_dimensions', []),
-          ],
-          metadata: [
-            'orchestration_id' => $context->orchestrationId,
-            'agent_key' => $context->agent->key,
-            'audio_evaluation_stage' => 'evaluation',
-            'custom_evaluation_schema' => $customSchema,
-          ],
-          conversationId: $this->conversationIdValue($context),
-          storeConversation: (bool)$context->payloadValue('store_conversation', false),
-          continueConversation: (bool)$context->payloadValue('continue_conversation', false),
-          schema: $evaluationSchema,
-        );
-
-        $runtimeResult = $this->aiRuntime->execute($request);
-
-        if ($customSchema) {
-            $structured = $runtimeResult->structuredOutput;
-
-            if (!is_array($structured) || $structured === []) {
-                throw TextToStructuredEvaluationException::invalidSpecialistPayload(
-                  'evaluation stage expected non-empty structured output for the custom audio evaluation schema.',
-                );
-            }
-
-            return new AgentExecutionResult(
-              kind: AgentExecutionResult::KIND_COMPLETE,
-              output: [
-                'summary' => $this->summaryFromStructuredOutput($structured),
-                'recommended_action' => $this->recommendedActionFromStructuredOutput($structured),
-                'confidence' => $this->confidenceFromStructuredOutput($structured),
-                'dimensions' => $this->dimensionsFromStructuredOutput($structured, $enabledDimensions),
-                'structured_output' => $structured,
-                'metadata' => [
-                  'structured_evaluation_path' => 'structured_output',
-                  'custom_evaluation_schema' => true,
-                ],
-                'evaluation_provider' => $runtimeResult->provider,
-                'evaluation_model' => $runtimeResult->model,
-                'usage' => $this->usagePayload($runtimeResult),
-              ],
-              summary: 'TextToStructuredEvaluation specialist completed custom schema analysis.',
-            );
-        }
-
-        $structured = $runtimeResult->structuredOutput;
-        $usedStructuredPrimaryPath = false;
-        $normalizedOutput = null;
-
-        if (is_array($structured) && $structured !== []) {
-            try {
-                $normalizedOutput = $this->structuredEvaluationOutputNormalizer->normalizeFromDecodedArray($structured);
-                $usedStructuredPrimaryPath = true;
-            } catch (TextToStructuredEvaluationException) {
-                $normalizedOutput = null;
-            }
-        }
-
-        if (!$normalizedOutput instanceof StructuredEvaluationOutputNormalizationResult) {
-            $normalizedOutput = $this->structuredEvaluationOutputNormalizer->normalize($runtimeResult->output);
-        }
-
-        $parsed = $normalizedOutput->payload;
-
-        $repaired = !$usedStructuredPrimaryPath && $normalizedOutput->wasRepaired();
-
-        return new AgentExecutionResult(
-          kind: AgentExecutionResult::KIND_COMPLETE,
-          output: [
-            'summary' => $parsed['summary'],
-            'recommended_action' => $parsed['recommended_action'],
-            'confidence' => $parsed['confidence'],
-            'dimensions' => $parsed['dimensions'],
-            'structured_output' => $parsed,
-            'metadata' => [
-              'structured_evaluation_path' => $usedStructuredPrimaryPath ? 'structured_output' : 'text_normalization',
-              'structured_evaluation_repaired' => $repaired,
-              'custom_evaluation_schema' => false,
-            ],
-            'structured_evaluation_path' => $usedStructuredPrimaryPath ? 'structured_output' : 'text_normalization',
-            'structured_evaluation_repaired' => $repaired,
-            'evaluation_provider' => $runtimeResult->provider,
-            'evaluation_model' => $runtimeResult->model,
-            'usage' => $this->usagePayload($runtimeResult),
-          ],
-          summary: 'TextToStructuredEvaluation specialist completed structured analysis.',
-        );
-    }
-
     private function stringPayloadValue(AgentExecutionContext $context, string $key): string
     {
         $value = $context->payloadValue($key);
 
         if (!is_string($value) || $value === '') {
             throw TextToStructuredEvaluationException::invalidSpecialistPayload(
-              sprintf('%s must be a non-empty string.', $key),
+                sprintf('%s must be a non-empty string.', $key),
             );
         }
 
@@ -241,7 +242,7 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
 
         if (!is_string($value) || $value === '') {
             throw TextToStructuredEvaluationException::invalidSpecialistPayload(
-              sprintf('%s must be null or a non-empty string.', $key),
+                sprintf('%s must be null or a non-empty string.', $key),
             );
         }
 
@@ -268,7 +269,7 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
 
             if (!is_scalar($value) && $value !== null) {
                 throw TextToStructuredEvaluationException::invalidSpecialistPayload(
-                  sprintf('prompt_variables[%s] must be scalar or null.', $key),
+                    sprintf('prompt_variables[%s] must be scalar or null.', $key),
                 );
             }
 
@@ -319,7 +320,7 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
         }
 
         throw TextToStructuredEvaluationException::invalidSpecialistPayload(
-          'evaluation_schema must be null, a Closure, an ObjectSchema, or a non-empty class-string.',
+            'evaluation_schema must be null, a Closure, an ObjectSchema, or a non-empty class-string.',
         );
     }
 
@@ -392,10 +393,15 @@ final readonly class TextToStructuredEvaluationSpecialistAgent implements Agent
 
         if (is_array($dimensions)) {
             foreach ($dimensions as $name => $payload) {
-                if (!is_string($name) || $name === '' || !is_array($payload)) {
+                if (!is_string($name)) {
                     continue;
                 }
-
+                if ($name === '') {
+                    continue;
+                }
+                if (!is_array($payload)) {
+                    continue;
+                }
                 $score = $payload['score'] ?? 1;
                 $summary = $payload['summary'] ?? 'Custom schema dimension returned.';
                 $evidence = $payload['evidence'] ?? ['structured_output'];

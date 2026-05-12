@@ -21,6 +21,7 @@ use CreativeCrafts\LaravelAiAgentKit\Prompts\InMemoryPromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptExecutionMapper;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAiRuntime;
 use Laravel\Ai\ObjectSchema;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
 
 it('passes caller provided schemas through the audio evaluation orchestration request', function (mixed $schema): void {
     $orchestrator = new RecordingSchemaDrivenAudioOrchestrator([
@@ -173,7 +174,7 @@ final class SchemaDrivenAudioEvaluationSchema
 {
 }
 
-final class RecordingSchemaDrivenAudioOrchestrator implements \CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator
+final class RecordingSchemaDrivenAudioOrchestrator implements AgentOrchestrator
 {
     /** @var list<OrchestrationRequest> */
     public array $requests = [];
