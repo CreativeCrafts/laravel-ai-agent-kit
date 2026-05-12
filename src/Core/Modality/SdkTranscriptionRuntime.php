@@ -15,20 +15,27 @@ final readonly class SdkTranscriptionRuntime implements TranscriptionRuntime
     public function transcribe(TranscriptionRequest $request): TranscriptionResult
     {
         $pending = Transcription::fromBase64($request->base64Audio, $request->mimeType);
-
-        if ($request->language !== null) {
-            $pending = $pending->language($request->language);
-        }
+        $providerOptions = [];
 
         if ($request->prompt !== null) {
+            $providerOptions['prompt'] = $request->prompt;
+        }
+
+        if ($request->providerOptions instanceof TranscriptionProviderOptions) {
+            $providerOptions = array_merge($providerOptions, $request->providerOptions->toProviderOptions());
+        }
+
+        if ($providerOptions !== []) {
             if (!method_exists($pending, 'providerOptions')) {
                 throw UnsupportedTranscriptionPromptException::forInstalledSdk();
             }
 
             $providerOptionsMethod = new ReflectionMethod($pending, 'providerOptions');
-            $providerOptionsMethod->invoke($pending, [
-              'prompt' => $request->prompt,
-            ]);
+            $providerOptionsMethod->invoke($pending, $providerOptions);
+        }
+
+        if ($request->language !== null) {
+            $pending = $pending->language($request->language);
         }
 
         if ($request->diarize) {
