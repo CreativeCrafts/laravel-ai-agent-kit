@@ -62,19 +62,23 @@ PackageAssertions::assertLastRuntimeRequest($fakeRuntime, function ($request): v
 });
 ~~~
 
-## Testing transcription prompts
+## Testing transcription prompts and provider options
 
-When testing the Agent Kit to Laravel AI SDK transcription bridge, use Laravel AI SDK transcription fakes and assert that prompted transcription appears in provider options. This proves the prompt was not silently dropped before provider dispatch.
+When testing the Agent Kit to Laravel AI SDK transcription bridge, use Laravel AI SDK transcription fakes and assert that requested prompt/provider options appear in SDK provider options. This proves controlled options were not silently dropped before provider dispatch.
 
 ~~~php
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\TranscriptionRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionProviderOptions;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionRequest;
 use Laravel\Ai\Prompts\TranscriptionPrompt;
 use Laravel\Ai\Transcription;
 
 Transcription::fake(function (TranscriptionPrompt $prompt): string {
-    expect($prompt->providerOptions['prompt'] ?? null)
-        ->toBe('Transcribe verbatim and preserve pauses.');
+    $providerOptions = property_exists($prompt, 'providerOptions')
+        ? $prompt->providerOptions
+        : [];
+
+    expect($providerOptions['chunking_strategy'] ?? null)->toBe('auto');
 
     return 'fake transcript';
 })->preventStrayTranscriptions();
@@ -84,14 +88,17 @@ $result = app(TranscriptionRuntime::class)->transcribe(
         runId: 'test-transcription-001',
         base64Audio: base64_encode('audio'),
         mimeType: 'audio/mpeg',
+        diarize: true,
         provider: 'openai',
-        model: 'gpt-4o-transcribe',
-        prompt: 'Transcribe verbatim and preserve pauses.',
+        model: 'gpt-4o-transcribe-diarize',
+        providerOptions: new TranscriptionProviderOptions(chunkingStrategy: 'auto'),
     ),
 );
 ~~~
 
-For application-facing tests that do not care about the SDK bridge, bind your own `TranscriptionRuntime` fake or test double and assert the received `TranscriptionRequest::$prompt` directly.
+Provider-option assertions are SDK-version-sensitive. If the installed Laravel AI SDK transcription pending object does not support provider options, Agent Kit raises its fail-fast unsupported prompt/provider-options exception instead of dropping `prompt` or `chunking_strategy` silently.
+
+For application-facing tests that do not care about the SDK bridge, bind your own `TranscriptionRuntime` fake or test double and assert the received `TranscriptionRequest::$prompt` or `TranscriptionRequest::$providerOptions` directly.
 
 ## What to test with package fakes
 
