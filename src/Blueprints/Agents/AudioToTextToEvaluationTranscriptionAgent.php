@@ -15,6 +15,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionContext;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionResult;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\Exceptions\UnsupportedTranscriptionPromptException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionResult;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptExecutionMapper;
 use Throwable;
@@ -66,7 +67,7 @@ final readonly class AudioToTextToEvaluationTranscriptionAgent implements Agent
         $promptVariables = $this->promptVariables($context);
         $renderedPrompt = $this->promptRepository->render($promptName, $promptVariables, $promptVersion);
 
-        $transcript = $this->tryTranscriptionRuntimeTranscript(
+        $runtimeResult = $this->tryTranscriptionRuntimeResult(
             context: $context,
             audioReference: $audioReference,
             audioMimeType: $audioMimeType,
@@ -77,32 +78,53 @@ final readonly class AudioToTextToEvaluationTranscriptionAgent implements Agent
             transcriptionModel: $this->nullableStringPayloadValue($context, 'transcription_model'),
         );
 
-        if ($transcript === null) {
-            $request = $this->promptExecutionMapper->mapToExecutionRequest(
-                name: $promptName,
-                runId: $context->executionId,
-                variables: $promptVariables,
-                version: $promptVersion,
-                provider: $context->providerProfile,
-                model: $this->nullableStringPayloadValue($context, 'transcription_model'),
-                input: [
-                    'subject' => $context->payloadValue('subject'),
-                    'audio_reference' => $context->payloadValue('audio_reference'),
-                    'audio_mime_type' => $context->payloadValue('audio_mime_type'),
-                ],
-                metadata: [
-                    'orchestration_id' => $context->orchestrationId,
-                    'agent_key' => $context->agent->key,
-                    'transcription_stage' => true,
-                ],
-                conversationId: $this->conversationIdValue($context),
-                storeConversation: (bool)$context->payloadValue('store_conversation', false),
-                continueConversation: (bool)$context->payloadValue('continue_conversation', false),
-            );
+        if ($runtimeResult instanceof TranscriptionResult) {
+            $transcript = trim($runtimeResult->transcript);
 
-            $runtimeResult = $this->aiRuntime->execute($request);
-            $transcript = trim($runtimeResult->output);
+            if ($transcript === '') {
+                throw AudioToTextToEvaluationException::invalidPayload('transcription output must be a non-empty string.');
+            }
+
+            return new AgentExecutionResult(
+                kind: AgentExecutionResult::KIND_COMPLETE,
+                output: [
+                    'transcript' => $transcript,
+                    'segments' => $this->segmentPayloads($runtimeResult),
+                    'transcription_provider' => $runtimeResult->provider,
+                    'transcription_model' => $runtimeResult->model,
+                    'usage' => [
+                        'prompt_tokens' => $runtimeResult->promptTokens,
+                        'completion_tokens' => $runtimeResult->completionTokens,
+                    ],
+                ],
+                summary: 'AudioToTextToEvaluation transcription specialist completed the transcript.',
+            );
         }
+
+        $request = $this->promptExecutionMapper->mapToExecutionRequest(
+            name: $promptName,
+            runId: $context->executionId,
+            variables: $promptVariables,
+            version: $promptVersion,
+            provider: $context->providerProfile,
+            model: $this->nullableStringPayloadValue($context, 'transcription_model'),
+            input: [
+                'subject' => $context->payloadValue('subject'),
+                'audio_reference' => $context->payloadValue('audio_reference'),
+                'audio_mime_type' => $context->payloadValue('audio_mime_type'),
+            ],
+            metadata: [
+                'orchestration_id' => $context->orchestrationId,
+                'agent_key' => $context->agent->key,
+                'transcription_stage' => true,
+            ],
+            conversationId: $this->conversationIdValue($context),
+            storeConversation: (bool)$context->payloadValue('store_conversation', false),
+            continueConversation: (bool)$context->payloadValue('continue_conversation', false),
+        );
+
+        $aiRuntimeResult = $this->aiRuntime->execute($request);
+        $transcript = trim($aiRuntimeResult->output);
 
         if ($transcript === '') {
             throw AudioToTextToEvaluationException::invalidPayload('transcription output must be a non-empty string.');
@@ -112,6 +134,13 @@ final readonly class AudioToTextToEvaluationTranscriptionAgent implements Agent
             kind: AgentExecutionResult::KIND_COMPLETE,
             output: [
                 'transcript' => $transcript,
+                'segments' => [],
+                'transcription_provider' => $aiRuntimeResult->provider,
+                'transcription_model' => $aiRuntimeResult->model,
+                'usage' => [
+                    'prompt_tokens' => $aiRuntimeResult->promptTokens,
+                    'completion_tokens' => $aiRuntimeResult->completionTokens,
+                ],
             ],
             summary: 'AudioToTextToEvaluation transcription specialist completed the transcript.',
         );
@@ -247,7 +276,7 @@ final readonly class AudioToTextToEvaluationTranscriptionAgent implements Agent
         return $resolved;
     }
 
-    private function tryTranscriptionRuntimeTranscript(
+    private function tryTranscriptionRuntimeResult(
         AgentExecutionContext $context,
         string $audioReference,
         ?string $audioMimeType,
@@ -256,7 +285,7 @@ final readonly class AudioToTextToEvaluationTranscriptionAgent implements Agent
         string $renderedPrompt,
         string $providerProfile,
         ?string $transcriptionModel,
-    ): ?string {
+    ): ?TranscriptionResult {
         $normalized = $this->normalizeBase64AudioPayload($audioReference, $audioMimeType);
 
         if ($normalized === null) {
@@ -283,9 +312,7 @@ final readonly class AudioToTextToEvaluationTranscriptionAgent implements Agent
                 ),
             );
 
-            $text = trim($result->transcript);
-
-            return $text !== '' ? $text : null;
+            return trim($result->transcript) !== '' ? $result : null;
         } catch (UnsupportedTranscriptionPromptException $exception) {
             throw $exception;
         } catch (Throwable) {
@@ -339,6 +366,25 @@ final readonly class AudioToTextToEvaluationTranscriptionAgent implements Agent
             'base64' => $candidate,
             'mime_type' => $mimeType,
         ];
+    }
+
+    /**
+     * @return list<array{text:string,speaker:string,start_seconds:float,end_seconds:float}>
+     */
+    private function segmentPayloads(TranscriptionResult $result): array
+    {
+        $segments = [];
+
+        foreach ($result->segments as $segment) {
+            $segments[] = [
+                'text' => $segment->text,
+                'speaker' => $segment->speaker,
+                'start_seconds' => $segment->startSeconds,
+                'end_seconds' => $segment->endSeconds,
+            ];
+        }
+
+        return $segments;
     }
 
     private function conversationIdValue(AgentExecutionContext $context): ?ConversationId
