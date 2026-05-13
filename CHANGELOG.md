@@ -6,6 +6,24 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
 ### Added
 
+- Transcription audio sources:
+  - added `TranscriptionAudioSource` and `TranscriptionAudioSourceKind` as package-owned DTOs for base64, local path, storage, upload, and URL audio references;
+  - `TranscriptionRequest::fromAudioSource(...)` lets applications use non-base64 audio without calling the underlying Laravel AI SDK directly;
+  - existing `base64Audio` transcription requests remain supported;
+  - `SdkTranscriptionRuntime` maps base64, path, storage, and upload sources to the matching Laravel AI SDK transcription constructors internally;
+  - URL audio transcription fails closed with `UnsupportedTranscriptionAudioSourceException` until URL support is verified for the installed SDK/provider path;
+  - source safe metadata records kind, MIME type, disk/reference, upload filename, or base64 payload length without logging raw media contents.
+- Multimodal audio-image structured evaluation:
+  - added `EvaluationImageInput` and `EvaluationImageInputKind` for URL, base64, path, storage, and upload image inputs;
+  - added `AudioImageStructuredEvaluationRequest`, `AudioImageStructuredEvaluationResult`, and `AudioImageStructuredEvaluation`;
+  - added `AudioImageStructuredEvaluationPipelineStep` and `AudioImageStructuredEvaluationPipeline` for synchronous or queued pipeline composition;
+  - added `AgentKitManager::evaluateAudioImage(...)` and `AgentKitManager::audioImageStructuredEvaluation()` entry points;
+  - audio-image evaluation transcribes audio through `TranscriptionRuntime`, then evaluates transcript plus image attachment through `AiRuntime` using caller-provided structured schemas;
+  - configured providers are capability-checked for `audio_transcription`, `structured_output`, and either `image_input` or `vision`;
+  - empty transcripts are rejected by default and can be allowed per request when the structured evaluator should classify malformed/empty audio.
+- Testing support:
+  - added `FakeTranscriptionRuntime` for source-backed transcription assertions;
+  - added focused tests for source metadata, audio-image structured evaluation, capability failures, empty transcript behavior, and pipeline step state output.
 - Schema-driven audio evaluation:
   - `AudioToTextToEvaluationRequest` now accepts an optional caller-provided `schema` for custom transcript evaluation output;
   - audio evaluation forwards custom schemas into the transcript evaluation runtime request;
