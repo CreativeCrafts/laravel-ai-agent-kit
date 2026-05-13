@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Blueprints;
 
-use Closure;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionAudioSource;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionProviderOptions;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\GenerationOptions;
@@ -25,7 +24,7 @@ final readonly class AudioImageStructuredEvaluationRequest
         public TranscriptionAudioSource $audio,
         public EvaluationImageInput $image,
         public string $evaluationPrompt,
-        public Closure|object|string $schema,
+        public object|string $schema,
         public array $instructions = [],
         public ?string $transcriptionPrompt = null,
         public ?string $transcriptionProvider = null,
