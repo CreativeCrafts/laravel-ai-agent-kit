@@ -8,7 +8,7 @@ This maintainer reference maps Laravel AI SDK surfaces to Agent Kit entry points
 |-------|-------|
 | Audit target | `laravel/ai ^0.6` from `composer.json` |
 | Lockfile status | This package repository does not commit `composer.lock`; release validation should record the locally installed `laravel/ai` patch version with `composer show laravel/ai`. |
-| Last parity sweep | `audit-laravel-ai-sdk-parity` |
+| Last parity sweep | `audit-laravel-ai-sdk-parity`; updated by `support-audio-sources-and-multimodal-audio-image-evaluation` |
 | Classification values | `package-owned`, `direct-SDK`, `deferred`, `out-of-scope` |
 
 ## Principle
@@ -23,6 +23,7 @@ Agent Kit does not mirror every SDK class. If an SDK surface does not need packa
 |------------------------|--------------------------|-------------------|-----------------------|
 | Anonymous/text agents | package-owned | `AiRuntime`, `ExecutionRequest`, `ExecutionResult`, `AgentKit::run()` | Runtime calls need provider policy, memory projection, tools, budgets, telemetry, and package DTOs. |
 | Structured output | package-owned | `ExecutionRequest::$schema`, `ExecutionResult::$structuredOutput` | Schema-backed execution is part of package blueprint/runtime behavior. |
+| Multimodal image/text structured execution | package-owned | `ExecutionRequest::$attachments`; `EvaluationImageInput`; `AudioImageStructuredEvaluation` | Package-owned DTOs hide SDK image attachment objects while preserving schema/provider policy. |
 | Streaming text | package-owned | `StreamingAiRuntime`, `AgentKit::executeStream()` | Streaming needs package failure normalization, lifecycle telemetry, and conservative failover semantics. |
 | SDK broadcast agent jobs | direct-SDK | none | Use SDK jobs directly when the application wants SDK-specific broadcast-channel behavior instead of package runtime streaming. |
 | Generation options | package-owned | `GenerationOptions` on `ExecutionRequest` | Package runtime preserves options across provider attempts. |
@@ -40,6 +41,7 @@ Agent Kit does not mirror every SDK class. If an SDK surface does not need packa
 | Image generation | package-owned | `ImageGenerationRuntime`, `AgentKit::generateImage()` | Package facade exposes typed image generation. |
 | Audio generation | package-owned | `AudioGenerationRuntime`, `AgentKit::generateAudio()` | Package facade exposes typed audio generation. |
 | Transcription | package-owned | `TranscriptionRuntime`, `AgentKit::transcribe()` | Audio blueprints need deterministic runtime contracts. |
+| Transcription audio sources | package-owned | `TranscriptionAudioSource`, `TranscriptionRequest::fromAudioSource(...)`, `SdkTranscriptionRuntime` source mapping | SDK supports base64/path/storage/upload constructors; Agent Kit owns source DTOs so applications do not call SDK constructors directly. URL transcription remains fail-closed until SDK/provider support is verified. |
 | Reranking | package-owned | `RerankingRuntime`, `AgentKit::rerank()` | Retrieval workflows need typed reranking access. |
 | Provider-specific modality options not represented in package DTOs | direct-SDK | none | Use SDK directly when the application needs provider-native knobs that Agent Kit has not promoted. |
 
@@ -65,6 +67,13 @@ Agent Kit does not mirror every SDK class. If an SDK surface does not need packa
 | Tool input validation | package-owned | `InMemoryToolRegistry` validation | Agent Kit enforces its supported schema subset before handlers run. |
 | Tool execution callbacks outside package registry | direct-SDK | none | Use SDK directly for SDK-only experiments that should bypass package tool policy. |
 
+## Blueprints and workflows
+
+| Workflow | Agent Kit classification | Agent Kit surface | Rationale / follow-up |
+|----------|--------------------------|-------------------|-----------------------|
+| Audio to text to structured text evaluation | package-owned | `AudioToTextToEvaluation` | Package composes transcription plus text evaluation with prompt and schema governance. |
+| Audio-image structured evaluation | package-owned | `AudioImageStructuredEvaluation`, `AudioImageStructuredEvaluationPipelineStep`, `AudioImageStructuredEvaluationPipeline` | Package composes transcription plus image/text structured runtime execution for providers that advertise transcription, image input/vision, and structured output. |
+
 ## Async and jobs
 
 Use the async inventory for SDK job mapping. Agent Kit queued pipelines are preferred when the workflow needs package budgets, memory, result handlers, retries, and telemetry.
@@ -78,6 +87,7 @@ Use `docs/maintainers/sdk-events-provider-tools-inventory.md` for event and prov
 | Agent Kit public surface | Fake / testing path | Classification |
 |--------------------------|---------------------|----------------|
 | Runtime execution | `FakeAiRuntime`, package assertions | package-owned |
+| Transcription runtime | `FakeTranscriptionRuntime`; SDK fakes only for bridge tests | package-owned |
 | Streaming runtime | bind `StreamingAiRuntime` test double; SDK bridge tests use Laravel AI fakes | package-owned |
 | Provider policy | `FakeProviderPolicy` | package-owned |
 | Tools | `FakeToolRunner` and `InMemoryToolRegistry` tests | package-owned |
