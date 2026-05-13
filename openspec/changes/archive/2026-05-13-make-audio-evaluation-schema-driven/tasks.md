@@ -39,8 +39,8 @@
 
 ## 6. Validation
 
-- [ ] 6.1 Run `openspec validate make-audio-evaluation-schema-driven`.
-- [ ] 6.2 Run formatting checks.
-- [ ] 6.3 Run PHPStan/static analysis.
-- [ ] 6.4 Run audio blueprint test subset.
-- [ ] 6.5 Run full test suite if feasible.
+- [x] 6.1 Run `openspec validate make-audio-evaluation-schema-driven`.
+- [x] 6.2 Run formatting checks.
+- [x] 6.3 Run PHPStan/static analysis.
+- [x] 6.4 Run audio blueprint test subset.
+- [x] 6.5 Run full test suite if feasible.

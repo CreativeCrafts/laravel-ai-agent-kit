@@ -14,13 +14,13 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionAudioSourceKind;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionResult;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\RunContext;
-use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ProviderDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionResult;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeTranscriptionRuntime;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Files\RemoteImage;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 
 it('records source-backed transcription requests through the fake runtime', function (): void {
     $runtime = new FakeTranscriptionRuntime();
@@ -241,7 +241,7 @@ it('stores results from the audio-image pipeline step in RunContext state', func
                     structuredOutput: ['ok' => true],
                 ),
             ]),
-            app(\CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry::class),
+            app(ProviderRegistry::class),
         ),
     );
 

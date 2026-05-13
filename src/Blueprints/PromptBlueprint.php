@@ -67,7 +67,7 @@ final readonly class PromptBlueprint
             throw new InvalidArgumentException('Prompt blueprints that continue a conversation require a conversationId.');
         }
 
-        if (is_string($this->schema) && $this->schema === '') {
+        if ($this->schema === '') {
             throw new InvalidArgumentException('Prompt blueprint schema class-string must be non-empty.');
         }
 

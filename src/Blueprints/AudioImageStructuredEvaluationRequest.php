@@ -51,7 +51,7 @@ final readonly class AudioImageStructuredEvaluationRequest
         }
 
         foreach ($this->instructions as $index => $instruction) {
-            if (!is_string($instruction) || $instruction === '') {
+            if ($instruction === '') {
                 throw new InvalidArgumentException(sprintf('Audio-image structured evaluation instruction at index [%d] must be a non-empty string.', $index));
             }
         }

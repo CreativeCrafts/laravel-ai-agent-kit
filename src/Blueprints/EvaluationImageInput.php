@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Blueprints;
 
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\Exceptions\UnsupportedEvaluationImageInputException;
 use Illuminate\Http\UploadedFile;
 use InvalidArgumentException;
 use Laravel\Ai\Files\File;
@@ -87,11 +88,11 @@ final readonly class EvaluationImageInput
         $payload = $this->payload;
 
         return match ($this->kind) {
-            EvaluationImageInputKind::Url => Image::fromUrl((string) $payload),
-            EvaluationImageInputKind::Base64 => Image::fromBase64((string) $payload, $this->mimeType),
-            EvaluationImageInputKind::Path => Image::fromPath((string) $payload, $this->mimeType),
-            EvaluationImageInputKind::Storage => Image::fromStorage((string) $payload, $this->disk),
-            EvaluationImageInputKind::Upload => Image::fromUpload($payload, $this->mimeType),
+            EvaluationImageInputKind::Url => Image::fromUrl((string)$payload),
+            EvaluationImageInputKind::Base64 => Image::fromBase64((string)$payload, $this->mimeType),
+            EvaluationImageInputKind::Path => Image::fromPath((string)$payload, $this->mimeType),
+            EvaluationImageInputKind::Storage => Image::fromStorage((string)$payload, $this->disk),
+            EvaluationImageInputKind::Upload => Image::fromUpload($this->uploadedFilePayload($payload), $this->mimeType),
         };
     }
 
@@ -101,9 +102,9 @@ final readonly class EvaluationImageInput
     public function safeMetadata(): array
     {
         $metadata = [
-            'kind' => $this->kind->value,
-            'mime_type' => $this->mimeType,
-            'disk' => $this->disk,
+          'kind' => $this->kind->value,
+          'mime_type' => $this->mimeType,
+          'disk' => $this->disk,
         ];
 
         if ($this->kind === EvaluationImageInputKind::Base64 && is_string($this->payload)) {
@@ -123,5 +124,14 @@ final readonly class EvaluationImageInput
             $metadata,
             static fn (mixed $value): bool => $value !== null,
         );
+    }
+
+    private function uploadedFilePayload(mixed $payload): UploadedFile
+    {
+        if ($payload instanceof UploadedFile) {
+            return $payload;
+        }
+
+        throw UnsupportedEvaluationImageInputException::forInputKind($this->kind);
     }
 }

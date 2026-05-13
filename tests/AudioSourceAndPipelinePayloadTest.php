@@ -9,6 +9,8 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Modality\SdkTranscriptionRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionAudioSource;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\RunContext;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Ai\Contracts\HasStructuredOutput;
 
 it('redacts raw base64 audio and upload contents from source metadata', function (): void {
     $raw = 'secret-audio-bytes';
@@ -64,9 +66,9 @@ it('keeps queued audio-image workflow payloads in Agent Kit DTO terms', function
         ->not->toContain('Laravel\\Ai\\Transcription');
 });
 
-final class TestQueuedPayloadAudioImageSchema implements \Laravel\Ai\Contracts\HasStructuredOutput
+final class TestQueuedPayloadAudioImageSchema implements HasStructuredOutput
 {
-    public function schema(\Illuminate\Contracts\JsonSchema\JsonSchema $schema): array
+    public function schema(JsonSchema $schema): array
     {
         return [
             'ok' => $schema->boolean(),
