@@ -79,10 +79,10 @@
 
 ## 10. Validation
 
-- [ ] 10.1 Run `openspec validate support-audio-sources-and-multimodal-audio-image-evaluation`.
-- [ ] 10.2 Run `composer pint` or package formatting command.
-- [ ] 10.3 Run static analysis.
-- [ ] 10.4 Run modality/transcription runtime tests.
-- [ ] 10.5 Run blueprint/workflow tests.
-- [ ] 10.6 Run queued pipeline tests.
-- [ ] 10.7 Run full test suite if feasible.
+- [x] 10.1 Run `openspec validate support-audio-sources-and-multimodal-audio-image-evaluation`.
+- [x] 10.2 Run `composer pint` or package formatting command.
+- [x] 10.3 Run static analysis.
+- [x] 10.4 Run modality/transcription runtime tests.
+- [x] 10.5 Run blueprint/workflow tests.
+- [x] 10.6 Run queued pipeline tests.
+- [x] 10.7 Run full test suite if feasible.
