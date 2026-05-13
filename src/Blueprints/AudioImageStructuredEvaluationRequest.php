@@ -9,7 +9,6 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionAudioSource;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionProviderOptions;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\GenerationOptions;
 use InvalidArgumentException;
-use Laravel\Ai\ObjectSchema;
 
 /**
  * @param list<string> $instructions
@@ -26,7 +25,7 @@ final readonly class AudioImageStructuredEvaluationRequest
         public TranscriptionAudioSource $audio,
         public EvaluationImageInput $image,
         public string $evaluationPrompt,
-        public Closure|ObjectSchema|string $schema,
+        public Closure|object|string $schema,
         public array $instructions = [],
         public ?string $transcriptionPrompt = null,
         public ?string $transcriptionProvider = null,
