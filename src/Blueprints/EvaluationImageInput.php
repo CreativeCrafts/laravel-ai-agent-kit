@@ -6,8 +6,6 @@ namespace CreativeCrafts\LaravelAiAgentKit\Blueprints;
 
 use Illuminate\Http\UploadedFile;
 use InvalidArgumentException;
-use Laravel\Ai\Files\File;
-use Laravel\Ai\Files\Image;
 
 final readonly class EvaluationImageInput
 {
@@ -82,17 +80,19 @@ final readonly class EvaluationImageInput
         return $this->kind;
     }
 
-    public function toAttachment(): File
+    public function payload(): string|UploadedFile
     {
-        $payload = $this->payload;
+        return $this->payload;
+    }
 
-        return match ($this->kind) {
-            EvaluationImageInputKind::Url => Image::fromUrl((string) $payload),
-            EvaluationImageInputKind::Base64 => Image::fromBase64((string) $payload, $this->mimeType),
-            EvaluationImageInputKind::Path => Image::fromPath((string) $payload, $this->mimeType),
-            EvaluationImageInputKind::Storage => Image::fromStorage((string) $payload, $this->disk),
-            EvaluationImageInputKind::Upload => Image::fromUpload($payload, $this->mimeType),
-        };
+    public function mimeType(): ?string
+    {
+        return $this->mimeType;
+    }
+
+    public function disk(): ?string
+    {
+        return $this->disk;
     }
 
     /**
