@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Modality;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\TranscriptionRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\Exceptions\UnsupportedTranscriptionAudioSourceException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\Exceptions\UnsupportedTranscriptionPromptException;
+use Illuminate\Http\UploadedFile;
+use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Transcription;
 use ReflectionMethod;
@@ -14,7 +17,8 @@ final readonly class SdkTranscriptionRuntime implements TranscriptionRuntime
 {
     public function transcribe(TranscriptionRequest $request): TranscriptionResult
     {
-        $pending = Transcription::fromBase64($request->base64Audio, $request->mimeType);
+        $source = $request->resolvedAudioSource();
+        $pending = $this->pendingFromSource($source);
         $providerOptions = [];
 
         if ($request->prompt !== null) {
@@ -72,7 +76,31 @@ final readonly class SdkTranscriptionRuntime implements TranscriptionRuntime
             promptTokens: $response->usage->promptTokens ?? 0,
             completionTokens: $response->usage->completionTokens ?? 0,
             segments: $segments,
-            metadata: $request->metadata,
+            metadata: array_merge($request->metadata, [
+                'audio_source' => $source->safeMetadata(),
+            ]),
         );
+    }
+
+    private function pendingFromSource(TranscriptionAudioSource $source): PendingTranscriptionGeneration
+    {
+        $payload = $source->payload();
+
+        return match ($source->kind()) {
+            TranscriptionAudioSourceKind::Base64 => Transcription::fromBase64((string) $payload, $source->mimeType()),
+            TranscriptionAudioSourceKind::Path => Transcription::fromPath((string) $payload, $source->mimeType()),
+            TranscriptionAudioSourceKind::Storage => Transcription::fromStorage((string) $payload, $source->disk()),
+            TranscriptionAudioSourceKind::Upload => Transcription::fromUpload($this->uploadedFilePayload($source, $payload)),
+            TranscriptionAudioSourceKind::Url => throw UnsupportedTranscriptionAudioSourceException::forSourceKind($source->kind()),
+        };
+    }
+
+    private function uploadedFilePayload(TranscriptionAudioSource $source, mixed $payload): UploadedFile
+    {
+        if ($payload instanceof UploadedFile) {
+            return $payload;
+        }
+
+        throw UnsupportedTranscriptionAudioSourceException::forSourceKind($source->kind());
     }
 }

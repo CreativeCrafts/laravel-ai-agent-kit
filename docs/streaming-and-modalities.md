@@ -84,6 +84,45 @@ Configure per modality:
 
 You may replace a modality driver with a class that implements the corresponding package contract.
 
+## Transcription audio sources
+
+Use `TranscriptionAudioSource` when audio is already stored, local, uploaded, or base64 encoded. This keeps applications on Agent Kit contracts and prevents direct calls to the underlying Laravel AI SDK transcription constructors.
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\TranscriptionRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionAudioSource;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionRequest;
+
+$result = app(TranscriptionRuntime::class)->transcribe(
+    TranscriptionRequest::fromAudioSource(
+        runId: 'transcription-storage-001',
+        audioSource: TranscriptionAudioSource::fromStorage(
+            path: 'language-tests/answers/audio.mp3',
+            disk: 's3-audios',
+            mimeType: 'audio/mpeg',
+        ),
+        provider: 'openai',
+        model: 'gpt-4o-transcribe',
+        prompt: 'Transcribe verbatim. Preserve pauses and hesitations.',
+    ),
+);
+~~~
+
+Supported source factories:
+
+~~~php
+TranscriptionAudioSource::fromBase64($base64Audio, 'audio/wav');
+TranscriptionAudioSource::fromPath('/tmp/audio.mp3', 'audio/mpeg');
+TranscriptionAudioSource::fromStorage('answers/audio.mp3', 's3-audios', 'audio/mpeg');
+TranscriptionAudioSource::fromUpload($uploadedFile, 'audio/mpeg');
+~~~
+
+`TranscriptionAudioSource::fromUrl(...)` is intentionally fail-closed in the SDK-backed runtime until remote URL transcription is verified for the installed Laravel AI SDK/provider path. Use storage/path/base64/upload sources or provide a custom `TranscriptionRuntime` when remote audio URLs are required.
+
+Existing `new TranscriptionRequest(base64Audio: ...)` calls remain supported. New code should prefer `TranscriptionRequest::fromAudioSource(...)` for any non-base64 input.
+
+Source metadata is redacted/summarized: base64 payloads and upload contents are not emitted in full. Tests can assert source kind, MIME type, disk, path/reference, and prompt/model/provider values through `FakeTranscriptionRuntime`.
+
 ## Transcription prompts
 
 Use `TranscriptionRequest::$prompt` when the transcription stage must preserve domain-specific spoken features such as pauses, hesitations, false starts, grammar mistakes, uncertainty markers, locale-specific characters, or verbatim phrasing.
@@ -161,5 +200,7 @@ When the blueprint uses `TranscriptionRuntime`, it renders the configured transc
 Use package fakes for runtime and modality behavior. Do not call real provider APIs in tests.
 
 For transcription prompt tests, fake the Laravel AI transcription gateway and assert that the prompt appears in transcription provider options. For controlled provider-option tests, assert `chunking_strategy` appears in the same provider-options payload when the installed SDK supports provider options; otherwise assert the package fail-fast exception.
+
+For source-backed transcription tests, bind `CreativeCrafts\LaravelAiAgentKit\Testing\Fakes\FakeTranscriptionRuntime` to `TranscriptionRuntime` and assert the recorded `TranscriptionRequest::resolvedAudioSource()` kind and safe metadata.
 
 See [Testing](testing.md).

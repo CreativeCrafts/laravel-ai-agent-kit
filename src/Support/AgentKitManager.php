@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Support;
 
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioImageStructuredEvaluation;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioImageStructuredEvaluationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioImageStructuredEvaluationResult;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluation;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluationResult;
@@ -63,6 +66,14 @@ final readonly class AgentKitManager
         return $this->audioEvaluation->evaluate($request);
     }
 
+    /**
+     * @throws BindingResolutionException
+     */
+    public function evaluateAudioImage(AudioImageStructuredEvaluationRequest $request): AudioImageStructuredEvaluationResult
+    {
+        return $this->audioImageStructuredEvaluation()->evaluate($request);
+    }
+
     public function orchestrate(OrchestrationRequest $request): OrchestrationResult
     {
         return $this->orchestrator->run($request);
@@ -81,6 +92,14 @@ final readonly class AgentKitManager
     public function audioToTextToEvaluation(): AudioToTextToEvaluation
     {
         return $this->audioEvaluation;
+    }
+
+    /**
+     * @throws BindingResolutionException
+     */
+    public function audioImageStructuredEvaluation(): AudioImageStructuredEvaluation
+    {
+        return $this->container->make(AudioImageStructuredEvaluation::class);
     }
 
     public function orchestrator(): AgentOrchestrator

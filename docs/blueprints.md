@@ -113,6 +113,69 @@ When `schema` is provided, the evaluation stage requires non-empty structured ou
 
 If no schema is provided, the existing default evaluation behavior remains unchanged.
 
+## Audio-image structured evaluation
+
+Use `AudioImageStructuredEvaluation` when the evaluation needs both the transcript and an image in the same structured runtime call. This is the Agent Kit-first path for providers such as OpenAI when the configured provider supports transcription, image input, and structured output.
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioImageStructuredEvaluationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\EvaluationImageInput;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionAudioSource;
+use CreativeCrafts\LaravelAiAgentKit\Facades\AgentKit;
+
+$result = AgentKit::evaluateAudioImage(
+    new AudioImageStructuredEvaluationRequest(
+        runId: 'language-score-001',
+        audio: TranscriptionAudioSource::fromStorage(
+            path: 'language-tests/answers/audio.mp3',
+            disk: 's3-audios',
+            mimeType: 'audio/mpeg',
+        ),
+        image: EvaluationImageInput::fromUrl('https://example.test/question-image.jpg'),
+        evaluationPrompt: 'Evaluate the transcript against the image and return the requested schema.',
+        schema: SwedishEvaluationSchema::class,
+        instructions: [
+            'Return strict structured output only.',
+        ],
+        transcriptionProvider: 'openai-transcription',
+        transcriptionModel: 'gpt-4o-transcribe',
+        evaluationProvider: 'openai-vision',
+        evaluationModel: 'gpt-4.1-mini',
+    ),
+);
+
+$structured = $result->structuredOutput;
+~~~
+
+The workflow runs two package-owned stages:
+
+1. `TranscriptionRuntime` transcribes the `TranscriptionAudioSource`.
+2. `AiRuntime` evaluates the transcript plus `EvaluationImageInput` as a structured request.
+
+The evaluation provider must advertise `structured_output` and either `image_input` or `vision` when provider metadata is configured. The transcription provider must advertise `audio_transcription` when configured. If provider metadata is unavailable, the workflow lets the runtime/provider path handle the failure.
+
+Empty transcripts are rejected by default. Set `allowEmptyTranscript: true` when the schema should classify empty or malformed audio itself, for example language-test scoring workflows that map empty audio to a low score.
+
+`EvaluationImageInput` supports URL, base64, local path, storage, and upload variants. The Laravel AI SDK image attachment objects are created inside Agent Kit bridge code; application code should use the package-owned DTOs.
+
+### Pipeline usage
+
+The blueprint can also be used in package pipelines through `AudioImageStructuredEvaluationPipelineStep` or `AudioImageStructuredEvaluationPipeline`.
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioImageStructuredEvaluationPipeline;
+use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\RunContext;
+
+$context = new RunContext(
+    runId: 'language-score-001',
+    input: [
+        'audio_image_structured_evaluation_request' => $request,
+    ],
+);
+~~~
+
+Queued pipeline payloads should pass only Agent Kit DTOs and scalar metadata. Do not serialize Laravel AI SDK file objects directly.
+
 ## Prompt requirements
 
 Register the prompt templates referenced by blueprint request fields before execution. Use prompt versions deliberately so workflow behavior is reproducible.
@@ -126,6 +189,7 @@ The `AgentKit` facade provides concise shortcuts:
 ~~~php
 AgentKit::evaluateText($request);
 AgentKit::evaluateAudio($request);
+AgentKit::evaluateAudioImage($request);
 ~~~
 
 Prefer dependency injection for long-lived services and jobs so dependencies remain explicit and easy to fake in tests.
