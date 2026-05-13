@@ -20,11 +20,12 @@ final readonly class AudioImageStructuredEvaluation
     private const string CAPABILITY_VISION = 'vision';
 
     public function __construct(
-      private TranscriptionRuntime $transcriptionRuntime,
-      private AiRuntime $runtime,
-      private ProviderRegistry $providerRegistry,
-      private EvaluationImageAttachmentFactory $imageAttachmentFactory = new EvaluationImageAttachmentFactory(),
-    ) {}
+        private TranscriptionRuntime $transcriptionRuntime,
+        private AiRuntime $runtime,
+        private ProviderRegistry $providerRegistry,
+        private EvaluationImageAttachmentFactory $imageAttachmentFactory = new EvaluationImageAttachmentFactory(),
+    ) {
+    }
 
     public function evaluate(AudioImageStructuredEvaluationRequest $request): AudioImageStructuredEvaluationResult
     {
@@ -32,22 +33,22 @@ final readonly class AudioImageStructuredEvaluation
         $this->assertEvaluationProviderCapabilities($request->evaluationProvider);
 
         $transcription = $this->transcriptionRuntime->transcribe(
-          TranscriptionRequest::fromAudioSource(
-            runId: $request->runId . ':transcription',
-            audioSource: $request->audio,
-            language: $request->language,
-            diarize: $request->diarize,
-            timeout: $request->transcriptionTimeout,
-            provider: $request->transcriptionProvider,
-            model: $request->transcriptionModel,
-            metadata: array_merge($request->metadata, [
+            TranscriptionRequest::fromAudioSource(
+                runId: $request->runId . ':transcription',
+                audioSource: $request->audio,
+                language: $request->language,
+                diarize: $request->diarize,
+                timeout: $request->transcriptionTimeout,
+                provider: $request->transcriptionProvider,
+                model: $request->transcriptionModel,
+                metadata: array_merge($request->metadata, [
               'workflow' => 'audio_image_structured_evaluation',
               'workflow_stage' => 'transcription',
               'parent_run_id' => $request->runId,
             ]),
-            prompt: $request->transcriptionPrompt,
-            providerOptions: $request->transcriptionProviderOptions,
-          ),
+                prompt: $request->transcriptionPrompt,
+                providerOptions: $request->transcriptionProviderOptions,
+            ),
         );
 
         if ($transcription->transcript === '' && !$request->allowEmptyTranscript) {
@@ -55,13 +56,13 @@ final readonly class AudioImageStructuredEvaluation
         }
 
         $evaluation = $this->runtime->execute(
-          new ExecutionRequest(
-            runId: $request->runId . ':evaluation',
-            prompt: $this->evaluationPrompt($request, $transcription->transcript),
-            instructions: $request->instructions,
-            provider: $request->evaluationProvider,
-            model: $request->evaluationModel,
-            metadata: array_merge($request->metadata, [
+            new ExecutionRequest(
+                runId: $request->runId . ':evaluation',
+                prompt: $this->evaluationPrompt($request, $transcription->transcript),
+                instructions: $request->instructions,
+                provider: $request->evaluationProvider,
+                model: $request->evaluationModel,
+                metadata: array_merge($request->metadata, [
               'workflow' => 'audio_image_structured_evaluation',
               'workflow_stage' => 'evaluation',
               'parent_run_id' => $request->runId,
@@ -70,35 +71,35 @@ final readonly class AudioImageStructuredEvaluation
               'transcription_provider' => $transcription->provider,
               'transcription_model' => $transcription->model,
             ]),
-            timeout: $request->evaluationTimeout,
-            generationOptions: $request->generationOptions,
-            schema: $request->schema,
-            attachments: [$this->imageAttachmentFactory->make($request->image)],
-          ),
+                timeout: $request->evaluationTimeout,
+                generationOptions: $request->generationOptions,
+                schema: $this->imageAttachmentFactory->executionSchema($request->schema),
+                attachments: [$this->imageAttachmentFactory->make($request->image)],
+            ),
         );
 
         return new AudioImageStructuredEvaluationResult(
-          runId: $request->runId,
-          transcript: $transcription->transcript,
-          structuredOutput: $evaluation->structuredOutput ?? [],
-          output: $evaluation->output,
-          usage: [
+            runId: $request->runId,
+            transcript: $transcription->transcript,
+            structuredOutput: $evaluation->structuredOutput ?? [],
+            output: $evaluation->output,
+            usage: [
             'transcription_prompt_tokens' => $transcription->promptTokens,
             'transcription_completion_tokens' => $transcription->completionTokens,
             'evaluation_prompt_tokens' => $evaluation->usage['prompt_tokens'] ?? 0,
             'evaluation_completion_tokens' => $evaluation->usage['completion_tokens'] ?? 0,
             'evaluation_total_tokens' => $evaluation->usage['total_tokens'] ?? 0,
           ],
-          metadata: [
+            metadata: [
             'audio_source' => $request->audio->safeMetadata(),
             'image_input' => $request->image->safeMetadata(),
             'transcription_metadata' => $transcription->metadata,
             'evaluation_metadata' => $evaluation->metadata,
           ],
-          transcriptionProvider: $transcription->provider,
-          transcriptionModel: $transcription->model,
-          evaluationProvider: $evaluation->provider,
-          evaluationModel: $evaluation->model,
+            transcriptionProvider: $transcription->provider,
+            transcriptionModel: $transcription->model,
+            evaluationProvider: $evaluation->provider,
+            evaluationModel: $evaluation->model,
         );
     }
 
