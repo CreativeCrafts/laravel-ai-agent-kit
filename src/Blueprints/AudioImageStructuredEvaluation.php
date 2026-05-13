@@ -9,6 +9,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\TranscriptionRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\EvaluationImageAttachmentFactory;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
 
 final readonly class AudioImageStructuredEvaluation
@@ -22,6 +23,7 @@ final readonly class AudioImageStructuredEvaluation
         private TranscriptionRuntime $transcriptionRuntime,
         private AiRuntime $runtime,
         private ProviderRegistry $providerRegistry,
+        private EvaluationImageAttachmentFactory $imageAttachmentFactory = new EvaluationImageAttachmentFactory(),
     ) {
     }
 
@@ -72,7 +74,7 @@ final readonly class AudioImageStructuredEvaluation
                 timeout: $request->evaluationTimeout,
                 generationOptions: $request->generationOptions,
                 schema: $request->schema,
-                attachments: [$request->image->toAttachment()],
+                attachments: [$this->imageAttachmentFactory->make($request->image)],
             ),
         );
 
