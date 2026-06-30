@@ -30,6 +30,11 @@ phpstan.neon
 testbench.yaml
 /coverage
 
+# Security ownership map (local analysis artifacts)
+/ownership-map-out
+/.ownership-map-venv
+/.ownership-sensitive.csv
+
 CLAUDE.md
 .codex
 .claude

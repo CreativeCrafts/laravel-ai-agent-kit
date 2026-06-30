@@ -8,7 +8,8 @@ This maintainer reference maps Laravel AI SDK surfaces to Agent Kit entry points
 |-------|-------|
 | Audit target | `laravel/ai ^0.8` from `composer.json` (CI lockfile currently resolves `v0.8.1`) |
 | Lockfile status | This repository commits `composer.lock`. Record the resolved `laravel/ai` patch with `composer show laravel/ai` when updating maintainer inventories. |
-| Last parity sweep | `audit-laravel-ai-sdk-parity`; updated by `support-audio-sources-and-multimodal-audio-image-evaluation` |
+| Resolved SDK version | `v0.8.1` (`composer show laravel/ai`, 2026-06-30) |
+| Last parity sweep | 2026-06-30 — manual scan of `vendor/laravel/ai` v0.8.1 against this matrix, async inventory, and events/provider-tools inventory |
 | Classification values | `package-owned`, `direct-SDK`, `deferred`, `out-of-scope` |
 
 ## Principle
@@ -23,8 +24,11 @@ Agent Kit does not mirror every SDK class. If an SDK surface does not need packa
 |------------------------|--------------------------|-------------------|-----------------------|
 | Anonymous/text agents | package-owned | `AiRuntime`, `ExecutionRequest`, `ExecutionResult`, `AgentKit::run()` | Runtime calls need provider policy, memory projection, tools, budgets, telemetry, and package DTOs. |
 | Structured output | package-owned | `ExecutionRequest::$schema`, `ExecutionResult::$structuredOutput` | Schema-backed execution is part of package blueprint/runtime behavior. |
-| Multimodal image/text structured execution | package-owned | `ExecutionRequest::$attachments`; `EvaluationImageInput`; `AudioImageStructuredEvaluation` | Package-owned DTOs hide SDK image attachment objects while preserving schema/provider policy. |
+| Multimodal image/text structured execution | package-owned | `ExecutionRequest::$attachments`; `EvaluationImageInput`; `AudioImageStructuredEvaluation` | Package-owned DTOs hide SDK image attachment objects while preserving schema/provider policy. `ExecutionRequest` also accepts raw `Laravel\Ai\Files\File` attachments (including provider-hosted IDs) for advanced integrators. |
+| Blueprint image `fromId()` / provider-hosted image references | deferred | none (`EvaluationImageInput` has no `fromId()`) | Use raw `ExecutionRequest` attachments or Files gateway wrappers until a package DTO is promoted. |
 | Streaming text | package-owned | `StreamingAiRuntime`, `AgentKit::executeStream()` | Streaming needs package failure normalization, lifecycle telemetry, and conservative failover semantics. |
+| Streaming reasoning, citations, and in-stream tool events | deferred | none (`SdkAiRuntime` forwards `TextDelta` only) | SDK v0.8.1 also emits `Reasoning*`, `Citation`, `ProviderToolEvent`, `ToolCall`, and `ToolResult` stream events. Add package `StreamChunk` types only if applications need first-class access without SDK listeners. |
+| SDK failover lifecycle events | direct-SDK | none (`SdkAiRuntime` owns failover) | SDK emits `AgentFailedOver` and `ProviderFailedOver`; package runtime retries via configured failover order without normalizing these SDK events. |
 | SDK broadcast agent jobs | direct-SDK | none | Use SDK jobs directly when the application wants SDK-specific broadcast-channel behavior instead of package runtime streaming. |
 | Generation options | package-owned | `GenerationOptions` on `ExecutionRequest` | Package runtime preserves options across provider attempts. |
 | SDK middleware / agent prompt internals | out-of-scope | package memory bridge and runtime middleware | Agent Kit owns runtime middleware and memory behavior rather than exposing SDK internals. |
@@ -37,7 +41,7 @@ Agent Kit does not mirror every SDK class. If an SDK surface does not need packa
 | SDK capability | Agent Kit classification | Agent Kit surface | Rationale / follow-up |
 |----------------|--------------------------|-------------------|-----------------------|
 | Embeddings | package-owned | `EmbeddingsRuntime`, `AgentKit::embed()` | Package vectors and tools need provider/model override and typed results. |
-| Embedding query/cache helpers | deferred | none | Useful if SDK exposes stable query/cache primitives that should be policy-governed. Create a follow-up proposal before wrapping. |
+| Embeddings response cache (`PendingEmbeddingsGeneration::cache()`) | deferred | none | SDK v0.8.1 supports optional Laravel-cache-backed embedding reuse. `EmbeddingsRequest` / `SdkEmbeddingsRuntime` do not expose cache TTL yet. Create a follow-up proposal before wrapping. |
 | Image generation | package-owned | `ImageGenerationRuntime`, `AgentKit::generateImage()` | Package facade exposes typed image generation. |
 | Audio generation | package-owned | `AudioGenerationRuntime`, `AgentKit::generateAudio()` | Package facade exposes typed audio generation. |
 | Transcription | package-owned | `TranscriptionRuntime`, `AgentKit::transcribe()` | Audio blueprints need deterministic runtime contracts. |
@@ -55,7 +59,8 @@ Agent Kit does not mirror every SDK class. If an SDK surface does not need packa
 | WebSearch provider tool | package-owned adapter | provider tool names on runtime requests | Provider-native object construction is hidden behind package aliases. |
 | WebFetch provider tool | package-owned adapter | provider tool names on runtime requests | Provider-native object construction is hidden behind package aliases. |
 | SDK vector stores / provider-hosted retrieval | direct-SDK | Files/Stores wrappers or direct SDK | Provider-hosted retrieval is distinct from Agent Kit application-owned vectors. |
-| Application-owned vector storage | package-owned | `VectorStoreInterface`, `SimilaritySearchTool` | Package owns local/database vector store contracts and fakes. |
+| Application-owned vector storage | package-owned | `VectorStoreInterface`, `SimilaritySearchTool` | Package owns local/database vector store contracts and fakes. Distinct from SDK `SimilaritySearch` (Eloquent `whereVectorSimilarTo`). |
+| SDK Eloquent similarity search tool | direct-SDK | none | SDK `Laravel\Ai\Tools\SimilaritySearch` targets Eloquent models with vector columns. Use directly for SDK-native retrieval; use package `SimilaritySearchTool` for `VectorStoreInterface`. |
 | External vector indexes | deferred | custom `VectorStoreInterface` binding | A first-class adapter can be proposed when there is a concrete provider target. |
 
 ## Tools
@@ -63,7 +68,9 @@ Agent Kit does not mirror every SDK class. If an SDK surface does not need packa
 | SDK surface | Agent Kit classification | Agent Kit surface | Rationale / follow-up |
 |-------------|--------------------------|-------------------|-----------------------|
 | Custom SDK tools | package-owned adapter | package `Tool` contract and `SdkToolMaterializer` | Tool authorization and schema validation must remain package-owned. |
-| Provider-native tools | package-owned adapter | `ProviderToolRegistry`, `ProviderToolMaterializer` | Runtime requests name explicit provider-tool aliases. |
+| Provider-native tools | package-owned adapter | `ProviderToolRegistry`, `ProviderToolMaterializer` | Runtime requests name explicit provider-tool aliases. Config supports `web_search`, `web_fetch`, and `file_search` only (matches SDK v0.8.1 `Providers/Tools`). |
+| SDK sub-agent tool (`AgentTool`) | direct-SDK | none | SDK wraps a nested `Agent` as an isolated tool. Prefer package orchestration/delegation for multi-agent workflows that need package policy and memory. |
+| MCP client/server tools (`McpTool`, `McpServerTool`) | direct-SDK | none | SDK v0.8.1 wraps Laravel MCP client/server tool primitives. No package registry adapter; use SDK tool registration directly or add a proposal if MCP needs package authorization/redaction. |
 | Tool input validation | package-owned | `InMemoryToolRegistry` validation | Agent Kit enforces its supported schema subset before handlers run. |
 | Tool execution callbacks outside package registry | direct-SDK | none | Use SDK directly for SDK-only experiments that should bypass package tool policy. |
 

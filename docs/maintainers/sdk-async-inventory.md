@@ -8,7 +8,8 @@ This maintainer reference maps Laravel AI SDK queue-oriented entry points to Age
 |-------|-------|
 | Audit target | `laravel/ai ^0.8` from `composer.json` (CI lockfile currently resolves `v0.8.1`) |
 | Lockfile status | This repository commits `composer.lock`. Record the resolved `laravel/ai` patch with `composer show laravel/ai` when updating maintainer inventories. |
-| Last parity sweep | `audit-laravel-ai-sdk-parity` |
+| Resolved SDK version | `v0.8.1` (`composer show laravel/ai`, 2026-06-30) |
+| Last parity sweep | 2026-06-30 — scan of `vendor/laravel/ai/src/Jobs`; no new job classes beyond the inventory below |
 
 ## Recommendation legend
 
@@ -29,6 +30,12 @@ This maintainer reference maps Laravel AI SDK queue-oriented entry points to Age
 | `Laravel\\Ai\\Jobs\\GenerateImage` | Queue image generation | runtime | Use `ImageGenerationRuntime` inside application jobs or pipeline steps. Use SDK job directly for SDK-only async image generation. |
 | `Laravel\\Ai\\Jobs\\GenerateAudio` | Queue audio generation | runtime | Use `AudioGenerationRuntime` inside application jobs or pipeline steps. Use SDK job directly for SDK-only async audio generation. |
 | `Laravel\\Ai\\Jobs\\GenerateTranscription` | Queue transcription | runtime | Use `TranscriptionRuntime` inside application jobs or pipeline steps. Use SDK job directly for SDK-only transcription queues. |
+
+Shared job concern (not a standalone queue entry point):
+
+| SDK surface | Purpose | Classification | Agent Kit recommendation |
+|-------------|---------|----------------|--------------------------|
+| `Laravel\\Ai\\Jobs\\Concerns\\InvokesQueuedResponseCallbacks` | Invokes serialized callbacks on queued modality/agent responses | out of scope | Internal SDK behavior used by the jobs above. Do not wrap unless a package-owned queued callback contract is proposed. |
 
 ## Agent Kit queued pipeline guidance
 
