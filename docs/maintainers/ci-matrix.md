@@ -10,7 +10,7 @@ The GitHub Actions workflow runs Pest, PHPStan, Pint, `composer validate`, and `
 | 8.4 | Yes | Yes |
 | 8.5 | Yes | Yes |
 
-The repository lock file targets the current default testbench line. Jobs that target older supported Laravel versions may resolve the corresponding `illuminate/*` and Orchestra Testbench constraints before running tests.
+The repository commits `composer.lock`, which targets the current default Testbench line. Jobs that target older supported Laravel versions resolve the corresponding `illuminate/*` and Orchestra Testbench constraints before running tests.
 
 ## Coverage
 

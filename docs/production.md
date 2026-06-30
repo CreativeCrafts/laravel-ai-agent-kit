@@ -29,7 +29,7 @@ See [Tools](tools.md).
 
 - Do not use `in_memory` for durable or cross-worker state.
 - Use `database` when conversations must persist and encrypted payload storage is required.
-- Existing installs that already ran the earlier database memory migration must run the message-identity upgrade migration before deploying atomic database conversation persistence.
+- Existing installs that already ran the earlier database memory migration must publish and run the message-identity upgrade migration (`update_ai_agent_conversation_messages_message_identity_index`, included in the `ai-agent-kit-migrations` tag) before deploying atomic database conversation persistence.
 - Verify the `ai_agent_conversation_messages` table has a unique index on `conversation_record_id` + `message_id`, not only the old global `message_id` unique index.
 - Use `redis` for shared ephemeral memory across workers.
 - Keep Redis memory encryption enabled unless you explicitly accept plaintext prompt content, assistant output, metadata, and attachment references in Redis.
@@ -96,7 +96,7 @@ Before deploying:
 - verify provider profiles and failover order
 - verify tool authorization denies by default and allows only intended paths
 - verify memory persistence and retention behavior
-- verify the database message-identity upgrade migration has run on existing installs before deploying database atomic persistence
+- verify the database message-identity upgrade migration has been published and run on existing installs before deploying database atomic persistence
 - verify Redis memory encryption, Redis key prefixing, encryption key management, and retention TTL behavior when Redis memory is enabled
 - verify queued workflows with the same queue driver shape you use in production
 - verify queue payload guard limits when enabled

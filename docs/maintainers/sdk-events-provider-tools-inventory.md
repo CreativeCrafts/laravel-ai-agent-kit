@@ -6,8 +6,8 @@ This maintainer reference maps Laravel AI SDK events and provider-native tools t
 
 | Field | Value |
 |-------|-------|
-| Audit target | `laravel/ai ^0.6` from `composer.json` |
-| Lockfile status | This package repository does not commit `composer.lock`; release validation should record the locally installed `laravel/ai` patch version with `composer show laravel/ai`. |
+| Audit target | `laravel/ai ^0.8` from `composer.json` (CI lockfile currently resolves `v0.8.1`) |
+| Lockfile status | This repository commits `composer.lock`. Record the resolved `laravel/ai` patch with `composer show laravel/ai` when updating maintainer inventories. |
 | Last parity sweep | `audit-laravel-ai-sdk-parity` |
 | Classification values | `package-normalized`, `package-owned-adapter`, `direct-SDK`, `deferred`, `out-of-scope` |
 

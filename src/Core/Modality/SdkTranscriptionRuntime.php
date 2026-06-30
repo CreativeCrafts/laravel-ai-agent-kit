@@ -6,12 +6,10 @@ namespace CreativeCrafts\LaravelAiAgentKit\Core\Modality;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\TranscriptionRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\Exceptions\UnsupportedTranscriptionAudioSourceException;
-use CreativeCrafts\LaravelAiAgentKit\Core\Modality\Exceptions\UnsupportedTranscriptionPromptException;
 use Illuminate\Http\UploadedFile;
 use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Transcription;
-use ReflectionMethod;
 
 final readonly class SdkTranscriptionRuntime implements TranscriptionRuntime
 {
@@ -30,12 +28,7 @@ final readonly class SdkTranscriptionRuntime implements TranscriptionRuntime
         }
 
         if ($providerOptions !== []) {
-            if (!method_exists($pending, 'providerOptions')) {
-                throw UnsupportedTranscriptionPromptException::forInstalledSdk();
-            }
-
-            $providerOptionsMethod = new ReflectionMethod($pending, 'providerOptions');
-            $providerOptionsMethod->invoke($pending, $providerOptions);
+            $pending = $pending->providerOptions($providerOptions);
         }
 
         if ($request->language !== null) {

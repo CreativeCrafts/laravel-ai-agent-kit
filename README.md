@@ -42,7 +42,7 @@ After publishing `config/ai-agent-kit.php`, configure at least one enabled provi
 
 At minimum, make sure:
 
-- `providers` contains at least one enabled provider profile.
+- `providers` contains at least one enabled provider profile with the capabilities your workflows need. The bundled `null` profile has empty capabilities and is not sufficient for blueprint evaluation on its own — merge a preset from `examples/provider-profile-presets.php` or configure real profiles (see [Providers](docs/providers.md)).
 - `default_provider` references an enabled provider profile.
 - `failover_order` includes the default provider profile.
 - `memory.default_driver` is intentional. The default `in_memory` driver is process-local and non-persistent.
@@ -116,6 +116,29 @@ $result = AgentKit::evaluateAudio(
 
 See [Blueprints](docs/blueprints.md) for request fields, result fields, prompt requirements, and structured-output behavior.
 
+## Quick start: evaluate audio with image
+
+Use the audio-image blueprint when structured evaluation needs both a transcript and an image attachment:
+
+~~~php
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioImageStructuredEvaluationRequest;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\EvaluationImageInput;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionAudioSource;
+use CreativeCrafts\LaravelAiAgentKit\Facades\AgentKit;
+
+$result = AgentKit::evaluateAudioImage(
+    new AudioImageStructuredEvaluationRequest(
+        runId: 'eval-001',
+        audio: TranscriptionAudioSource::fromBase64(base64_encode($audioBytes), 'audio/wav'),
+        image: EvaluationImageInput::fromUrl('https://example.com/screenshot.png'),
+        evaluationPrompt: 'Evaluate the transcript against the image.',
+        schema: YourEvaluationSchema::class,
+    ),
+);
+~~~
+
+See [Blueprints](docs/blueprints.md#audio-image-structured-evaluation) for capability requirements and pipeline composition.
+
 ## Quick start: register and orchestrate agents
 
 Register first-class agents explicitly through the package registry:
@@ -168,6 +191,7 @@ See [Agents and orchestration](docs/agents-and-orchestration.md) for agent defin
 | Pipelines and queues | Structured sync or queued execution with `RunContext` | [Pipelines and queues](docs/pipelines-and-queues.md) |
 | Vectors and retrieval | Application-owned vector stores plus provider Files/Stores boundaries | [Vectors and retrieval](docs/vectors-and-retrieval.md) |
 | Streaming and modalities | Streaming text, transcription, embeddings, images, reranking, and audio generation | [Streaming and modalities](docs/streaming-and-modalities.md) |
+| Errors and telemetry | Typed failure categories and redacted package events | [Errors and telemetry](docs/errors-and-telemetry.md) |
 | Testing | Package fakes and deterministic app tests | [Testing](docs/testing.md) |
 | Production | Operational defaults and deployment checks | [Production](docs/production.md) |
 

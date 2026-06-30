@@ -18,16 +18,25 @@ final class StructuredRuntimeTelemetryAgent extends StructuredAnonymousAgent imp
      * @param iterable<mixed> $tools
      */
     public function __construct(
-        RuntimeTelemetryContext $telemetryContext,
         string $instructions,
         iterable $messages,
         iterable $tools,
-        Closure $schema,
+        ?Closure $schema = null,
+        ?RuntimeTelemetryContext $telemetryContext = null,
         ?GenerationOptions $generationOptions = null,
     ) {
-        $this->telemetryContext = $telemetryContext;
-        $this->generationOptions = $generationOptions;
-
         parent::__construct($instructions, $messages, $tools, $schema);
+
+        $this->telemetryContext = $telemetryContext ?? new RuntimeTelemetryContext(
+            runId: '',
+            requestedToolNames: [],
+            inputKeys: [],
+            metadataKeys: [],
+            packageConversationId: null,
+            storeConversation: false,
+            continueConversation: false,
+            projectedMessageCount: 0,
+        );
+        $this->generationOptions = $generationOptions;
     }
 }

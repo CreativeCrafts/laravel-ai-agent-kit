@@ -109,6 +109,30 @@ Use result kinds intentionally:
 - `KIND_CONTINUE`: the same agent should continue with updated payload/state.
 - `KIND_DELEGATE`: the orchestrator should evaluate a delegation proposal.
 
+## Delegation policy
+
+Handoffs are governed by `orchestration.delegation_policy` in `config/ai-agent-kit.php`. The orchestrator evaluates every `KIND_DELEGATE` result against the configured mode before running the target agent.
+
+| Mode | Behavior |
+|------|----------|
+| `static_only` (default) | Only agents listed in the delegating agent's `delegationTargets` may receive handoffs. |
+| `dynamic_with_allowlist` | Static targets plus additional pairs declared in `delegation_policy.allowlist`. |
+| `dynamic_full_registry` | Any registered agent may be targeted. |
+
+Declare static targets on `AgentDefinition`:
+
+~~~php
+return new AgentDefinition(
+    key: 'support.agent',
+    displayName: 'Support Agent',
+    requiredCapabilities: ['text_generation'],
+    primaryProviderProfile: 'openai-general',
+    delegationTargets: ['refund.specialist', 'billing.specialist'],
+);
+~~~
+
+Use dynamic modes only when your application explicitly needs broader handoff surfaces. Smaller delegation graphs are easier to test and safer for privacy.
+
 ## Delegation
 
 Delegation is orchestrator-governed. An agent may propose a downstream target, but the `DelegationPolicyEngine` decides whether that handoff is allowed.

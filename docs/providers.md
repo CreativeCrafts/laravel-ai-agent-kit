@@ -36,6 +36,8 @@ Common capabilities include:
 - `audio_transcription`
 - `embeddings`
 - `image_generation`
+- `image_input`
+- `vision`
 - `reranking`
 - `audio_generation`
 

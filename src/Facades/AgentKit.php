@@ -38,6 +38,7 @@ use Illuminate\Support\Facades\Facade;
 /**
  * @method static TextToStructuredEvaluationResult evaluateText(TextToStructuredEvaluationRequest $request)
  * @method static AudioToTextToEvaluationResult evaluateAudio(AudioToTextToEvaluationRequest $request)
+ * @method static \CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioImageStructuredEvaluationResult evaluateAudioImage(\CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioImageStructuredEvaluationRequest $request)
  * @method static OrchestrationResult orchestrate(OrchestrationRequest $request)
  * @method static TextToStructuredEvaluation textToStructuredEvaluation()
  * @method static AudioToTextToEvaluation audioToTextToEvaluation()

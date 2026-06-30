@@ -50,12 +50,12 @@ php artisan migrate
 
 Open `config/ai-agent-kit.php` and make sure:
 
-- `providers` contains at least one enabled profile.
+- `providers` contains at least one enabled profile with the capabilities your workflows need. The bundled `null` profile has empty capabilities and is not sufficient for blueprint evaluation on its own — merge a preset from `examples/provider-profile-presets.php` or configure real profiles.
 - `default_provider` points at an enabled profile.
 - `failover_order` includes the default profile.
 - each workflow capability you need is represented in a compatible provider profile.
 
-The default `null` provider is useful for local structure and deterministic package tests. Production workflows should use real Laravel AI provider configuration and package provider profiles that describe the capabilities your app needs.
+The default `null` provider is useful for bootstrapping and deterministic package tests. Production and blueprint workflows should use real Laravel AI provider configuration and capability-bearing profiles.
 
 See [Providers](providers.md) for provider profiles, presets, capabilities, and failover.
 

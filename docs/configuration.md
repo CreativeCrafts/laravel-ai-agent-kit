@@ -10,24 +10,26 @@ The package validates `config/ai-agent-kit.php` during boot by default. Invalid 
 
 ## Required provider settings
 
-At minimum, configure:
+The published config ships a `null` driver profile with **empty** capabilities. That profile is useful for bootstrapping and deterministic package tests, but **blueprints and agents require capability-bearing profiles** (for example `text_generation` and `structured_output` for text evaluation).
+
+For local or production workflows, merge a preset from `examples/provider-profile-presets.php` or define real profiles:
 
 ~~~php
 'providers' => [
-    'null' => [
-        'driver' => 'null',
+    'openai-structured' => [
+        'driver' => 'openai',
         'enabled' => true,
-        'capabilities' => ['text_generation'],
+        'capabilities' => ['text_generation', 'structured_output'],
         'options' => [],
     ],
 ],
 
-'default_provider' => 'null',
+'default_provider' => 'openai-structured',
 
-'failover_order' => ['null'],
+'failover_order' => ['openai-structured'],
 ~~~
 
-For real provider profiles, see [Providers](providers.md).
+See [Providers](providers.md) for capability names, presets, and failover.
 
 ## Validation
 
@@ -39,6 +41,17 @@ For real provider profiles, see [Providers](providers.md).
 
 Keep validation enabled in normal application environments. Disable it only for narrow test scenarios where a test intentionally builds partial configuration.
 
+## Ephemeral driver warnings
+
+Optional one-time-per-process warnings when in-memory memory or vector drivers are selected in configured environments (default: production):
+
+~~~php
+'ephemeral_driver_warnings' => [
+    'enabled' => false,
+    'environments' => ['production'],
+],
+~~~
+
 ## Budgets
 
 Budgets protect workflows from unbounded execution:
@@ -46,6 +59,7 @@ Budgets protect workflows from unbounded execution:
 ~~~php
 'budgets' => [
     'max_steps' => 20,
+    'max_orchestration_depth' => 25,
     'max_tool_calls' => 50,
     'max_retries_per_step' => 2,
     'max_total_timeout_seconds' => 120,
@@ -55,6 +69,28 @@ Budgets protect workflows from unbounded execution:
 ~~~
 
 Runtime execution enforces token and tool-call ceilings when usage metadata is available. Cost ceilings are fail-closed: when `max_cost_usd` is configured, requests must provide numeric cost metadata so the package can make deterministic decisions.
+
+## Orchestration
+
+Delegation policy controls which agent handoffs the orchestrator may approve:
+
+~~~php
+'orchestration' => [
+    'delegation_policy' => [
+        'mode' => 'static_only',
+        'allowlist' => [],
+        'rewrites' => [],
+    ],
+],
+~~~
+
+Supported modes:
+
+- `static_only` — only targets declared on the delegating agent's `delegationTargets`
+- `dynamic_with_allowlist` — static targets plus per-agent entries in `allowlist`
+- `dynamic_full_registry` — any registered agent may be targeted
+
+See [Agents and orchestration](agents-and-orchestration.md).
 
 ## Resilience
 
@@ -97,6 +133,22 @@ Failover and circuit-breaker behavior are package-owned policies. Provider SDK e
 
 Runtime middleware wraps package `AiRuntime` execution. Streaming is covered in [Streaming and modalities](streaming-and-modalities.md).
 
+## Modalities
+
+Each modality resolves a runtime contract from the container. Use `default_driver` => `sdk` for the Laravel AI bridge, or a class implementing the modality contract:
+
+~~~php
+'modalities' => [
+    'transcription' => ['default_driver' => 'sdk'],
+    'embeddings' => ['default_driver' => 'sdk'],
+    'image_generation' => ['default_driver' => 'sdk'],
+    'reranking' => ['default_driver' => 'sdk'],
+    'audio_generation' => ['default_driver' => 'sdk'],
+],
+~~~
+
+See [Streaming and modalities](streaming-and-modalities.md).
+
 ## Memory
 
 ~~~php
@@ -105,7 +157,14 @@ Runtime middleware wraps package `AiRuntime` execution. Streaming is covered in 
 ],
 ~~~
 
-Use `in_memory` for local and test usage, `database` for encrypted durable storage, and `redis` for shared ephemeral memory across workers. See [Memory](memory.md).
+Use `in_memory` for local and test usage, `database` for encrypted durable storage, and `redis` for shared ephemeral memory across workers.
+
+Additional memory keys:
+
+- `memory.laravel_ai_legacy` — read fallback to Laravel AI conversation tables when using the database driver
+- `memory.attachments_replay` — opt-in replay of persisted attachments on conversation continuation
+
+See [Memory](memory.md).
 
 ## Vectors
 
@@ -117,9 +176,68 @@ Use `in_memory` for local and test usage, `database` for encrypted durable stora
 
 Use `database` or a custom `VectorStoreInterface` implementation for shared retrieval. Built-in stores enforce one embedding width per namespace. See [Vectors and retrieval](vectors-and-retrieval.md).
 
+## Laravel AI Files and Stores
+
+Optional default provider keys for package facades over Laravel AI Files and Stores APIs:
+
+~~~php
+'laravel_ai_files' => [
+    'default_provider' => env('AI_AGENT_KIT_LARAVEL_AI_FILES_PROVIDER'),
+],
+
+'laravel_ai_stores' => [
+    'default_provider' => env('AI_AGENT_KIT_LARAVEL_AI_STORES_PROVIDER'),
+],
+~~~
+
+See [Vectors and retrieval](vectors-and-retrieval.md).
+
 ## Tools
 
-Tool execution remains default-deny until your app registers tools and authorizes execution. Configure packaged tools only after you understand the authorizer path. See [Tools](tools.md).
+Tool execution remains default-deny until your app registers tools and authorizes execution.
+
+Packaged tool configuration:
+
+~~~php
+'tools' => [
+    'authorizer' => \CreativeCrafts\LaravelAiAgentKit\Tools\DenyAllToolAuthorizer::class,
+    'similarity_search' => [
+        'enabled' => false,
+        'register' => false,
+    ],
+    'provider_tools' => [
+        // 'web.search' => ['type' => 'web_search', 'enabled' => true],
+        // 'docs.search' => ['type' => 'file_search', 'enabled' => true, 'stores' => ['store_123']],
+    ],
+],
+~~~
+
+Provider-native tools (`web_search`, `file_search`) are enabled only through explicit `provider_tools` aliases. See [Tools](tools.md).
+
+## Queued pipelines
+
+~~~php
+'pipeline' => [
+    'queued' => [
+        'payload_guard' => false,
+        'debug_payload_guard' => false,
+        'max_serialized_job_bytes' => 524288,
+    ],
+],
+~~~
+
+See [Pipelines and queues](pipelines-and-queues.md).
+
+## Summarization
+
+Conversation summarization is pluggable. The default is a no-op summarizer:
+
+~~~php
+'summarization' => [
+    'enabled' => false,
+    'trigger_message_count' => 20,
+],
+~~~
 
 ## Observability
 
@@ -135,8 +253,23 @@ Telemetry events are redacted by default. Files/Stores gateway observability can
 
 See [Errors and telemetry](errors-and-telemetry.md).
 
+## Scaffolding and maintenance commands
+
+After install, the package registers:
+
+~~~bash
+php artisan ai:make:agent Support/ReplyAgent
+php artisan ai:make:pipeline Support/ReplyPipeline
+php artisan ai:make:prompt Support.Reply --prompt-version=1.0.0
+php artisan ai:make:tool Support/LookupCustomer
+php artisan ai:purge:conversations
+~~~
+
+`ai:purge:conversations` removes expired conversation records according to the configured memory driver retention policy.
+
 ## Related guides
 
+- [Getting started](getting-started.md)
 - [Providers](providers.md)
 - [Memory](memory.md)
 - [Tools](tools.md)

@@ -125,6 +125,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
           ->hasViews()
           ->hasMigration('create_ai_agent_conversations_table')
           ->hasMigration('create_ai_agent_conversation_messages_table')
+          ->hasMigration('update_ai_agent_conversation_messages_message_identity_index')
           ->hasMigration('create_ai_agent_vector_documents_table')
           ->hasCommands([
             MakeAgentCommand::class,
@@ -217,7 +218,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
                 agentRegistry: $app->make(AgentRegistry::class),
                 delegationPolicyEngine: $app->make(DelegationPolicyEngine::class),
                 maxExecutionDepth: $this->positiveIntConfig($config, 'ai-agent-kit.budgets.max_orchestration_depth', 25),
-                maxExecutionSteps: $this->positiveIntConfig($config, 'ai-agent-kit.budgets.max_steps', 50),
+                maxExecutionSteps: $this->positiveIntConfig($config, 'ai-agent-kit.budgets.max_steps', 20),
                 agentProviderProfileSelector: $app->make(AgentProviderProfileSelector::class),
                 events: $app->make(Dispatcher::class),
                 redactor: $app->make(Redactor::class),

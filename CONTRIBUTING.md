@@ -8,6 +8,7 @@ Contributor and maintainer process documentation lives under `docs/maintainers/`
 - [Release verification](docs/maintainers/release-verification.md)
 - [SDK capability matrix](docs/maintainers/sdk-capability-matrix.md)
 - [SDK async inventory](docs/maintainers/sdk-async-inventory.md)
+- [SDK events and provider tools inventory](docs/maintainers/sdk-events-provider-tools-inventory.md)
 - [Testing strategy](docs/maintainers/testing-strategy.md)
 
 Public developer documentation should stay focused on application usage. Keep release process, SDK inventory, and repository-maintenance details in maintainer docs or the changelog.
@@ -41,6 +42,7 @@ The package ships first-class fakes under `CreativeCrafts\LaravelAiAgentKit\Test
 - `FakeToolRunner`
 - `FakeConversationStore`
 - `FakeVectorStore`
+- `FakeTranscriptionRuntime`
 
 These fakes are intended to be instantiated directly and bound into the Laravel container inside tests.
 
@@ -134,6 +136,7 @@ The package ships scaffolding commands for the current workflow surface:
 - `php artisan ai:make:prompt Support.Reply --prompt-version=2.1.0`
 - `php artisan ai:make:agent Support/ReplyAgent`
 - `php artisan ai:make:pipeline Support/ReplyPipeline`
+- `php artisan ai:purge:conversations`
 
 The agent and pipeline commands use `ProjectInspector` to derive the active PSR-4 root namespace and source paths before generating files. They fail safely when the destination already exists unless
 `--force` is supplied.
