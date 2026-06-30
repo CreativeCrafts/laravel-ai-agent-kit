@@ -43,6 +43,25 @@ final readonly class RuntimeTelemetryContext
     }
 
     /**
+     * Placeholder context for telemetry agent constructors when no runtime
+     * request context is available. Production execution paths should always
+     * supply a context from {@see fromRequest()}.
+     */
+    public static function unspecified(): self
+    {
+        return new self(
+            runId: '',
+            requestedToolNames: [],
+            inputKeys: [],
+            metadataKeys: [],
+            packageConversationId: null,
+            storeConversation: false,
+            continueConversation: false,
+            projectedMessageCount: 0,
+        );
+    }
+
+    /**
      * @param list<string> $values
      * @return list<string>
      */

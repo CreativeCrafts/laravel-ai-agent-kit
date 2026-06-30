@@ -27,16 +27,7 @@ final class StructuredRuntimeTelemetryAgent extends StructuredAnonymousAgent imp
     ) {
         parent::__construct($instructions, $messages, $tools, $schema);
 
-        $this->telemetryContext = $telemetryContext ?? new RuntimeTelemetryContext(
-            runId: '',
-            requestedToolNames: [],
-            inputKeys: [],
-            metadataKeys: [],
-            packageConversationId: null,
-            storeConversation: false,
-            continueConversation: false,
-            projectedMessageCount: 0,
-        );
+        $this->telemetryContext = $telemetryContext ?? RuntimeTelemetryContext::unspecified();
         $this->generationOptions = $generationOptions;
     }
 }

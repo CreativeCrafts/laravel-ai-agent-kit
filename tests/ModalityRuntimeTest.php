@@ -10,7 +10,6 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\TranscriptionRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\AudioGenerationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\AudioGenerationResult;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\EmbeddingsRequest;
-use CreativeCrafts\LaravelAiAgentKit\Core\Modality\Exceptions\UnsupportedTranscriptionPromptException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\ImageGenerationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\RerankingRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionProviderOptions;
@@ -109,22 +108,15 @@ it('rejects chunking provider options when diarization is disabled', function ()
     );
 })->throws(InvalidArgumentException::class, 'Transcription request chunkingStrategy is only supported when diarize is true.');
 
-it('forwards transcription prompts through sdk provider options when supported or fails fast otherwise', function (): void {
-    $supportsProviderOptions = method_exists(
-        Transcription::fromBase64(base64_encode('fake-audio-bytes'), 'audio/wav'),
-        'providerOptions',
-    );
+it('forwards transcription prompts through sdk provider options', function (): void {
+    Transcription::fake(function (TranscriptionPrompt $prompt): string {
+        $providerOptions = property_exists($prompt, 'providerOptions')
+          ? $prompt->providerOptions
+          : [];
 
-    Transcription::fake(function (TranscriptionPrompt $prompt) use ($supportsProviderOptions): string {
-        if ($supportsProviderOptions) {
-            $providerOptions = property_exists($prompt, 'providerOptions')
-              ? $prompt->providerOptions
-              : [];
-
-            expect($providerOptions)
-              ->toHaveKey('prompt')
-              ->and($providerOptions['prompt'])->toBe('Transcribe verbatim and preserve pauses.');
-        }
+        expect($providerOptions)
+          ->toHaveKey('prompt')
+          ->and($providerOptions['prompt'])->toBe('Transcribe verbatim and preserve pauses.');
 
         return 'prompted transcript';
     })->preventStrayTranscriptions();
@@ -143,34 +135,20 @@ it('forwards transcription prompts through sdk provider options when supported o
         prompt: 'Transcribe verbatim and preserve pauses.',
     );
 
-    if (!$supportsProviderOptions) {
-        expect(fn () => $runtime->transcribe($request))
-          ->toThrow(UnsupportedTranscriptionPromptException::class);
-
-        return;
-    }
-
     $result = $runtime->transcribe($request);
 
     expect($result->transcript)->toBe('prompted transcript');
 });
 
-it('forwards diarized automatic chunking through sdk provider options when supported or fails fast otherwise', function (): void {
-    $supportsProviderOptions = method_exists(
-        Transcription::fromBase64(base64_encode('fake-audio-bytes'), 'audio/wav'),
-        'providerOptions',
-    );
+it('forwards diarized automatic chunking through sdk provider options', function (): void {
+    Transcription::fake(function (TranscriptionPrompt $prompt): string {
+        $providerOptions = property_exists($prompt, 'providerOptions')
+            ? $prompt->providerOptions
+            : [];
 
-    Transcription::fake(function (TranscriptionPrompt $prompt) use ($supportsProviderOptions): string {
-        if ($supportsProviderOptions) {
-            $providerOptions = property_exists($prompt, 'providerOptions')
-                ? $prompt->providerOptions
-                : [];
-
-            expect($providerOptions)
-                ->toHaveKey('chunking_strategy')
-                ->and($providerOptions['chunking_strategy'])->toBe('auto');
-        }
+        expect($providerOptions)
+            ->toHaveKey('chunking_strategy')
+            ->and($providerOptions['chunking_strategy'])->toBe('auto');
 
         return 'diarized transcript';
     })->preventStrayTranscriptions();
@@ -189,13 +167,6 @@ it('forwards diarized automatic chunking through sdk provider options when suppo
         model: 'gpt-4o-transcribe-diarize',
         providerOptions: new TranscriptionProviderOptions(chunkingStrategy: 'auto'),
     );
-
-    if (!$supportsProviderOptions) {
-        expect(fn () => $runtime->transcribe($request))
-            ->toThrow(UnsupportedTranscriptionPromptException::class);
-
-        return;
-    }
 
     $result = $runtime->transcribe($request);
 

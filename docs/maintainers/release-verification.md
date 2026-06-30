@@ -11,8 +11,7 @@ Use this checklist before tagging a package release.
 
 ## Specification workflow
 
-- [ ] Validate the active change with the repository's OpenSpec workflow when a change is in flight
-- [ ] Archive completed changes according to the project workflow
+- [ ] Archive completed changes according to the project workflow when applicable
 
 ## Laravel AI SDK alignment
 

@@ -50,3 +50,4 @@ First public release. Requires PHP 8.3+, Laravel 12 or 13, and `laravel/ai ^0.8`
 
 - Maintainer SDK parity inventories target `laravel/ai ^0.8`.
 - Public docs describe current package behavior without requiring readers to follow internal development sequencing.
+- Granular pre-1.0.0 development history is archived in [docs/maintainers/CHANGELOG-pre-1.0.0-development.md](docs/maintainers/CHANGELOG-pre-1.0.0-development.md).

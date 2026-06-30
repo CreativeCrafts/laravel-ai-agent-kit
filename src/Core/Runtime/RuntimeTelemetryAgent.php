@@ -25,16 +25,7 @@ final class RuntimeTelemetryAgent extends AnonymousAgent implements CarriesRunti
     ) {
         parent::__construct($instructions, $messages, $tools);
 
-        $this->telemetryContext = $telemetryContext ?? new RuntimeTelemetryContext(
-            runId: '',
-            requestedToolNames: [],
-            inputKeys: [],
-            metadataKeys: [],
-            packageConversationId: null,
-            storeConversation: false,
-            continueConversation: false,
-            projectedMessageCount: 0,
-        );
+        $this->telemetryContext = $telemetryContext ?? RuntimeTelemetryContext::unspecified();
         $this->generationOptions = $generationOptions;
     }
 }

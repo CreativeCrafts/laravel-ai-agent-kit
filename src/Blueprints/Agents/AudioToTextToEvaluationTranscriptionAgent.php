@@ -13,7 +13,6 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionContext;
 use CreativeCrafts\LaravelAiAgentKit\Core\Agents\AgentExecutionResult;
-use CreativeCrafts\LaravelAiAgentKit\Core\Modality\Exceptions\UnsupportedTranscriptionPromptException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionResult;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
@@ -310,8 +309,6 @@ final readonly class AudioToTextToEvaluationTranscriptionAgent implements Agent
             );
 
             return trim($result->transcript) !== '' ? $result : null;
-        } catch (UnsupportedTranscriptionPromptException $exception) {
-            throw $exception;
         } catch (Throwable) {
             return null;
         }
