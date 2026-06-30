@@ -78,6 +78,7 @@ Delegation policy controls which agent handoffs the orchestrator may approve:
 'orchestration' => [
     'delegation_policy' => [
         'mode' => 'static_only',
+        'allow_dynamic_delegation' => false,
         'allowlist' => [],
         'rewrites' => [],
     ],
@@ -87,8 +88,10 @@ Delegation policy controls which agent handoffs the orchestrator may approve:
 Supported modes:
 
 - `static_only` — only targets declared on the delegating agent's `delegationTargets`
-- `dynamic_with_allowlist` — static targets plus per-agent entries in `allowlist`
-- `dynamic_full_registry` — any registered agent may be targeted
+- `dynamic_with_allowlist` — static targets plus per-agent entries in `allowlist` (requires `allow_dynamic_delegation`)
+- `dynamic_full_registry` — any registered agent may be targeted (requires `allow_dynamic_delegation`)
+
+Set `AI_AGENT_KIT_ORCHESTRATION_ALLOW_DYNAMIC_DELEGATION=true` (or `allow_dynamic_delegation => true`) before enabling a non-static mode.
 
 See [Agents and orchestration](agents-and-orchestration.md).
 
@@ -162,7 +165,7 @@ Use `in_memory` for local and test usage, `database` for encrypted durable stora
 Additional memory keys:
 
 - `memory.laravel_ai_legacy` — read fallback to Laravel AI conversation tables when using the database driver
-- `memory.attachments_replay` — opt-in replay of persisted attachments on conversation continuation
+- `memory.attachments_replay` — opt-in replay of persisted attachments on conversation continuation; `allow_provider_references` defaults to `false`
 
 See [Memory](memory.md).
 
@@ -219,7 +222,7 @@ Provider-native tools (`web_search`, `file_search`) are enabled only through exp
 ~~~php
 'pipeline' => [
     'queued' => [
-        'payload_guard' => false,
+        'payload_guard' => true,
         'debug_payload_guard' => false,
         'max_serialized_job_bytes' => 524288,
     ],

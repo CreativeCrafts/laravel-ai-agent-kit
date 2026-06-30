@@ -45,14 +45,14 @@ return [
     |--------------------------------------------------------------------------
     |
     | Optional payload guards fail dispatch if the serialized queued job exceeds
-    | `max_serialized_job_bytes`. `payload_guard` is an explicit production-capable
-    | opt-in. `debug_payload_guard` only runs when `config(app.debug)` is true.
-    | See docs/pipelines-and-queues.md.
+    | `max_serialized_job_bytes`. `payload_guard` is enabled by default for
+    | production safety. `debug_payload_guard` only runs when `config(app.debug)`
+    | is true. See docs/pipelines-and-queues.md.
     |
     */
   'pipeline' => [
     'queued' => [
-      'payload_guard' => (bool)env('AI_AGENT_KIT_QUEUED_PIPELINE_PAYLOAD_GUARD', false),
+      'payload_guard' => (bool)env('AI_AGENT_KIT_QUEUED_PIPELINE_PAYLOAD_GUARD', true),
       'debug_payload_guard' => (bool)env('AI_AGENT_KIT_QUEUED_PIPELINE_DEBUG_PAYLOAD_GUARD', false),
       'max_serialized_job_bytes' => env('AI_AGENT_KIT_QUEUED_PIPELINE_MAX_SERIALIZED_BYTES') === null
         ? 524288
@@ -147,13 +147,15 @@ return [
     |--------------------------------------------------------------------------
     |
     | Delegation policy controls how agent handoffs are approved. Static mode
-    | honors only each agent's declared delegation targets. Dynamic modes can
-    | expand allowed targets with explicit allowlists or full registry access.
+    | honors only each agent's declared delegation targets. Dynamic modes require
+    | `allow_dynamic_delegation` and can expand allowed targets with explicit
+    | allowlists or full registry access.
     |
     */
   'orchestration' => [
     'delegation_policy' => [
       'mode' => (string)env('AI_AGENT_KIT_ORCHESTRATION_DELEGATION_POLICY_MODE', 'static_only'),
+      'allow_dynamic_delegation' => (bool)env('AI_AGENT_KIT_ORCHESTRATION_ALLOW_DYNAMIC_DELEGATION', false),
       'allowlist' => [],
       'rewrites' => [],
     ],
@@ -292,7 +294,7 @@ return [
       'max_age_seconds' => env('AI_AGENT_KIT_MEMORY_ATTACHMENTS_REPLAY_MAX_AGE_SECONDS') === null
         ? null
         : (int)env('AI_AGENT_KIT_MEMORY_ATTACHMENTS_REPLAY_MAX_AGE_SECONDS'),
-      'allow_provider_references' => (bool)env('AI_AGENT_KIT_MEMORY_ATTACHMENTS_REPLAY_ALLOW_PROVIDER_REFERENCES', true),
+      'allow_provider_references' => (bool)env('AI_AGENT_KIT_MEMORY_ATTACHMENTS_REPLAY_ALLOW_PROVIDER_REFERENCES', false),
       'deny_types' => [
         'base64-image',
         'base64-document',

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Modality;
 
+use CreativeCrafts\LaravelAiAgentKit\Security\MediaSourceSafeMetadata;
+use CreativeCrafts\LaravelAiAgentKit\Security\SafeHttpUrlValidator;
+use CreativeCrafts\LaravelAiAgentKit\Security\SafeLocalPathReferenceValidator;
 use Illuminate\Http\UploadedFile;
 use InvalidArgumentException;
 
@@ -39,6 +42,8 @@ final readonly class TranscriptionAudioSource
             throw new InvalidArgumentException('Transcription path audio source requires a non-empty path.');
         }
 
+        SafeLocalPathReferenceValidator::assertSafeReference($path, 'Transcription path audio source');
+
         return new self(TranscriptionAudioSourceKind::Path, $path, $mimeType);
     }
 
@@ -47,6 +52,8 @@ final readonly class TranscriptionAudioSource
         if ($path === '') {
             throw new InvalidArgumentException('Transcription storage audio source requires a non-empty path.');
         }
+
+        SafeLocalPathReferenceValidator::assertSafeReference($path, 'Transcription storage audio source');
 
         return new self(TranscriptionAudioSourceKind::Storage, $path, $mimeType, $disk);
     }
@@ -71,6 +78,8 @@ final readonly class TranscriptionAudioSource
         if (!in_array($scheme, ['http', 'https'], true)) {
             throw new InvalidArgumentException('Transcription URL audio source only supports HTTP(S) URLs.');
         }
+
+        SafeHttpUrlValidator::assertPublicHttpUrl($url, 'Transcription URL audio source');
 
         return new self(TranscriptionAudioSourceKind::Url, $url, $mimeType);
     }
@@ -111,7 +120,13 @@ final readonly class TranscriptionAudioSource
         }
 
         if (in_array($this->kind, [TranscriptionAudioSourceKind::Path, TranscriptionAudioSourceKind::Storage, TranscriptionAudioSourceKind::Url], true) && is_string($this->payload)) {
-            $metadata['reference'] = $this->payload;
+            $metadata = [
+                ...$metadata,
+                ...MediaSourceSafeMetadata::referenceFields(
+                    $this->payload,
+                    $this->kind === TranscriptionAudioSourceKind::Url,
+                ),
+            ];
         }
 
         if ($this->kind === TranscriptionAudioSourceKind::Upload && $this->payload instanceof UploadedFile) {

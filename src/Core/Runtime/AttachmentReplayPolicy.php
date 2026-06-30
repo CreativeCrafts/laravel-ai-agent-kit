@@ -27,7 +27,7 @@ final readonly class AttachmentReplayPolicy
             'local-document',
             'local-audio',
         ],
-        public bool $allowProviderReferences = true,
+        public bool $allowProviderReferences = false,
         public array $denyUrlSubstrings = [],
     ) {
     }

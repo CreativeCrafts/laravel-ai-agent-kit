@@ -449,6 +449,19 @@ final readonly class ConfigValidator
                     ),
                 );
             }
+
+            $allowDynamic = (bool)($delegationPolicy['allow_dynamic_delegation'] ?? false);
+
+            if ($mode !== DelegationPolicyMode::STATIC_ONLY->value && !$allowDynamic) {
+                throw InvalidConfigurationException::invalidValue(
+                    'orchestration.delegation_policy.mode',
+                    'Non-static delegation modes require orchestration.delegation_policy.allow_dynamic_delegation to be true.',
+                );
+            }
+        }
+
+        if (array_key_exists('allow_dynamic_delegation', $delegationPolicy) && !is_bool($delegationPolicy['allow_dynamic_delegation'])) {
+            throw InvalidConfigurationException::invalidType('orchestration.delegation_policy.allow_dynamic_delegation', 'bool');
         }
 
         if (array_key_exists('allowlist', $delegationPolicy) && !is_array($delegationPolicy['allowlist'])) {

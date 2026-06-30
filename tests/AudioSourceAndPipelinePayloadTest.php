@@ -10,6 +10,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionAudioSource;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\RunContext;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 
 it('redacts raw base64 audio and upload contents from source metadata', function (): void {
@@ -28,6 +29,38 @@ it('redacts raw base64 audio and upload contents from source metadata', function
         ->and(json_encode($metadata))->not->toContain($base64)
         ->and(json_encode($metadata))->not->toContain($raw);
 });
+
+it('redacts full storage paths and URL hosts from source metadata', function (): void {
+    $storageMetadata = TranscriptionAudioSource::fromStorage('answers/audio.mp3', 's3-audios', 'audio/mpeg')->safeMetadata();
+    $urlMetadata = EvaluationImageInput::fromUrl('https://example.test/question.jpg')->safeMetadata();
+
+    expect($storageMetadata)
+        ->toMatchArray([
+            'kind' => 'storage',
+            'disk' => 's3-audios',
+            'mime_type' => 'audio/mpeg',
+            'reference_basename' => 'audio.mp3',
+            'reference_fingerprint' => hash('sha256', 'answers/audio.mp3'),
+        ])
+        ->and($storageMetadata)->not->toHaveKey('reference')
+        ->and(json_encode($storageMetadata))->not->toContain('answers/audio.mp3')
+        ->and($urlMetadata)
+        ->toMatchArray([
+            'kind' => 'url',
+            'url_scheme' => 'https',
+            'url_host' => 'example.test',
+        ])
+        ->and($urlMetadata)->not->toHaveKey('reference')
+        ->and(json_encode($urlMetadata))->not->toContain('question.jpg');
+});
+
+it('rejects private URL transcription sources before provider dispatch', function (): void {
+    TranscriptionAudioSource::fromUrl('http://10.0.0.1/audio.mp3', 'audio/mpeg');
+})->throws(InvalidArgumentException::class, 'private or reserved IP');
+
+it('rejects path traversal in storage transcription sources', function (): void {
+    TranscriptionAudioSource::fromStorage('../secrets/audio.mp3', 'local');
+})->throws(InvalidArgumentException::class, 'parent-directory');
 
 it('fails closed for URL transcription sources before provider dispatch', function (): void {
     $runtime = new SdkTranscriptionRuntime();

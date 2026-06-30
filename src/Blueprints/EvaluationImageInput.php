@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Blueprints;
 
+use CreativeCrafts\LaravelAiAgentKit\Security\MediaSourceSafeMetadata;
+use CreativeCrafts\LaravelAiAgentKit\Security\SafeHttpUrlValidator;
+use CreativeCrafts\LaravelAiAgentKit\Security\SafeLocalPathReferenceValidator;
 use Illuminate\Http\UploadedFile;
 use InvalidArgumentException;
 
@@ -40,6 +43,8 @@ final readonly class EvaluationImageInput
             throw new InvalidArgumentException('Evaluation image URL input only supports HTTP(S) URLs.');
         }
 
+        SafeHttpUrlValidator::assertPublicHttpUrl($url, 'Evaluation image URL input');
+
         return new self(EvaluationImageInputKind::Url, $url);
     }
 
@@ -58,6 +63,8 @@ final readonly class EvaluationImageInput
             throw new InvalidArgumentException('Evaluation image path input requires a non-empty path.');
         }
 
+        SafeLocalPathReferenceValidator::assertSafeReference($path, 'Evaluation image path input');
+
         return new self(EvaluationImageInputKind::Path, $path, $mimeType);
     }
 
@@ -66,6 +73,8 @@ final readonly class EvaluationImageInput
         if ($path === '') {
             throw new InvalidArgumentException('Evaluation image storage input requires a non-empty path.');
         }
+
+        SafeLocalPathReferenceValidator::assertSafeReference($path, 'Evaluation image storage input');
 
         return new self(EvaluationImageInputKind::Storage, $path, disk: $disk);
     }
@@ -111,7 +120,13 @@ final readonly class EvaluationImageInput
         }
 
         if (in_array($this->kind, [EvaluationImageInputKind::Url, EvaluationImageInputKind::Path, EvaluationImageInputKind::Storage], true) && is_string($this->payload)) {
-            $metadata['reference'] = $this->payload;
+            $metadata = [
+                ...$metadata,
+                ...MediaSourceSafeMetadata::referenceFields(
+                    $this->payload,
+                    $this->kind === EvaluationImageInputKind::Url,
+                ),
+            ];
         }
 
         if ($this->kind === EvaluationImageInputKind::Upload && $this->payload instanceof UploadedFile) {

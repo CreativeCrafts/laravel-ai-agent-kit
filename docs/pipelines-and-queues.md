@@ -143,18 +143,18 @@ Use the debug guard for local development:
 
 `debug_payload_guard` runs only when `app.debug` is true.
 
-Use the production-capable guard when you want dispatch-time protection outside debug mode:
+`payload_guard` is enabled by default. Disable it only when your workflow payloads legitimately exceed `max_serialized_job_bytes` and you accept dispatch-time size enforcement being off:
 
 ~~~php
 'pipeline' => [
     'queued' => [
-        'payload_guard' => true,
+        'payload_guard' => false,
         'max_serialized_job_bytes' => 524288,
     ],
 ],
 ~~~
 
-`payload_guard` is disabled by default. Enable it deliberately after choosing a size that matches your queue backend and workflow payloads.
+Set `max_serialized_job_bytes` to a limit that matches your queue backend and operational payload budget.
 
 ## When to use Laravel AI SDK jobs directly
 

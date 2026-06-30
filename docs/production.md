@@ -47,9 +47,9 @@ See [Memory](memory.md).
 - Keep `RunContext` payloads small and serializable.
 - Prefer `conversationId` over serializing a full `Conversation` graph.
 - Configure queue connection, queue name, timeout, and result handler behavior deliberately.
-- Enable `debug_payload_guard` in local development if you need serialized job size checks.
-- Enable `payload_guard` in production when you want dispatch-time rejection for oversized serialized jobs.
-- Set `max_serialized_job_bytes` to a limit that matches your queue backend and operational payload budget.
+- `payload_guard` is enabled by default; set `max_serialized_job_bytes` to match your queue backend and payload budget.
+- Enable `debug_payload_guard` in local development for additional size checks when `app.debug` is true.
+- Disable `payload_guard` only when large serialized jobs are intentional and you accept the operational risk.
 
 See [Pipelines and queues](pipelines-and-queues.md).
 

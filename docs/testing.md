@@ -89,11 +89,11 @@ expect($fakeTranscriptions->lastRequest()?->resolvedAudioSource()->safeMetadata(
     ->toMatchArray([
         'kind' => 'storage',
         'disk' => 's3-audios',
-        'reference' => 'answers/audio.mp3',
+        'reference_basename' => 'audio.mp3',
     ]);
 ~~~
 
-`safeMetadata()` never exposes raw base64 audio or uploaded file contents. It reports source kind and safe identifiers such as disk/path, MIME type, upload filename, or payload length.
+`safeMetadata()` never exposes raw base64 audio, uploaded file contents, or full path/URL references. It reports source kind, MIME type, upload filename, payload length, and redacted identifiers such as basename, URL host, or a reference fingerprint.
 
 ## Testing transcription prompts and provider options
 

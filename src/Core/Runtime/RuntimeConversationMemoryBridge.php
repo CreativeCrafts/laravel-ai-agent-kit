@@ -383,7 +383,7 @@ final readonly class RuntimeConversationMemoryBridge
             maxPerTurn: isset($replay['max_per_turn']) && is_int($replay['max_per_turn']) ? $replay['max_per_turn'] : null,
             maxAgeSeconds: isset($replay['max_age_seconds']) && is_int($replay['max_age_seconds']) ? $replay['max_age_seconds'] : null,
             denyTypes: $denyTypesList,
-            allowProviderReferences: (bool)($replay['allow_provider_references'] ?? true),
+            allowProviderReferences: (bool)($replay['allow_provider_references'] ?? false),
             denyUrlSubstrings: $denyUrlList,
         );
     }
