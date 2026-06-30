@@ -97,6 +97,34 @@ it('rejects non-static delegation policy without explicit allow_dynamic_delegati
     ]);
 })->throws(InvalidConfigurationException::class, 'allow_dynamic_delegation');
 
+it('rejects invalid media input URL allowlist entries', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'null' => [
+          'driver' => 'null',
+          'enabled' => true,
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'null',
+      'failover_order' => ['null'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 1,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+      'media_input' => [
+        'url_allowed_hosts' => ['https://example.test'],
+      ],
+    ]);
+})->throws(InvalidConfigurationException::class, 'media_input.url_allowed_hosts.0');
+
 it('validates redis memory configuration', function () {
     /** @var ConfigValidator $validator */
     $validator = app(ConfigValidator::class);

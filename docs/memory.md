@@ -96,6 +96,16 @@ The Redis encrypted value uses a small wrapper that identifies encrypted payload
 
 For compatibility, Redis memory can still read existing plaintext payloads written by earlier package versions. New writes use the configured mode. Set `encrypt_payloads` to `false` only when you explicitly accept that prompt content, assistant output, metadata, and attachment references are readable in Redis.
 
+### Redis plaintext migration runbook
+
+When upgrading from plaintext Redis payloads to encrypted storage:
+
+1. Deploy with `memory.redis.encrypt_payloads` enabled (default).
+2. Run a controlled migration window: load and re-save active conversations through Agent Kit so new writes use encrypted wrappers.
+3. After re-save coverage, flush or expire legacy plaintext keys under your Redis prefix (or rely on configured `retention_days` TTL).
+4. Rotate Redis credentials and review access controls after migration.
+5. Verify backups and replicas no longer retain required plaintext payloads before decommissioning old keys.
+
 Applications sharing Redis keys must use the same application encryption key to read encrypted payloads. Prefer separate Redis prefixes per application and environment.
 
 Make sure production deployments have stable key management and retention policies that match your application requirements.

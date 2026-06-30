@@ -158,6 +158,16 @@ Empty transcripts are rejected by default. Set `allowEmptyTranscript: true` when
 
 `EvaluationImageInput` supports URL, base64, local path, storage, and upload variants. The Laravel AI SDK image attachment objects are created inside Agent Kit bridge code; application code should use the package-owned DTOs.
 
+### Media input trust boundaries
+
+The same trust model as transcription sources applies to `EvaluationImageInput`:
+
+- Prefer `fromUpload()`, `fromBase64()`, or `fromStorage()` for user-supplied content.
+- Use `fromPath()` only for trusted local paths controlled by your application.
+- Use `fromUrl()` only for approved remote assets; configure `media_input.url_allowed_hosts` when URLs may be user-influenced.
+
+See [Streaming and modalities](streaming-and-modalities.md#media-input-trust-boundaries) for the full table and SSRF guidance.
+
 ### Pipeline usage
 
 The blueprint can also be used in package pipelines through `AudioImageStructuredEvaluationPipelineStep` or `AudioImageStructuredEvaluationPipeline`.

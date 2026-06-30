@@ -1,17 +1,43 @@
 # Security Best Practices Report — Laravel AI Agent Kit
 
 **Date:** 2026-06-30  
+**Last updated:** 2026-06-30 (post-remediation)  
 **Scope:** Full package review (`creativecrafts/laravel-ai-agent-kit`)  
 **Stack:** PHP 8.3+, Laravel 12/13, `laravel/ai ^0.8`  
-**Methodology:** Manual review of security-sensitive subsystems; `composer audit` (clean). No PHP/Laravel-specific reference doc exists in the security skill; assessment uses Laravel security conventions and package architecture.
+**Methodology:** Manual review of security-sensitive subsystems; `composer audit` (clean).
 
 ## Executive summary
 
-The package is **designed secure-by-default** in its core threat areas: tool execution is denied unless explicitly authorized, conversation payloads encrypt at rest for persistent drivers, and runtime telemetry redacts content (lengths and key names only). Dependency advisories are clean.
+The package is **designed secure-by-default** in its core threat areas: tool execution is denied unless explicitly authorized, conversation payloads encrypt at rest for persistent drivers, runtime telemetry redacts content, and media-input DTOs now apply SSRF and path-traversal guards at construction time.
 
-The highest practical risks are **application-layer misuse surfaces** the package intentionally exposes: user-supplied **filesystem paths**, **storage paths**, and **HTTP(S) URLs** for audio/image inputs can lead to **local file read** or **SSRF** if callers pass untrusted input without validation. Operators must also avoid enabling **`dynamic_full_registry`** delegation or **provider-native tools** (`web_search`, `file_search`) without understanding data-exfiltration implications.
+**Remediation status (2026-06-30):**
 
-No critical vulnerabilities were found in package code under intended configuration. Findings below prioritize operator and integrator responsibilities.
+| Severity | Total | Addressed | Remaining operator responsibility |
+|----------|-------|-----------|----------------------------------|
+| Critical | 0 | — | — |
+| High | 2 | 2 (guards + docs) | Untrusted `fromPath()` absolute paths; DNS rebinding at fetch time |
+| Medium | 4 | 4 | — |
+| Low | 3 | 3 (docs/defaults) | Redis migration execution; provider-tool policy in app code |
+
+No critical vulnerabilities were found under intended configuration. Residual risk is primarily **application-layer misuse** when integrators pass user-controlled paths/URLs without matching their threat model.
+
+---
+
+## Remediation log
+
+| Finding | Status | Implementation |
+|---------|--------|----------------|
+| 1 — SSRF via URL inputs | **Addressed** | `SafeHttpUrlValidator`: private/reserved IPs, localhost/metadata hosts, internal suffixes, DNS resolution check; optional `media_input.url_allowed_hosts` |
+| 2 — Path-based local reads | **Addressed (documented + partial guard)** | `SafeLocalPathReferenceValidator`: null bytes, `..`, `file://`; trust-boundary docs; `fromPath()` still accepts trusted absolute paths by design |
+| 3 — `safeMetadata()` full references | **Addressed** | `MediaSourceSafeMetadata`: basename + fingerprint, or URL host/scheme |
+| 4 — Dynamic delegation surface | **Addressed** | `allow_dynamic_delegation` required for non-`static_only` modes; config validation + docs |
+| 5 — Attachment replay provider refs | **Addressed** | `allow_provider_references` defaults to `false` |
+| 6 — Queued payload guard opt-in | **Addressed** | `payload_guard` defaults to `true` |
+| 7 — Redis plaintext legacy reads | **Addressed (runbook)** | Migration runbook in `docs/memory.md` |
+| 8 — Provider-native tool exfiltration | **Addressed (documentation)** | Expanded guidance in `docs/tools.md` and `docs/production.md` |
+| 9 — Ephemeral driver warnings off | **Addressed** | `ephemeral_driver_warnings.enabled` defaults to `true` |
+
+**Key commits:** `911c67c` (core hardening), follow-up remediation in current branch.
 
 ---
 
@@ -25,75 +51,58 @@ No critical findings.
 
 ### Finding 1 — User-controlled URL inputs enable SSRF when passed to provider runtimes
 
-**Location:** `src/Blueprints/EvaluationImageInput.php` (lines 27–43), `src/Core/Modality/TranscriptionAudioSource.php` (lines 59–75)
+**Original issue:** URL factories validated scheme only; private/metadata hosts were not blocked.
 
-**Issue:** `EvaluationImageInput::fromUrl()` and `TranscriptionAudioSource::fromUrl()` validate URL shape and restrict schemes to `http`/`https`, but do not block private IP ranges, link-local addresses, or cloud metadata endpoints. When applications pass user-supplied URLs into blueprints or modality requests, the downstream Laravel AI SDK/provider may fetch those URLs server-side.
+**Remediation:**
 
-**Impact:** An attacker could probe internal networks or cloud metadata services via SSRF.
+- `src/Security/SafeHttpUrlValidator.php` — blocks literal private/reserved IPs, localhost/metadata hosts, internal suffixes (`.local`, `.internal`, …), and resolves hostnames; rejects when any resolved address is private or reserved.
+- `config/ai-agent-kit.php` — optional `media_input.url_allowed_hosts` / `AI_AGENT_KIT_MEDIA_URL_ALLOWED_HOSTS`.
+- `docs/streaming-and-modalities.md`, `docs/blueprints.md`, `docs/configuration.md` — trust-boundary guidance.
 
-**Recommendation:** Document that URL inputs must be validated or proxied by the application (allowlist domains, block RFC1918/link-local, use pre-signed object URLs). Consider optional SSRF guard hooks or documented middleware patterns for URL-bearing DTOs.
+**Residual risk:** DNS rebinding between validation and provider fetch; hostnames with no DNS records skip resolution (allows test domains). For untrusted URLs, use signed object URLs, an application fetch proxy, or a strict host allowlist.
+
+**Operator action:** Configure `media_input.url_allowed_hosts` when URLs may be user-influenced.
 
 ---
 
 ### Finding 2 — Path-based audio/image sources read arbitrary local filesystem paths
 
-**Location:** `src/Core/Modality/TranscriptionAudioSource.php` (lines 36–42), `src/Blueprints/EvaluationImageInput.php` (lines 55–61), `src/Core/Modality/SdkTranscriptionRuntime.php` (path branch in `pendingFromSource()`)
+**Original issue:** `fromPath()` forwarded any non-empty string without validation.
 
-**Issue:** `fromPath()` accepts any non-empty string and forwards it to the SDK transcription/image constructors without canonicalization or chroot validation.
+**Remediation:**
 
-**Impact:** If application code passes user-influenced paths, attackers may read files accessible to the PHP process.
+- `src/Security/SafeLocalPathReferenceValidator.php` — rejects null bytes, `..` segments, and `file://` in path and storage references.
+- Documentation treats `fromPath()` as **trusted-administrator input only**; directs untrusted uploads to `fromUpload()`, `fromBase64()`, or `fromStorage()`.
 
-**Recommendation:** Treat `fromPath()` as trusted-administrator input only. Prefer `fromStorage()` with disk policies, `fromUpload()`, or base64 for untrusted uploads. Document this constraint prominently in modality/blueprint guides.
+**Residual risk:** Absolute paths without traversal (e.g. `/etc/passwd`) are still accepted intentionally for batch/admin workflows.
+
+**Operator action:** Never pass user-influenced strings to `fromPath()`.
 
 ---
 
 ## Medium
 
-### Finding 3 — `safeMetadata()` includes full path/URL references in result metadata
+### Finding 3 — `safeMetadata()` includes full path/URL references
 
-**Location:** `src/Core/Modality/TranscriptionAudioSource.php` (lines 113–114), `src/Blueprints/EvaluationImageInput.php` (lines 113–114), propagated via `SdkTranscriptionRuntime.php` (line 73) and blueprint metadata
-
-**Issue:** Metadata labeled “safe” still embeds full `reference` strings for path, storage, and URL kinds. These values can contain sensitive paths (`/var/app/secrets/...`) or internal URLs and may flow into logs, job payloads, or application observability if metadata is exported verbatim.
-
-**Impact:** Unintentional disclosure of internal paths or signed URL fragments in operational logs.
-
-**Recommendation:** Hash or basename-only references in metadata, or gate full references behind an explicit debug flag.
+**Status:** **Addressed.** Metadata exposes `reference_basename` + `reference_fingerprint` for path/storage kinds and `url_host` / `url_scheme` for URLs.
 
 ---
 
 ### Finding 4 — `dynamic_full_registry` delegation mode expands agent handoff surface
 
-**Location:** `config/ai-agent-kit.php` (lines 154–159), `src/Core/Orchestration/ConfigurableDelegationPolicyEngine.php`
-
-**Issue:** Default mode is `static_only` (good), but `dynamic_full_registry` permits delegation to any registered agent. A compromised or misbehaving agent could hand off to sensitive agents not intended in its delegation graph.
-
-**Impact:** Authorization bypass across agent boundaries when mode is misconfigured.
-
-**Recommendation:** Keep `static_only` in production unless explicitly required. Document threat model for dynamic modes in agents-and-orchestration guide (partially done).
+**Status:** **Addressed.** Default remains `static_only`. Non-static modes require `allow_dynamic_delegation` (config validation fails fast without it). Documented in `docs/configuration.md` and agents guide.
 
 ---
 
 ### Finding 5 — Attachment replay allows provider references by default
 
-**Location:** `config/ai-agent-kit.php` (`memory.attachments_replay.allow_provider_references` default `true`), `src/Core/Runtime/AttachmentReplayPolicy.php` (lines 30–31, 69)
-
-**Issue:** When attachment replay is enabled, provider file references may be rehydrated on subsequent turns unless denied by type/URL rules.
-
-**Impact:** Longer retention of provider-side file references than operators expect; potential re-submission of sensitive attachments to providers.
-
-**Recommendation:** Default `allow_provider_references` to `false` for stricter postures, or document explicit opt-in requirements.
+**Status:** **Addressed.** `memory.attachments_replay.allow_provider_references` defaults to `false` in config, `AttachmentReplayPolicy`, and `RuntimeConversationMemoryBridge`.
 
 ---
 
 ### Finding 6 — Queued pipeline payload size guard is opt-in
 
-**Location:** `config/ai-agent-kit.php` (`pipeline.queued.payload_guard` default `false`), `src/Core/Pipeline/LaravelQueuedPipelineDispatcher.php` (lines 48–49)
-
-**Issue:** Large serialized pipeline jobs can be dispatched without size limits unless `payload_guard` or debug guard is enabled.
-
-**Impact:** Queue worker memory exhaustion or denial-of-service from oversized jobs.
-
-**Recommendation:** Enable `payload_guard` in production and set `max_serialized_job_bytes` appropriately.
+**Status:** **Addressed.** `pipeline.queued.payload_guard` defaults to `true`. Documented in `docs/pipelines-and-queues.md` and `docs/production.md`.
 
 ---
 
@@ -101,37 +110,23 @@ No critical findings.
 
 ### Finding 7 — Redis memory reads legacy plaintext payloads for compatibility
 
-**Location:** `src/Memory/RedisConversationStore.php` (decode path; documented in `docs/memory.md`)
+**Status:** **Addressed (operational runbook).** Compatibility read path remains by design for migration. Runbook added to `docs/memory.md` (re-save, flush/TTL, rotate credentials).
 
-**Issue:** Encrypted payloads are default, but plaintext legacy keys remain readable during migration.
-
-**Impact:** Historical plaintext conversation data remains exposed if Redis is compromised before rotation.
-
-**Recommendation:** Migration runbook: re-save conversations under encryption, flush legacy keys, rotate Redis credentials after migration.
+**Operator action:** Execute migration steps during Redis encryption rollout.
 
 ---
 
-### Finding 8 — Provider-native tools can exfiltrate conversation context to third parties
+### Finding 8 — Provider-native tools can exfiltrate conversation context
 
-**Location:** `config/ai-agent-kit.php` (`tools.provider_tools`), `docs/tools.md`
+**Status:** **Addressed (documentation).** Opt-in by design. Expanded checklist in `docs/tools.md` and deploy verification in `docs/production.md`.
 
-**Issue:** Opt-in `web_search` and `file_search` provider tools send model-selected queries to external services when authorized and requested.
-
-**Impact:** Expected behavior, but data-leakage risk if enabled without policy review.
-
-**Recommendation:** Keep disabled until `ToolAuthorizer` and product policy explicitly allow; audit which requests name provider tools.
+**Operator action:** Implement explicit `ToolAuthorizer` policy before enabling `tools.provider_tools` aliases.
 
 ---
 
 ### Finding 9 — Ephemeral in-memory drivers not warned unless configured
 
-**Location:** `config/ai-agent-kit.php` (`ephemeral_driver_warnings.enabled` default `false`)
-
-**Issue:** In-memory memory/vector drivers lose isolation between processes and leak data lifetime to process scope without warning in production.
-
-**Impact:** Operational misconfiguration — not cryptographic failure.
-
-**Recommendation:** Enable ephemeral driver warnings in production deployments.
+**Status:** **Addressed.** `ephemeral_driver_warnings.enabled` now defaults to `true` (still scoped to configured environments, default `production`).
 
 ---
 
@@ -143,6 +138,7 @@ No critical findings.
 | JSON Schema input validation for tools | `src/Tools/InMemoryToolRegistry.php` |
 | AES-256 conversation encryption (database default) | `config/ai-agent-kit.php`, `DatabaseConversationStore` |
 | Redis payload encryption default | `config/ai-agent-kit.php`, `RedisConversationStore` |
+| Media URL/path construction guards | `src/Security/SafeHttpUrlValidator.php`, `SafeLocalPathReferenceValidator.php` |
 | Telemetry content redaction (lengths/keys only) | `src/Security/DefaultRedactor.php`, `SdkTelemetryNormalizer.php` |
 | Config fail-fast validation | `src/Core/Config/ConfigValidator.php` |
 | Clean dependency audit | `composer audit` — no advisories |
@@ -158,10 +154,13 @@ composer audit — No security vulnerability advisories found.
 
 ---
 
-## Recommended fix priority
+## Integrator checklist (production)
 
-1. **Documentation** for URL/path input trust boundaries (Findings 1–2) — highest integrator impact, no code regression risk.
-2. **Operator hardening** — enable payload guard, review delegation mode, attachment replay settings (Findings 4–6).
-3. **Optional code hardening** — metadata reference redaction (Finding 3) if logs are widely exported.
-
-Ask to begin fixes on a specific finding ID when ready.
+1. Keep `orchestration.delegation_policy.mode` at `static_only` unless dynamic delegation is explicitly required and reviewed.
+2. Set `media_input.url_allowed_hosts` when accepting URL-bearing DTOs from users or tenants.
+3. Never pass user input to `fromPath()`; use upload/storage/base64 paths instead.
+4. Keep `memory.attachments_replay.allow_provider_references` disabled unless provider reference replay is intentional.
+5. Keep `pipeline.queued.payload_guard` enabled and size `max_serialized_job_bytes` for your queue backend.
+6. Run the Redis plaintext migration runbook when enabling encryption on existing Redis data.
+7. Authorize provider-native tools explicitly; audit requests that name them.
+8. Leave `ephemeral_driver_warnings.enabled` on in production when using in-memory drivers.

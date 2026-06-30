@@ -43,14 +43,28 @@ Keep validation enabled in normal application environments. Disable it only for 
 
 ## Ephemeral driver warnings
 
-Optional one-time-per-process warnings when in-memory memory or vector drivers are selected in configured environments (default: production):
+Optional one-time-per-process warnings when in-memory memory or vector drivers are selected in configured environments (default: production). Enabled by default:
 
 ~~~php
 'ephemeral_driver_warnings' => [
-    'enabled' => false,
+    'enabled' => true,
     'environments' => ['production'],
 ],
 ~~~
+
+## Media input security
+
+Optional host allowlist for URL-bearing DTOs (`EvaluationImageInput::fromUrl()`, `TranscriptionAudioSource::fromUrl()`). When empty, only built-in SSRF guards apply. When set, the URL host must match an entry exactly or as a subdomain:
+
+~~~php
+'media_input' => [
+    'url_allowed_hosts' => ['cdn.example.com', 'example.test'],
+],
+~~~
+
+Environment variable: `AI_AGENT_KIT_MEDIA_URL_ALLOWED_HOSTS=cdn.example.com,example.test`
+
+See [Streaming and modalities](streaming-and-modalities.md#media-input-trust-boundaries).
 
 ## Budgets
 

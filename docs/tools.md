@@ -46,6 +46,18 @@ Provider-native tools such as web or file search should still be selected throug
 
 Provider tools are authorized separately from package custom tools because provider-native tools execute on the provider side and may have different billing, privacy, and rate-limit implications.
 
+When enabled, provider-native tools can cause the model to send queries derived from conversation context to third-party services (`web_search`, `file_search`, and similar). This is expected product behavior but is a **data-exfiltration surface** if enabled without review.
+
+Before enabling provider tools in production:
+
+- keep `DenyAllToolAuthorizer` replaced with an explicit policy that calls `authorizeProviderTool()` intentionally
+- register only the `tools.provider_tools` aliases you need
+- audit runtime requests that name provider tools in `ExecutionRequest::$providerTools`
+- document which tenants/workflows may use external search
+- prefer disabling provider tools until product and security review sign off
+
+See [Configuration](configuration.md) and [Production](production.md).
+
 ## Similarity search tool
 
 The optional `similarity_search` tool embeds a query with `EmbeddingsRuntime` and searches your configured `VectorStoreInterface`.

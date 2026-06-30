@@ -54,6 +54,7 @@ final readonly class ConfigValidator
         $this->validateValidationSection($config);
 
         $this->validateEphemeralDriverWarnings($config);
+        $this->validateMediaInput($config);
         $this->validateQueuedPipeline($config);
         $this->validateObservability($config);
 
@@ -247,6 +248,39 @@ final readonly class ConfigValidator
                         'Must be a non-empty string.',
                     );
                 }
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function validateMediaInput(array $config): void
+    {
+        if (!array_key_exists('media_input', $config)) {
+            return;
+        }
+
+        if (!is_array($config['media_input'])) {
+            throw InvalidConfigurationException::invalidType('media_input', 'array');
+        }
+
+        $mediaInput = $config['media_input'];
+
+        if (!array_key_exists('url_allowed_hosts', $mediaInput)) {
+            return;
+        }
+
+        if (!is_array($mediaInput['url_allowed_hosts'])) {
+            throw InvalidConfigurationException::invalidType('media_input.url_allowed_hosts', 'array');
+        }
+
+        foreach ($mediaInput['url_allowed_hosts'] as $i => $host) {
+            if (!is_string($host) || trim($host) === '' || str_contains($host, '://')) {
+                throw InvalidConfigurationException::invalidValue(
+                    "media_input.url_allowed_hosts.{$i}",
+                    'Must be a non-empty host or domain suffix without a scheme.',
+                );
             }
         }
     }

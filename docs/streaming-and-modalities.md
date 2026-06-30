@@ -117,11 +117,26 @@ TranscriptionAudioSource::fromStorage('answers/audio.mp3', 's3-audios', 'audio/m
 TranscriptionAudioSource::fromUpload($uploadedFile, 'audio/mpeg');
 ~~~
 
+### Media input trust boundaries
+
+Treat modality and blueprint media DTOs as security-sensitive when they originate from user or tenant input.
+
+| Factory | Intended use | Package guards |
+|---------|--------------|----------------|
+| `fromStorage()` | Disk-backed objects under Laravel Storage policies | Rejects `..`, null bytes, and `file://` in storage keys |
+| `fromUpload()` / `fromBase64()` | Untrusted uploads and in-memory payloads | No filesystem/URL fetch at construction |
+| `fromPath()` | **Trusted administrator or batch paths only** | Rejects traversal segments; does **not** chroot or validate absolute paths such as `/etc/passwd` |
+| `fromUrl()` | Pre-approved remote assets only | Rejects private/reserved IPs, localhost/metadata hosts, internal suffixes; optional host allowlist via `media_input.url_allowed_hosts`; resolves DNS and rejects private/reserved addresses when records exist |
+
+For user-supplied URLs, prefer pre-signed object URLs from your own storage, an application proxy, or configure `AI_AGENT_KIT_MEDIA_URL_ALLOWED_HOSTS` / `media_input.url_allowed_hosts` to an explicit domain list. DNS rebinding between validation and provider fetch remains an application concern when URLs are untrusted; use short-lived signed URLs or a fetch proxy when that threat model applies.
+
+For user-supplied files, prefer `fromUpload()`, `fromBase64()`, or `fromStorage()` with disk policies — not `fromPath()`.
+
 `TranscriptionAudioSource::fromUrl(...)` is intentionally fail-closed in the SDK-backed runtime until remote URL transcription is verified for the installed Laravel AI SDK/provider path. Use storage/path/base64/upload sources or provide a custom `TranscriptionRuntime` when remote audio URLs are required.
 
 Existing `new TranscriptionRequest(base64Audio: ...)` calls remain supported. New code should prefer `TranscriptionRequest::fromAudioSource(...)` for any non-base64 input.
 
-Source metadata is redacted/summarized: base64 payloads and upload contents are not emitted in full. Tests can assert source kind, MIME type, disk, path/reference, and prompt/model/provider values through `FakeTranscriptionRuntime`.
+Source metadata is redacted/summarized: base64 payloads and upload contents are not emitted in full. Path, storage, and URL kinds expose basename/fingerprint or URL host/scheme only — not full references. Tests can assert source kind, MIME type, disk, redacted reference fields, and prompt/model/provider values through `FakeTranscriptionRuntime`.
 
 ## Transcription prompts
 

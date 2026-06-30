@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Modality;
 
+use CreativeCrafts\LaravelAiAgentKit\Security\MediaInputSecurityConfig;
 use CreativeCrafts\LaravelAiAgentKit\Security\MediaSourceSafeMetadata;
 use CreativeCrafts\LaravelAiAgentKit\Security\SafeHttpUrlValidator;
 use CreativeCrafts\LaravelAiAgentKit\Security\SafeLocalPathReferenceValidator;
@@ -79,7 +80,11 @@ final readonly class TranscriptionAudioSource
             throw new InvalidArgumentException('Transcription URL audio source only supports HTTP(S) URLs.');
         }
 
-        SafeHttpUrlValidator::assertPublicHttpUrl($url, 'Transcription URL audio source');
+        SafeHttpUrlValidator::assertPublicHttpUrl(
+            $url,
+            'Transcription URL audio source',
+            MediaInputSecurityConfig::urlAllowedHosts(),
+        );
 
         return new self(TranscriptionAudioSourceKind::Url, $url, $mimeType);
     }

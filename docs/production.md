@@ -97,11 +97,13 @@ Before deploying:
 - verify tool authorization denies by default and allows only intended paths
 - verify memory persistence and retention behavior
 - verify the database message-identity upgrade migration has been published and run on existing installs before deploying database atomic persistence
-- verify Redis memory encryption, Redis key prefixing, encryption key management, and retention TTL behavior when Redis memory is enabled
+- verify Redis memory encryption, Redis key prefixing, encryption key management, retention TTL behavior, and plaintext-to-encrypted migration when Redis memory is enabled
 - verify queued workflows with the same queue driver shape you use in production
 - verify queue payload guard limits when enabled
 - verify telemetry payloads contain only safe operational metadata
 - verify failover behavior with fakes before enabling multi-provider failover in production
+- verify provider-native tools remain disabled or explicitly authorized for intended workflows only
+- verify ephemeral driver warnings are enabled in production (default) when using in-memory memory or vector drivers
 
 ## Recommended rollout
 

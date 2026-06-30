@@ -26,15 +26,37 @@ return [
     |
     | When enabled, the package logs a single warning per PHP process if an
     | in-memory driver is selected while the application environment matches
-    | `environments` (default: production). Does not throw.
+    | `environments` (default: production). Does not throw. Enabled by default.
     |
     */
   'ephemeral_driver_warnings' => [
-    'enabled' => (bool)env('AI_AGENT_KIT_EPHEMERAL_DRIVER_WARNINGS', false),
+    'enabled' => (bool)env('AI_AGENT_KIT_EPHEMERAL_DRIVER_WARNINGS', true),
     'environments' => array_values(
         array_filter(
             explode(',', (string)env('AI_AGENT_KIT_EPHEMERAL_WARN_ENVIRONMENTS', 'production')),
             static fn (string $name): bool => $name !== '',
+        ),
+    ),
+  ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Media input security
+    |--------------------------------------------------------------------------
+    |
+    | URL-bearing DTOs reject private/reserved hosts and optionally require an
+    | explicit host allowlist. Path/storage references reject traversal. See
+    | docs/streaming-and-modalities.md and docs/blueprints.md.
+    |
+    */
+  'media_input' => [
+    'url_allowed_hosts' => array_values(
+        array_filter(
+            array_map(
+                static fn (string $host): string => trim($host),
+                explode(',', (string)env('AI_AGENT_KIT_MEDIA_URL_ALLOWED_HOSTS', '')),
+            ),
+            static fn (string $host): bool => $host !== '',
         ),
     ),
   ],

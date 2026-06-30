@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Blueprints;
 
+use CreativeCrafts\LaravelAiAgentKit\Security\MediaInputSecurityConfig;
 use CreativeCrafts\LaravelAiAgentKit\Security\MediaSourceSafeMetadata;
 use CreativeCrafts\LaravelAiAgentKit\Security\SafeHttpUrlValidator;
 use CreativeCrafts\LaravelAiAgentKit\Security\SafeLocalPathReferenceValidator;
@@ -43,7 +44,11 @@ final readonly class EvaluationImageInput
             throw new InvalidArgumentException('Evaluation image URL input only supports HTTP(S) URLs.');
         }
 
-        SafeHttpUrlValidator::assertPublicHttpUrl($url, 'Evaluation image URL input');
+        SafeHttpUrlValidator::assertPublicHttpUrl(
+            $url,
+            'Evaluation image URL input',
+            MediaInputSecurityConfig::urlAllowedHosts(),
+        );
 
         return new self(EvaluationImageInputKind::Url, $url);
     }
