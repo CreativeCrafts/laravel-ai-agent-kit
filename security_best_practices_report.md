@@ -55,11 +55,11 @@ No critical findings.
 
 **Remediation:**
 
-- `src/Security/SafeHttpUrlValidator.php` — blocks literal private/reserved IPs, localhost/metadata hosts, internal suffixes (`.local`, `.internal`, …), and resolves hostnames; rejects when any resolved address is private or reserved.
+- `src/Security/SafeHttpUrlValidator.php` — blocks literal private/reserved IPs, localhost/metadata hosts, internal suffixes (`.local`, `.internal`, …), obfuscated IP-literal encodings (decimal `2130706433`, hex `0x7f000001`, octal `017700000001`, short dotted `127.1`), and resolves hostnames; rejects when any resolved address is private or reserved.
 - `config/ai-agent-kit.php` — optional `media_input.url_allowed_hosts` / `AI_AGENT_KIT_MEDIA_URL_ALLOWED_HOSTS`.
 - `docs/streaming-and-modalities.md`, `docs/blueprints.md`, `docs/configuration.md` — trust-boundary guidance.
 
-**Residual risk:** DNS rebinding between validation and provider fetch; hostnames with no DNS records skip resolution (allows test domains). For untrusted URLs, use signed object URLs, an application fetch proxy, or a strict host allowlist.
+**Residual risk:** DNS rebinding between validation and provider fetch; hostnames with no DNS records skip resolution (allows test domains). Obfuscated IP-literal encodings are now rejected at construction time. For untrusted URLs, use signed object URLs, an application fetch proxy, or a strict host allowlist.
 
 **Operator action:** Configure `media_input.url_allowed_hosts` when URLs may be user-influenced.
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Facades;
 
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioImageStructuredEvaluationResult;
+use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioImageStructuredEvaluationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationResult;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluationResult;
@@ -38,7 +40,7 @@ use Illuminate\Support\Facades\Facade;
 /**
  * @method static TextToStructuredEvaluationResult evaluateText(TextToStructuredEvaluationRequest $request)
  * @method static AudioToTextToEvaluationResult evaluateAudio(AudioToTextToEvaluationRequest $request)
- * @method static \CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioImageStructuredEvaluationResult evaluateAudioImage(\CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioImageStructuredEvaluationRequest $request)
+ * @method static AudioImageStructuredEvaluationResult evaluateAudioImage(AudioImageStructuredEvaluationRequest $request)
  * @method static OrchestrationResult orchestrate(OrchestrationRequest $request)
  * @method static TextToStructuredEvaluation textToStructuredEvaluation()
  * @method static AudioToTextToEvaluation audioToTextToEvaluation()

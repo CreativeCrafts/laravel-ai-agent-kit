@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Contracts\Vector;
 
-use CreativeCrafts\LaravelAiAgentKit\Tools\SimilaritySearchTool;
-
 /**
  * Optional capability: report the embedding width of stored documents in a namespace
  * (for tools such as {@see SimilaritySearchTool}).

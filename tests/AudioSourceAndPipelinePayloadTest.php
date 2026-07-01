@@ -61,6 +61,15 @@ it('rejects private URL transcription sources before provider dispatch', functio
     TranscriptionAudioSource::fromUrl('http://10.0.0.1/audio.mp3', 'audio/mpeg');
 })->throws(InvalidArgumentException::class, 'private or reserved IP');
 
+it('rejects obfuscated IP-literal URL hosts that resolve to loopback', function (string $url): void {
+    TranscriptionAudioSource::fromUrl($url, 'audio/mpeg');
+})->throws(InvalidArgumentException::class, 'numeric or obfuscated IP-literal')->with([
+    'decimal loopback' => ['http://2130706433/audio.mp3'],
+    'hex loopback' => ['http://0x7f000001/audio.mp3'],
+    'octal loopback' => ['http://017700000001/audio.mp3'],
+    'short dotted loopback' => ['http://127.1/audio.mp3'],
+]);
+
 it('rejects path traversal in storage transcription sources', function (): void {
     TranscriptionAudioSource::fromStorage('../secrets/audio.mp3', 'local');
 })->throws(InvalidArgumentException::class, 'parent-directory');

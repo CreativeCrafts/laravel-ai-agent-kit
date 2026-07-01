@@ -32,6 +32,7 @@ final class SafeHttpUrlValidator
             return;
         }
 
+        self::assertNotObfuscatedIpLiteral($normalizedHost, $context);
         self::assertResolvedAddressesArePublic($normalizedHost, $context);
     }
 
@@ -40,7 +41,7 @@ final class SafeHttpUrlValidator
         $normalizedHost = strtolower($host);
 
         if (str_starts_with($normalizedHost, '[') && str_ends_with($normalizedHost, ']')) {
-            $normalizedHost = substr($normalizedHost, 1, -1);
+            return substr($normalizedHost, 1, -1);
         }
 
         return $normalizedHost;
@@ -72,8 +73,10 @@ final class SafeHttpUrlValidator
 
         foreach ($allowedHosts as $allowedHost) {
             $allowed = strtolower(trim($allowedHost));
-
-            if ($allowed === '' || str_contains($allowed, '://')) {
+            if ($allowed === '') {
+                continue;
+            }
+            if (str_contains($allowed, '://')) {
                 continue;
             }
 
@@ -83,6 +86,34 @@ final class SafeHttpUrlValidator
         }
 
         throw new InvalidArgumentException(sprintf('%s host is not in the configured URL allowlist.', $context));
+    }
+
+    /**
+     * Reject obfuscated IP encodings that the OS resolver (and most HTTP clients) would
+     * still interpret as an address — e.g. the loopback bypasses `http://2130706433/`
+     * (decimal), `http://0x7f000001/` (hex), `http://017700000001/` (octal), and short
+     * dotted forms such as `127.1`. Standard dotted-quad IPv4/IPv6 are already handled by
+     * the FILTER_VALIDATE_IP branch before this check runs, and legitimate public
+     * hostnames always contain a non-numeric TLD label, so any host whose every label is
+     * purely numeric/hex is an address encoding rather than a DNS name.
+     */
+    private static function assertNotObfuscatedIpLiteral(string $normalizedHost, string $context): void
+    {
+        $candidate = rtrim($normalizedHost, '.');
+
+        if ($candidate === '') {
+            return;
+        }
+
+        foreach (explode('.', $candidate) as $label) {
+            if (preg_match('/^(0x[0-9a-f]+|\d+)$/', $label) !== 1) {
+                return;
+            }
+        }
+
+        throw new InvalidArgumentException(
+            sprintf('%s rejects numeric or obfuscated IP-literal hosts.', $context),
+        );
     }
 
     private static function assertPublicIp(string $ip, string $context): void

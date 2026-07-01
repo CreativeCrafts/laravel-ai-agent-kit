@@ -666,10 +666,10 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
     ): AnonymousAgent {
         if ($request->schema === null) {
             return new RuntimeTelemetryAgent(
-                telemetryContext: $telemetryContext,
                 instructions: $instructions,
                 messages: $messages,
                 tools: $materializedTools,
+                telemetryContext: $telemetryContext,
                 generationOptions: $request->generationOptions,
             );
         }
@@ -677,11 +677,11 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
         $schemaClosure = $this->normalizeSchema($request->schema);
 
         return new StructuredRuntimeTelemetryAgent(
-            telemetryContext: $telemetryContext,
             instructions: $instructions,
             messages: $messages,
             tools: $materializedTools,
             schema: $schemaClosure,
+            telemetryContext: $telemetryContext,
             generationOptions: $request->generationOptions,
         );
     }

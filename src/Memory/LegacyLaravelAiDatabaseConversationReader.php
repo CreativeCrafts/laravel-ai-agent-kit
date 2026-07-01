@@ -9,7 +9,6 @@ use DateTimeImmutable;
 use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
 use JsonException;
-use Laravel\Ai\Storage\DatabaseConversationStore;
 use DateTimeInterface;
 
 /**

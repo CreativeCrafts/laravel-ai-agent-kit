@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Runtime;
 
 use Laravel\Ai\ObjectSchema;
-use CreativeCrafts\LaravelAiAgentKit\Blueprints\Support\StructuredEvaluationOutputNormalizer;
-use Illuminate\JsonSchema\Types\Type;
 
 /**
  * Schema handle for TextToStructuredEvaluation specialist {@see ExecutionRequest::$schema}.

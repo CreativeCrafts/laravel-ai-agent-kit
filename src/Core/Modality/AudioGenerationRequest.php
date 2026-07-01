@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Modality;
 
 use InvalidArgumentException;
-use Laravel\Ai\Audio;
-use Laravel\Ai\PendingResponses\PendingAudioGeneration;
 
 /**
  * Text-to-speech / audio generation request aligned with {@see Audio::of} and
