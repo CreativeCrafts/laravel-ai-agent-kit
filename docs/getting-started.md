@@ -10,26 +10,6 @@ composer require creativecrafts/laravel-ai-agent-kit
 
 The package depends on the official Laravel AI SDK and uses it as the runtime substrate. Your application code should normally use Agent Kit workflows, contracts, DTOs, and fakes rather than provider SDK payloads directly.
 
-## Agent Kit versus direct Laravel AI SDK usage
-
-Use Agent Kit when your workflow needs package-owned behavior:
-
-- provider profiles and runtime failover
-- blueprints, orchestration, or queued pipelines
-- conversation memory, retention, encryption, or attachment replay
-- package tool authorization and schema validation
-- redacted package events and typed failure categories
-- package-owned fakes and deterministic workflow tests
-
-Use the Laravel AI SDK directly when the application intentionally wants SDK-native behavior outside the Agent Kit envelope:
-
-- SDK queue jobs or broadcast-agent behavior exactly as shipped by Laravel AI
-- provider-specific experimental options not promoted to Agent Kit DTOs
-- SDK-only files/stores/vector-provider experiments
-- tests that specifically validate Laravel AI SDK behavior rather than package contracts
-
-Agent Kit does not mirror every SDK class. Gaps are classified in maintainer parity docs as package-owned, direct-SDK, deferred, or out of scope.
-
 ## 2. Publish configuration and migrations
 
 Publish Laravel AI configuration and migrations first:
@@ -98,6 +78,26 @@ The blueprint returns a package-owned result DTO. It does not expose provider-na
 - Use [Memory](memory.md) before persisting or continuing conversations.
 - Use [Pipelines and queues](pipelines-and-queues.md) for long-running work.
 - Use [Production](production.md) before deploying real workloads.
+
+## Agent Kit versus direct Laravel AI SDK usage
+
+Use Agent Kit when your workflow needs package-owned behavior:
+
+- provider profiles and runtime failover
+- blueprints, orchestration, or queued pipelines
+- conversation memory, retention, encryption, or attachment replay
+- package tool authorization and schema validation
+- redacted package events and typed failure categories
+- package-owned fakes and deterministic workflow tests
+
+Use the Laravel AI SDK directly when the application intentionally wants SDK-native behavior outside the Agent Kit envelope:
+
+- SDK queue jobs or broadcast-agent behavior exactly as shipped by Laravel AI
+- provider-specific experimental options not promoted to Agent Kit DTOs
+- SDK-only files/stores/vector-provider experiments
+- tests that specifically validate Laravel AI SDK behavior rather than package contracts
+
+Agent Kit does not mirror every SDK class. Gaps are classified in maintainer parity docs as package-owned, direct-SDK, deferred, or out of scope.
 
 ## Safety defaults to know early
 

@@ -23,3 +23,16 @@
 /scripts            export-ignore
 /laravel-ai-agent-kit-threat-model.md  export-ignore
 /security_best_practices_report.md     export-ignore
+
+# Redirect-stub docs kept in the repo to preserve old GitHub deep links,
+# but trimmed from the Composer dist archive (they only point at the focused guides).
+/docs/orchestration-and-blueprints.md      export-ignore
+/docs/pipelines-queues-and-memory.md       export-ignore
+/docs/testing-with-fakes.md                export-ignore
+/docs/provider-profile-presets.md          export-ignore
+/docs/failure-normalization.md             export-ignore
+/docs/github-ci-matrix.md                  export-ignore
+/docs/laravel-ai-sdk-capability-matrix.md  export-ignore
+/docs/release-verification.md              export-ignore
+/docs/sdk-async-inventory.md               export-ignore
+/docs/testing-strategy.md                  export-ignore

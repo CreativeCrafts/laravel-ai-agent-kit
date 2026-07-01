@@ -284,6 +284,117 @@ php artisan ai:purge:conversations
 
 `ai:purge:conversations` removes expired conversation records according to the configured memory driver retention policy.
 
+## Environment variable reference
+
+Every setting above can be driven from `.env`. The tables below map each variable to its config key and shipped default. Prefer editing the published `config/ai-agent-kit.php` for structured values (arrays, class names); use environment variables for per-environment scalars.
+
+### Core, validation, and providers
+
+| Variable | Config key | Default |
+|---|---|---|
+| `AI_AGENT_KIT_VALIDATE_CONFIG` | `validation.enabled` | `true` |
+| `AI_AGENT_KIT_EPHEMERAL_DRIVER_WARNINGS` | `ephemeral_driver_warnings.enabled` | `true` |
+| `AI_AGENT_KIT_EPHEMERAL_WARN_ENVIRONMENTS` | `ephemeral_driver_warnings.environments` | `production` |
+| `AI_AGENT_KIT_DEFAULT_PROVIDER` | `default_provider` | `null` |
+| `AI_AGENT_KIT_FAILOVER_ORDER` | `failover_order` | `null` |
+| `AI_AGENT_KIT_MEDIA_URL_ALLOWED_HOSTS` | `media_input.url_allowed_hosts` | *(empty)* |
+
+### Budgets and orchestration
+
+| Variable | Config key | Default |
+|---|---|---|
+| `AI_AGENT_KIT_MAX_STEPS` | `budgets.max_steps` | `20` |
+| `AI_AGENT_KIT_MAX_ORCHESTRATION_DEPTH` | `budgets.max_orchestration_depth` | `25` |
+| `AI_AGENT_KIT_MAX_TOOL_CALLS` | `budgets.max_tool_calls` | `50` |
+| `AI_AGENT_KIT_MAX_RETRIES_PER_STEP` | `budgets.max_retries_per_step` | `2` |
+| `AI_AGENT_KIT_MAX_TOTAL_TIMEOUT_SECONDS` | `budgets.max_total_timeout_seconds` | `120` |
+| `AI_AGENT_KIT_MAX_TOKENS` | `budgets.max_tokens` | `null` |
+| `AI_AGENT_KIT_MAX_COST_USD` | `budgets.max_cost_usd` | `null` |
+| `AI_AGENT_KIT_ORCHESTRATION_DELEGATION_POLICY_MODE` | `orchestration.delegation_policy.mode` | `static_only` |
+| `AI_AGENT_KIT_ORCHESTRATION_ALLOW_DYNAMIC_DELEGATION` | `orchestration.delegation_policy.allow_dynamic_delegation` | `false` |
+
+### Resilience (retry and circuit breaker)
+
+| Variable | Config key | Default |
+|---|---|---|
+| `AI_AGENT_KIT_RETRY_ENABLED` | `resilience.retry.enabled` | `true` |
+| `AI_AGENT_KIT_RETRY_MAX_ATTEMPTS` | `resilience.retry.max_attempts` | `3` |
+| `AI_AGENT_KIT_RETRY_BACKOFF_STRATEGY` | `resilience.retry.backoff.strategy` | `exponential` |
+| `AI_AGENT_KIT_RETRY_BACKOFF_BASE_DELAY_MS` | `resilience.retry.backoff.base_delay_ms` | `250` |
+| `AI_AGENT_KIT_RETRY_BACKOFF_MAX_DELAY_MS` | `resilience.retry.backoff.max_delay_ms` | `2000` |
+| `AI_AGENT_KIT_RETRY_BACKOFF_MULTIPLIER` | `resilience.retry.backoff.multiplier` | `2.0` |
+| `AI_AGENT_KIT_CIRCUIT_BREAKER_ENABLED` | `resilience.circuit_breaker.enabled` | `true` |
+| `AI_AGENT_KIT_CIRCUIT_BREAKER_APPLY_TO_FAILOVER` | `resilience.circuit_breaker.apply_to_failover` | `false` |
+| `AI_AGENT_KIT_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `resilience.circuit_breaker.failure_threshold` | `3` |
+| `AI_AGENT_KIT_CIRCUIT_BREAKER_RESET_TIMEOUT_SECONDS` | `resilience.circuit_breaker.reset_timeout_seconds` | `60` |
+| `AI_AGENT_KIT_CIRCUIT_BREAKER_HALF_OPEN_SUCCESS_THRESHOLD` | `resilience.circuit_breaker.half_open_success_threshold` | `1` |
+
+### Runtime, prompts, and summarization
+
+| Variable | Config key | Default |
+|---|---|---|
+| `AI_AGENT_KIT_STREAMING_BROADCAST_CHANNEL` | `runtime.streaming.broadcast_channel` | `null` |
+| `AI_AGENT_KIT_PROMPTS_DRIVER` | `prompts.default_driver` | `in_memory` |
+| `AI_AGENT_KIT_PROMPTS_FILE_ROOT_PATH` | `prompts.file.root_path` | `null` |
+| `AI_AGENT_KIT_SUMMARIZATION_ENABLED` | `summarization.enabled` | `false` |
+| `AI_AGENT_KIT_SUMMARIZATION_TRIGGER_MESSAGE_COUNT` | `summarization.trigger_message_count` | `20` |
+
+### Memory
+
+| Variable | Config key | Default |
+|---|---|---|
+| `AI_AGENT_KIT_MEMORY_DRIVER` | `memory.default_driver` | `in_memory` |
+| `AI_AGENT_KIT_MEMORY_IN_MEMORY_RETENTION_DAYS` | `memory.in_memory.retention_days` | `null` |
+| `AI_AGENT_KIT_MEMORY_DB_CONNECTION` | `memory.database.connection` | `null` |
+| `AI_AGENT_KIT_MEMORY_CONVERSATIONS_TABLE` | `memory.database.conversations_table` | `ai_agent_conversations` |
+| `AI_AGENT_KIT_MEMORY_MESSAGES_TABLE` | `memory.database.messages_table` | `ai_agent_conversation_messages` |
+| `AI_AGENT_KIT_MEMORY_DATABASE_DRIVER_NAME` | `memory.database.driver_name` | `database` |
+| `AI_AGENT_KIT_MEMORY_RETENTION_DAYS` | `memory.database.retention_days` | `30` |
+| `AI_AGENT_KIT_MEMORY_ENCRYPT_PAYLOADS` | `memory.database.encrypt_payloads` | `true` |
+| `AI_AGENT_KIT_MEMORY_REDIS_CONNECTION` | `memory.redis.connection` | `null` |
+| `AI_AGENT_KIT_MEMORY_REDIS_PREFIX` | `memory.redis.prefix` | `ai_agent_memory:` |
+| `AI_AGENT_KIT_MEMORY_REDIS_DRIVER_NAME` | `memory.redis.driver_name` | `redis` |
+| `AI_AGENT_KIT_MEMORY_REDIS_RETENTION_DAYS` | `memory.redis.retention_days` | `null` |
+| `AI_AGENT_KIT_MEMORY_REDIS_ENCRYPT_PAYLOADS` | `memory.redis.encrypt_payloads` | `true` |
+| `AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_FALLBACK` | `memory.laravel_ai_legacy.enabled` | `false` |
+| `AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_CONNECTION` | `memory.laravel_ai_legacy.connection` | `null` |
+| `AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_CONVERSATIONS_TABLE` | `memory.laravel_ai_legacy.conversations_table` | `agent_conversations` |
+| `AI_AGENT_KIT_MEMORY_LARAVEL_AI_LEGACY_MESSAGES_TABLE` | `memory.laravel_ai_legacy.messages_table` | `agent_conversation_messages` |
+| `AI_AGENT_KIT_MEMORY_ATTACHMENTS_REPLAY_ENABLED` | `memory.attachments_replay.enabled` | `false` |
+| `AI_AGENT_KIT_MEMORY_ATTACHMENTS_REPLAY_MAX_PER_TURN` | `memory.attachments_replay.max_per_turn` | `null` |
+| `AI_AGENT_KIT_MEMORY_ATTACHMENTS_REPLAY_MAX_AGE_SECONDS` | `memory.attachments_replay.max_age_seconds` | `null` |
+| `AI_AGENT_KIT_MEMORY_ATTACHMENTS_REPLAY_ALLOW_PROVIDER_REFERENCES` | `memory.attachments_replay.allow_provider_references` | `false` |
+
+### Vectors and similarity search
+
+| Variable | Config key | Default |
+|---|---|---|
+| `AI_AGENT_KIT_VECTOR_DRIVER` | `vector.default_driver` | `in_memory` |
+| `AI_AGENT_KIT_VECTOR_IN_MEMORY_ENABLED` | `vector.in_memory.enabled` | `true` |
+| `AI_AGENT_KIT_VECTOR_DATABASE_CONNECTION` | `vector.database.connection` | `null` |
+| `AI_AGENT_KIT_VECTOR_DATABASE_TABLE` | `vector.database.table` | `ai_agent_vector_documents` |
+| `AI_AGENT_KIT_VECTOR_DATABASE_MAX_SCAN_ROWS` | `vector.database.max_scan_rows` | `null` |
+| `AI_AGENT_KIT_SIMILARITY_SEARCH_ENABLED` | `tools.similarity_search.enabled` | `false` |
+| `AI_AGENT_KIT_SIMILARITY_SEARCH_REGISTER` | `tools.similarity_search.register` | `false` |
+| `AI_AGENT_KIT_SIMILARITY_SEARCH_NAME` | `tools.similarity_search.name` | `similarity_search` |
+| `AI_AGENT_KIT_SIMILARITY_SEARCH_NAMESPACE` | `tools.similarity_search.default_namespace` | `default` |
+| `AI_AGENT_KIT_SIMILARITY_SEARCH_LIMIT` | `tools.similarity_search.default_limit` | `10` |
+| `AI_AGENT_KIT_SIMILARITY_SEARCH_EMBEDDING_DIMENSIONS` | `tools.similarity_search.embedding_dimensions` | `null` |
+| `AI_AGENT_KIT_SIMILARITY_SEARCH_EMBEDDING_TIMEOUT` | `tools.similarity_search.embedding_timeout_seconds` | `null` |
+| `AI_AGENT_KIT_SIMILARITY_SEARCH_EMBEDDING_PROVIDER` | `tools.similarity_search.embedding_provider` | `null` |
+| `AI_AGENT_KIT_SIMILARITY_SEARCH_EMBEDDING_MODEL` | `tools.similarity_search.embedding_model` | `null` |
+
+### Queued pipelines, Files/Stores, and observability
+
+| Variable | Config key | Default |
+|---|---|---|
+| `AI_AGENT_KIT_QUEUED_PIPELINE_PAYLOAD_GUARD` | `pipeline.queued.payload_guard` | `true` |
+| `AI_AGENT_KIT_QUEUED_PIPELINE_DEBUG_PAYLOAD_GUARD` | `pipeline.queued.debug_payload_guard` | `false` |
+| `AI_AGENT_KIT_QUEUED_PIPELINE_MAX_SERIALIZED_BYTES` | `pipeline.queued.max_serialized_job_bytes` | `524288` |
+| `AI_AGENT_KIT_LARAVEL_AI_FILES_PROVIDER` | `laravel_ai_files.default_provider` | `null` |
+| `AI_AGENT_KIT_LARAVEL_AI_STORES_PROVIDER` | `laravel_ai_stores.default_provider` | `null` |
+| `AI_AGENT_KIT_LARAVEL_AI_FILES_STORES_OBSERVABILITY` | `observability.laravel_ai_files_stores.enabled` | `true` |
+
 ## Related guides
 
 - [Getting started](getting-started.md)
