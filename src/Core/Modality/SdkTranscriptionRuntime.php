@@ -8,7 +8,6 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\TranscriptionRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\Exceptions\UnsupportedTranscriptionAudioSourceException;
 use Illuminate\Http\UploadedFile;
 use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
-use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Transcription;
 
 final readonly class SdkTranscriptionRuntime implements TranscriptionRuntime
@@ -28,7 +27,7 @@ final readonly class SdkTranscriptionRuntime implements TranscriptionRuntime
         }
 
         if ($providerOptions !== []) {
-            $pending = $pending->providerOptions($providerOptions);
+            $pending = $pending->withProviderOptions($providerOptions);
         }
 
         if ($request->language !== null) {
@@ -48,14 +47,12 @@ final readonly class SdkTranscriptionRuntime implements TranscriptionRuntime
         $segments = [];
 
         foreach ($response->segments as $segment) {
-            if ($segment instanceof TranscriptionSegment) {
-                $segments[] = new TranscriptionSegmentResult(
-                    text: $segment->text,
-                    speaker: $segment->speaker,
-                    startSeconds: $segment->startSeconds,
-                    endSeconds: $segment->endSeconds,
-                );
-            }
+            $segments[] = new TranscriptionSegmentResult(
+                text: $segment->text,
+                speaker: $segment->speaker,
+                startSeconds: $segment->startSeconds,
+                endSeconds: $segment->endSeconds,
+            );
         }
 
         $provider = $response->meta->provider ?? 'unknown';

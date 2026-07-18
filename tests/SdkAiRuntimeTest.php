@@ -31,7 +31,6 @@ use CreativeCrafts\LaravelAiAgentKit\Tools\Exceptions\ToolAuthorizationDeniedExc
 use CreativeCrafts\LaravelAiAgentKit\Tools\InMemoryToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Tools\ProviderToolMaterializer;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolAdapter;
-use Illuminate\Support\Collection;
 use Laravel\Ai\Ai;
 use Laravel\Ai\AiServiceProvider;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -556,23 +555,52 @@ it('enforces max tool-call budget during runtime execution', function () {
 
     config()->set('ai-agent-kit.budgets.max_tool_calls', 1);
 
-    Ai::fakeAgent(RuntimeTelemetryAgent::class, [
-      static function (): AgentResponse {
-          $response = new AgentResponse(
-              invocationId: 'inv-runtime-budget-tool-calls',
-              text: 'Tool-heavy response',
-              usage: new Usage(promptTokens: 1, completionTokens: 1),
-              meta: new Meta(provider: 'openai', model: 'gpt-4o-mini'),
-          );
+    app()->bind(ToolAuthorizer::class, function () {
+        return new class () implements ToolAuthorizer {
+            public function authorizeCustomTool(Tool $tool, array $input): bool
+            {
+                return true;
+            }
 
-          return $response->withToolCallsAndResults(
-              new Collection([
-              new ToolCall('tool-call-1', 'math.add', ['left' => 1, 'right' => 2]),
-              new ToolCall('tool-call-2', 'math.add', ['left' => 3, 'right' => 4]),
-            ]),
-              new Collection(),
-          );
-      },
+            public function authorizeProviderTool(string $providerToolName): bool
+            {
+                return true;
+            }
+        };
+    });
+
+    /** @var ToolRegistry $registry */
+    $registry = app(ToolRegistry::class);
+    $registry->register(
+        new class () implements Tool {
+            public function name(): string
+            {
+                return 'math.add';
+            }
+
+            public function inputSchema(): array
+            {
+                return [
+                    'type' => 'object',
+                    'properties' => [
+                        'left' => ['type' => 'integer'],
+                        'right' => ['type' => 'integer'],
+                    ],
+                    'required' => ['left', 'right'],
+                    'additionalProperties' => false,
+                ];
+            }
+
+            public function execute(array $input): array
+            {
+                return ['sum' => $input['left'] + $input['right']];
+            }
+        },
+    );
+
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, [
+        new ToolCall('tool-call-1', 'math.add', ['left' => 1, 'right' => 2]),
+        new ToolCall('tool-call-2', 'math.add', ['left' => 3, 'right' => 4]),
     ])->preventStrayPrompts();
 
     /** @var AiRuntime $runtime */
@@ -584,6 +612,7 @@ it('enforces max tool-call budget during runtime execution', function () {
                 runId: 'run-budget-tool-calls',
                 prompt: 'Trigger tool-call budget enforcement.',
                 provider: 'openai',
+                toolNames: ['math.add'],
             ),
         ))
       ->toThrow(RuntimeBudgetExceededException::class, 'max_tool_calls [1]');

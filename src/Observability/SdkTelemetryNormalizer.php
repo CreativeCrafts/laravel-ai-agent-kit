@@ -131,15 +131,9 @@ final readonly class SdkTelemetryNormalizer
 
     private function resolveProviderName(TextProvider $provider): string
     {
-        if (method_exists($provider, 'name')) {
-            $name = $provider->name();
+        $name = $provider->name();
 
-            if (is_string($name) && $name !== '') {
-                return $name;
-            }
-        }
-
-        return $provider::class;
+        return $name !== '' ? $name : $provider::class;
     }
 
     private function normalizeString(?string $value, string $fallback): string

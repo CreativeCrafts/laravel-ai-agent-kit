@@ -26,6 +26,7 @@ use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\Data\ToolResult;
 
 final readonly class RuntimeConversationMemoryBridge
 {
@@ -207,13 +208,32 @@ final readonly class RuntimeConversationMemoryBridge
             ConversationMessageRole::User => $this->projectUserMessage($message),
             ConversationMessageRole::Assistant => new AssistantMessage($message->content),
             ConversationMessageRole::Tool => new ToolResultMessage(collect([
-              [
-                'output' => $message->content,
-                'metadata' => $message->metadata,
-              ],
+                $this->toolResultFromConversationMessage($message),
             ])),
             ConversationMessageRole::System => new UserMessage('[system-context] ' . $message->content),
         };
+    }
+
+    private function toolResultFromConversationMessage(ConversationMessage $message): ToolResult
+    {
+        $toolResult = $message->metadata['tool_result'] ?? null;
+
+        if (is_array($toolResult)) {
+            return ToolResult::fromArray($toolResult);
+        }
+
+        $toolId = $message->metadataValue('tool_id');
+        $toolName = $message->metadataValue('tool_name');
+        $arguments = $message->metadataValue('tool_arguments');
+        $resultId = $message->metadataValue('result_id');
+
+        return new ToolResult(
+            id: is_string($toolId) && $toolId !== '' ? $toolId : $message->id->toString(),
+            name: is_string($toolName) && $toolName !== '' ? $toolName : 'tool',
+            arguments: is_array($arguments) ? $arguments : [],
+            result: $message->content,
+            resultId: is_string($resultId) ? $resultId : null,
+        );
     }
 
     private function projectUserMessage(ConversationMessage $message): UserMessage

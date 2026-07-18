@@ -15,13 +15,14 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Event;
-use Laravel\Ai\Contracts\Gateway\TextGateway;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\ToolInvoked;
+use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
@@ -62,6 +63,27 @@ it('normalizes sdk prompting and completion events into redacted package telemet
             return 'openai';
         }
 
+        public function driver(): string
+        {
+            return 'openai';
+        }
+
+        /**
+         * @return array<string, mixed>
+         */
+        public function providerCredentials(): array
+        {
+            return ['key' => 'test-key'];
+        }
+
+        /**
+         * @return array<string, mixed>
+         */
+        public function additionalConfiguration(): array
+        {
+            return [];
+        }
+
         public function prompt(AgentPrompt $prompt): AgentResponse
         {
             throw new RuntimeException('Not used in this test.');
@@ -72,14 +94,14 @@ it('normalizes sdk prompting and completion events into redacted package telemet
             throw new RuntimeException('Not used in this test.');
         }
 
-        public function textGateway(): TextGateway
-        {
-            throw new RuntimeException('Not used in this test.');
-        }
-
-        public function useTextGateway(TextGateway $gateway): self
+        public function useTextGateway(StepTextGateway $gateway): self
         {
             return $this;
+        }
+
+        public function textGenerationLoop(): TextGenerationLoop
+        {
+            throw new RuntimeException('Not used in this test.');
         }
 
         public function defaultTextModel(): string

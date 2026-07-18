@@ -42,6 +42,7 @@ use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\Error as StreamError;
+use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use RuntimeException;
@@ -987,11 +988,11 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
     }
 
     /**
-     * @param Collection<int, mixed> $events
+     * @param Collection<int, StreamEvent> $events
      */
     private function resolveStreamMeta(Collection $events): ?Meta
     {
-        $start = $events->first(static fn (mixed $event): bool => $event instanceof StreamStart);
+        $start = $events->first(static fn (StreamEvent $event): bool => $event instanceof StreamStart);
 
         if ($start instanceof StreamStart) {
             return new Meta($start->provider, $start->model);
