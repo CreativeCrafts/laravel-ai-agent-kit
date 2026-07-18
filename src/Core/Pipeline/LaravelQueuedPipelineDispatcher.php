@@ -62,7 +62,7 @@ final class LaravelQueuedPipelineDispatcher implements QueuedPipelineDispatcher
         $debugGuard = (bool)($block['debug_payload_guard'] ?? false);
         $debugEnabled = (bool)$this->config->get('app.debug', false);
 
-        if (!$payloadGuard && !($debugGuard && $debugEnabled)) {
+        if (!$payloadGuard && (!$debugGuard || !$debugEnabled)) {
             return;
         }
 
