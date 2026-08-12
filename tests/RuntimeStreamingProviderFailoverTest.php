@@ -17,6 +17,8 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StreamComplete;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StreamFailure;
 use Laravel\Ai\Ai;
 use Laravel\Ai\AiServiceProvider;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderTargetResolver;
 
 it('fails over when stream creation fails before chunks are emitted', function (): void {
     app()->register(AiServiceProvider::class);
@@ -94,6 +96,8 @@ function refreshStreamingProviderBindings(): void
     app()->forgetInstance(ProviderSelector::class);
     app()->forgetInstance(ConfiguredFailoverProviderSelector::class);
     app()->forgetInstance(FailoverProviderSelector::class);
+    app()->forgetInstance(ConfiguredProviderTargetResolver::class);
+    app()->forgetInstance(ProviderTargetResolver::class);
     app()->forgetInstance(SdkAiRuntime::class);
     app()->forgetInstance(AiRuntime::class);
     app()->forgetInstance(StreamingAiRuntime::class);

@@ -14,28 +14,17 @@ it('constructs with all defaults and an empty providerOptions map', function () 
       ->and($options->toProviderOptionsMap())->toBe([]);
 });
 
-it('accepts valid typed fields and maps them into the provider options map', function () {
+it('keeps typed fields off the raw provider options map', function () {
     $options = new GenerationOptions(
         temperature: 0.25,
         maxTokens: 512,
         maxSteps: 3,
     );
 
-    expect($options->toProviderOptionsMap())->toBe([
-      'temperature' => 0.25,
-      'maxTokens' => 512,
-      'maxSteps' => 3,
-    ]);
-});
-
-it('omits null typed fields from the provider options map', function () {
-    $options = new GenerationOptions(
-        temperature: 0.1,
-        maxTokens: null,
-        maxSteps: null,
-    );
-
-    expect($options->toProviderOptionsMap())->toBe(['temperature' => 0.1]);
+    expect($options->temperature)->toBe(0.25)
+      ->and($options->maxTokens)->toBe(512)
+      ->and($options->maxSteps)->toBe(3)
+      ->and($options->toProviderOptionsMap())->toBe([]);
 });
 
 it('preserves explicit providerOptions entries in the map', function () {
@@ -45,18 +34,77 @@ it('preserves explicit providerOptions entries in the map', function () {
     );
 
     expect($options->toProviderOptionsMap())->toBe([
-      'temperature' => 0.1,
       'top_p' => 0.9,
     ]);
 });
 
-it('lets explicit providerOptions entries override typed fields on key collision', function () {
+it('resolves nested provider options for the current sdk provider', function () {
     $options = new GenerationOptions(
-        temperature: 0.1,
-        providerOptions: ['temperature' => 0.9],
+        providerOptions: [
+          'openai' => ['reasoning' => ['effort' => 'medium']],
+          'anthropic' => ['thinking' => ['budget_tokens' => 1024]],
+        ],
     );
 
-    expect($options->toProviderOptionsMap())->toBe(['temperature' => 0.9]);
+    expect($options->providerOptionsFor('openai', 'openai'))->toBe([
+      'reasoning' => ['effort' => 'medium'],
+    ])->and($options->providerOptionsFor('anthropic', 'anthropic'))->toBe([
+      'thinking' => ['budget_tokens' => 1024],
+    ]);
+});
+
+it('does not leak scoped provider options to another provider', function () {
+    $options = new GenerationOptions(
+        providerOptions: [
+          'openai' => ['reasoning' => ['effort' => 'medium']],
+        ],
+    );
+
+    expect($options->providerOptionsFor('anthropic', 'anthropic', ['openai', 'anthropic']))->toBe([]);
+});
+
+it('isolates scoped options keyed by laravel ai instance names that are not agent kit profiles', function () {
+    $options = new GenerationOptions(
+        providerOptions: [
+          'openai-eu' => ['reasoning' => ['effort' => 'medium']],
+          'openai-us' => ['service_tier' => 'flex'],
+        ],
+    );
+
+    expect($options->providerOptionsFor('openai-eu', 'openai'))->toBe([
+      'reasoning' => ['effort' => 'medium'],
+    ])->and($options->providerOptionsFor('openai-us', 'openai'))->toBe([
+      'service_tier' => 'flex',
+    ])->and($options->providerOptionsFor('anthropic', 'anthropic', ['openai-eu', 'openai-us', 'openai', 'anthropic']))->toBe([]);
+});
+
+it('applies unscoped provider options to every attempt for backwards compatibility', function () {
+    $options = new GenerationOptions(
+        providerOptions: ['top_p' => 0.9],
+    );
+
+    expect($options->providerOptionsFor('openai', 'openai'))->toBe(['top_p' => 0.9])
+      ->and($options->providerOptionsFor('anthropic', 'anthropic'))->toBe(['top_p' => 0.9]);
+});
+
+it('lets request provider options override profile defaults for the current attempt', function () {
+    $options = new GenerationOptions(
+        providerOptions: [
+          'openai' => ['reasoning' => ['effort' => 'high']],
+        ],
+    );
+
+    $attempt = $options->forProviderAttempt(
+        sdkProviderName: 'openai',
+        driver: 'openai',
+        profileOptions: ['reasoning' => ['effort' => 'medium'], 'service_tier' => 'default'],
+        additionalScopeKeys: ['openai'],
+    );
+
+    expect($attempt->providerOptions)->toBe([
+      'reasoning' => ['effort' => 'high'],
+      'service_tier' => 'default',
+    ])->and($attempt->maxTokens)->toBeNull();
 });
 
 it('rejects temperature below zero', function () {

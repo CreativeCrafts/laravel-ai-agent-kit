@@ -5,14 +5,21 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Modality;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\ImageGenerationRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
 use InvalidArgumentException;
 use Laravel\Ai\Image;
 
 final readonly class SdkImageGenerationRuntime implements ImageGenerationRuntime
 {
+    public function __construct(
+        private ProviderTargetResolver $providerTargetResolver,
+    ) {
+    }
+
     public function generate(ImageGenerationRequest $request): ImageGenerationResult
     {
         $pending = Image::of($request->prompt);
+        $target = $this->providerTargetResolver->resolveExplicit($request->provider, $request->model);
 
         if ($request->size === '1:1') {
             $pending = $pending->size('1:1');
@@ -38,7 +45,7 @@ final readonly class SdkImageGenerationRuntime implements ImageGenerationRuntime
             $pending = $pending->timeout($request->timeout);
         }
 
-        $response = $pending->generate($request->provider, $request->model);
+        $response = $pending->generate($target->sdkProviderName, $target->model);
 
         $first = $response->firstImage();
         $provider = $response->meta->provider ?? 'unknown';

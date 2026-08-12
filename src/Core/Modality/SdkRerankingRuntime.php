@@ -5,19 +5,26 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Modality;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\RerankingRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
 use Laravel\Ai\Reranking;
 
 final readonly class SdkRerankingRuntime implements RerankingRuntime
 {
+    public function __construct(
+        private ProviderTargetResolver $providerTargetResolver,
+    ) {
+    }
+
     public function rerank(RerankingRequest $request): RerankingResult
     {
         $pending = Reranking::of($request->documents);
+        $target = $this->providerTargetResolver->resolveExplicit($request->provider, $request->model);
 
         if ($request->limit !== null) {
             $pending = $pending->limit($request->limit);
         }
 
-        $response = $pending->rerank($request->query, $request->provider, $request->model);
+        $response = $pending->rerank($request->query, $target->sdkProviderName, $target->model);
 
         $documents = [];
 

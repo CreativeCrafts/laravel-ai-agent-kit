@@ -18,10 +18,12 @@ it('defines the audited assistant-era provider capability matrix', function (): 
         'memory_aware_continuation',
         'text_to_structured_evaluation',
         'audio_to_text_to_evaluation',
+        'audio_image_structured_evaluation',
       ])
       ->and($matrix->get('text_generation'))->toBeInstanceOf(ProviderCapabilityMatrixEntry::class)
       ->and($matrix->get('text_generation')->isStagedWorkflow())->toBeFalse()
-      ->and($matrix->get('audio_to_text_to_evaluation')->isStagedWorkflow())->toBeTrue();
+      ->and($matrix->get('audio_to_text_to_evaluation')->isStagedWorkflow())->toBeTrue()
+      ->and($matrix->get('audio_image_structured_evaluation')->isStagedWorkflow())->toBeTrue();
 });
 
 it('reports no missing requirements when a profile satisfies an audited capability target', function (): void {
@@ -127,4 +129,66 @@ it('treats a missing staged provider as missing all of that stage requirements',
     )->toBe([
       'evaluation' => ['text_generation', 'structured_output'],
     ]);
+});
+
+it('requires text generation structured output and image input for audio-image evaluation', function (): void {
+    $matrix = new AuditedProviderCapabilityMatrix();
+
+    $transcriptionProvider = new ProviderDefinition(
+        name: 'audio-only',
+        driver: 'openai',
+        enabled: true,
+        options: [],
+        capabilities: ['audio_transcription'],
+    );
+
+    $evaluationProvider = new ProviderDefinition(
+        name: 'structured-only',
+        driver: 'openai',
+        enabled: true,
+        options: [],
+        capabilities: ['structured_output'],
+    );
+
+    expect(
+        $matrix->missingStageRequirements(
+            [
+          'transcription' => $transcriptionProvider,
+          'evaluation' => $evaluationProvider,
+        ],
+            'audio_image_structured_evaluation',
+        ),
+    )->toBe([
+      'evaluation' => ['text_generation', 'image_input'],
+    ]);
+});
+
+it('accepts vision as an image_input alias for audio-image evaluation', function (): void {
+    $matrix = new AuditedProviderCapabilityMatrix();
+
+    $transcriptionProvider = new ProviderDefinition(
+        name: 'audio-only',
+        driver: 'openai',
+        enabled: true,
+        options: [],
+        capabilities: ['audio_transcription'],
+    );
+
+    $evaluationProvider = new ProviderDefinition(
+        name: 'vision-evaluator',
+        driver: 'openai',
+        enabled: true,
+        options: [],
+        capabilities: ['text_generation', 'structured_output', 'vision'],
+    );
+
+    expect(
+        $matrix->missingStageRequirements(
+            [
+          'transcription' => $transcriptionProvider,
+          'evaluation' => $evaluationProvider,
+        ],
+            'audio_image_structured_evaluation',
+        ),
+    )->toBe([]);
 });

@@ -1145,3 +1145,90 @@ it('rejects invalid laravel_ai_stores.default_provider type', function () {
         ],
     ]);
 })->throws(InvalidConfigurationException::class, 'laravel_ai_stores.default_provider');
+
+it('accepts sdk_provider and profile provider_options', function (): void {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'primary-image-scorer' => [
+          'driver' => 'openai',
+          'sdk_provider' => 'openai-production',
+          'enabled' => true,
+          'capabilities' => ['text_generation', 'structured_output', 'vision'],
+          'options' => [
+            'model' => 'gpt-example',
+            'provider_options' => [
+              'reasoning' => ['effort' => 'medium'],
+            ],
+          ],
+        ],
+      ],
+      'default_provider' => 'primary-image-scorer',
+      'failover_order' => ['primary-image-scorer'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 1,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+    ]);
+
+    expect(true)->toBeTrue();
+});
+
+it('rejects an empty sdk_provider', function (): void {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'openai-fast' => [
+          'driver' => 'openai',
+          'sdk_provider' => '',
+          'enabled' => true,
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'openai-fast',
+      'failover_order' => ['openai-fast'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 1,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+    ]);
+})->throws(InvalidConfigurationException::class, 'providers.openai-fast.sdk_provider');
+
+it('rejects non-array profile provider_options', function (): void {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'openai-fast' => [
+          'driver' => 'openai',
+          'enabled' => true,
+          'options' => [
+            'provider_options' => 'not-an-array',
+          ],
+        ],
+      ],
+      'default_provider' => 'openai-fast',
+      'failover_order' => ['openai-fast'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 1,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+    ]);
+})->throws(InvalidConfigurationException::class, 'providers.openai-fast.options.provider_options');

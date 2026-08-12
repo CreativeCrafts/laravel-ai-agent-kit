@@ -35,6 +35,7 @@ use Illuminate\Config\Repository;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Facades\Event;
 use CreativeCrafts\LaravelAiAgentKit\Tools\ProviderToolMaterializer;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
 
 it('resolves categories through the package-owned failure-category carrier interface', function (): void {
     $throwable = new class ('carrier failure') extends RuntimeException implements HasFailureCategory {
@@ -141,6 +142,7 @@ it('emits provider-failure runtime telemetry when the provider prompt edge fails
           ->and($event->metadataKeys)->toBe([
               'trace_id',
               'runtime_provider_attempts',
+              'runtime_sdk_provider_attempts',
               'runtime_failover_exhausted',
           ])
           ->and($event->projectedMessageCount)->toBe(0)
@@ -324,6 +326,7 @@ function runtimeForFailureTests(ConversationContextManager $conversationContextM
         ]),
         ),
         container: app(),
+        providerTargetResolver: app(ProviderTargetResolver::class),
         events: $eventDispatcher,
         redactor: app(Redactor::class),
     );

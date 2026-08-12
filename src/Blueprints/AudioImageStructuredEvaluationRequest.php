@@ -39,6 +39,7 @@ final readonly class AudioImageStructuredEvaluationRequest
         public ?int $evaluationTimeout = null,
         public bool $allowEmptyTranscript = false,
         public array $metadata = [],
+        public bool $strictStructuredOutput = false,
     ) {
         if ($this->runId === '') {
             throw new InvalidArgumentException('Audio-image structured evaluation requests require a non-empty runId.');

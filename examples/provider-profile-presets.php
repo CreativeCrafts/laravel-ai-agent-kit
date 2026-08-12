@@ -13,6 +13,7 @@ return [
       ],
       'gemini-structured' => [
         'driver' => 'gemini',
+        'sdk_provider' => 'gemini',
         'enabled' => true,
         'capabilities' => ['text_generation', 'structured_output'],
         'options' => [],
@@ -56,6 +57,7 @@ return [
       ],
       'gemini-structured' => [
         'driver' => 'gemini',
+        'sdk_provider' => 'gemini',
         'enabled' => true,
         'capabilities' => ['text_generation', 'structured_output'],
         'options' => [],

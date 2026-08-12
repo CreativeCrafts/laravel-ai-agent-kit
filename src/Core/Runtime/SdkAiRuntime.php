@@ -8,11 +8,12 @@ use Closure;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\StreamingAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\CircuitBreakerManager;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\Redactor;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderNotInFailoverOrderException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ProviderDefinition;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ResolvedProviderTarget;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeBudgetExceededException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeExecutionException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\SchemaResolutionException;
@@ -37,6 +38,7 @@ use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Laravel\Ai\AnonymousAgent;
 use Laravel\Ai\Contracts\HasStructuredOutput;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Responses\Data\Meta;
@@ -56,6 +58,7 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
         private RuntimeConversationMemoryBridge $runtimeConversationMemoryBridge,
         private RuntimeBudgetEnforcer $runtimeBudgetEnforcer,
         private Container $container,
+        private ProviderTargetResolver $providerTargetResolver,
         private ?Dispatcher $events = null,
         private ?Redactor $redactor = null,
     ) {
@@ -105,15 +108,15 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
 
         $telemetryContext = RuntimeTelemetryContext::fromRequest($request, $projectedConversation);
         $instructions = $this->instructionsAsString($request, $projectedConversation->systemInstructions);
+        $effectiveAttachments = $this->effectivePromptAttachments($request, $projectedConversation);
+        $attemptedProfiles = [];
+        $attemptedSdkProviders = [];
+        $attempt = $this->providerTargetResolver->resolve($request->provider, $request->model);
+        $attemptRequest = $request->withProviderIdentity($attempt->policyIdentity(), $attempt->model);
+        $lastProviderThrowable = null;
 
         try {
-            $agent = $this->buildAgent(
-                request: $request,
-                telemetryContext: $telemetryContext,
-                instructions: $instructions,
-                messages: $projectedConversation->messages,
-                materializedTools: $materializedTools,
-            );
+            $schemaClosure = $request->schema === null ? null : $this->normalizeSchema($request->schema);
         } catch (Throwable $throwable) {
             throw $this->wrapAndReportRuntimeFailure(
                 request: $request,
@@ -123,35 +126,43 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
             );
         }
 
-        $effectiveAttachments = $this->effectivePromptAttachments($request, $projectedConversation);
-        $attemptedProviders = [];
-        $attemptRequest = $this->requestForInitialProviderAttempt($request);
-        $lastProviderThrowable = null;
-
         while (true) {
-            $attemptedProviders[] = $attemptRequest->provider ?? 'default';
+            $attemptRequest = $request->withProviderIdentity($attempt->policyIdentity(), $attempt->model);
+            $attemptedProfiles[] = $attempt->policyIdentity();
+            $attemptedSdkProviders[] = $attempt->sdkProviderName ?? 'default';
 
             try {
+                $agent = $this->buildAgent(
+                    request: $request,
+                    telemetryContext: $telemetryContext,
+                    instructions: $instructions,
+                    messages: $projectedConversation->messages,
+                    materializedTools: $materializedTools,
+                    generationOptions: $this->generationOptionsForAttempt($request, $attempt),
+                    schemaClosure: $schemaClosure,
+                );
+
                 $response = $agent->prompt(
                     prompt: $attemptRequest->prompt,
                     attachments: $effectiveAttachments,
-                    provider: $attemptRequest->provider,
-                    model: $attemptRequest->model,
+                    provider: $attempt->sdkProviderName,
+                    model: $attempt->model,
                     timeout: $attemptRequest->timeout,
                 );
 
-                $this->recordProviderSuccess($attemptRequest->provider);
+                $this->recordProviderSuccess($attempt->policyIdentity());
                 break;
             } catch (Throwable $throwable) {
                 $lastProviderThrowable = $throwable;
-                $this->recordProviderFailure($attemptRequest->provider);
+                $this->recordProviderFailure($attempt->policyIdentity());
 
-                $nextProvider = $this->nextFailoverProvider($attemptRequest->provider);
+                $nextProvider = $this->nextFailoverProvider($attempt->policyIdentity());
 
                 if (!$nextProvider instanceof ProviderDefinition) {
                     throw $this->wrapAndReportRuntimeFailure(
                         request: $attemptRequest->withMetadata([
-                        'runtime_provider_attempts' => $attemptedProviders,
+                        'runtime_provider_attempts' => $attemptedProfiles,
+                        'runtime_sdk_provider_attempts' => $attemptedSdkProviders,
                         'runtime_failover_exhausted' => true,
                       ]),
                         throwable: $throwable,
@@ -161,7 +172,7 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
                     );
                 }
 
-                $attemptRequest = $this->requestForProviderDefinition($request, $nextProvider);
+                $attempt = $this->providerTargetResolver->fromDefinition($nextProvider, $request->model);
             }
         }
 
@@ -234,9 +245,11 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
             'attachment_replay_merge' => $projectedConversation->attachmentReplayMerge,
             'attachment_replay_prior_included' => $projectedConversation->priorAttachmentReplayCount,
             'attachment_replay_prior_excluded' => $projectedConversation->priorAttachmentExcludedCount,
-            'runtime_provider_attempts' => $attemptedProviders,
-            'runtime_final_provider' => $attemptRequest->provider,
-            'runtime_failover_attempted' => count($attemptedProviders) > 1,
+            'runtime_provider_attempts' => $attemptedProfiles,
+            'runtime_sdk_provider_attempts' => $attemptedSdkProviders,
+            'runtime_final_provider' => $attempt->policyIdentity(),
+            'runtime_final_sdk_provider' => $attempt->sdkProviderName,
+            'runtime_failover_attempted' => count($attemptedProfiles) > 1,
           ],
             structuredOutput: StructuredAgentResponseMapper::mapStructuredPayload($response),
         );
@@ -294,53 +307,46 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
 
         $telemetryContext = RuntimeTelemetryContext::fromRequest($request, $projectedConversation);
         $instructions = $this->instructionsAsString($request, $projectedConversation->systemInstructions);
-
-        try {
-            $agent = $this->buildAgent(
-                request: $request,
-                telemetryContext: $telemetryContext,
-                instructions: $instructions,
-                messages: $projectedConversation->messages,
-                materializedTools: $materializedTools,
-            );
-        } catch (Throwable $throwable) {
-            $wrapped = $this->wrapStreamFailure(
-                $request,
-                $throwable,
-                $telemetryContext->projectedMessageCount,
-                $telemetryContext->packageConversationId?->toString(),
-                $broadcastChannel,
-            );
-            yield $this->streamFailureFromThrowable($request, $wrapped);
-
-            return;
-        }
-
         $effectiveAttachments = $this->effectivePromptAttachments($request, $projectedConversation);
-        $attemptedProviders = [];
-        $attemptRequest = $this->requestForInitialProviderAttempt($request);
+        $attemptedProfiles = [];
+        $attemptedSdkProviders = [];
+        $attempt = $this->providerTargetResolver->resolve($request->provider, $request->model);
+        $attemptRequest = $request->withProviderIdentity($attempt->policyIdentity(), $attempt->model);
 
         while (true) {
-            $attemptedProviders[] = $attemptRequest->provider ?? 'default';
+            $attemptRequest = $request->withProviderIdentity($attempt->policyIdentity(), $attempt->model);
+            $attemptedProfiles[] = $attempt->policyIdentity();
+            $attemptedSdkProviders[] = $attempt->sdkProviderName ?? 'default';
 
             try {
+                $agent = $this->buildAgent(
+                    request: $request,
+                    telemetryContext: $telemetryContext,
+                    instructions: $instructions,
+                    messages: $projectedConversation->messages,
+                    materializedTools: $materializedTools,
+                    generationOptions: $this->generationOptionsForAttempt($request, $attempt),
+                    schemaClosure: null,
+                );
+
                 $stream = $agent->stream(
                     prompt: $attemptRequest->prompt,
                     attachments: $effectiveAttachments,
-                    provider: $attemptRequest->provider,
-                    model: $attemptRequest->model,
+                    provider: $attempt->sdkProviderName,
+                    model: $attempt->model,
                     timeout: $attemptRequest->timeout,
                 );
 
                 break;
             } catch (Throwable $throwable) {
-                $this->recordProviderFailure($attemptRequest->provider);
-                $nextProvider = $this->nextFailoverProvider($attemptRequest->provider);
+                $this->recordProviderFailure($attempt->policyIdentity());
+                $nextProvider = $this->nextFailoverProvider($attempt->policyIdentity());
 
                 if (!$nextProvider instanceof ProviderDefinition) {
                     $wrapped = $this->wrapStreamFailure(
                         request: $attemptRequest->withMetadata([
-                        'runtime_provider_attempts' => $attemptedProviders,
+                        'runtime_provider_attempts' => $attemptedProfiles,
+                        'runtime_sdk_provider_attempts' => $attemptedSdkProviders,
                         'runtime_failover_exhausted' => true,
                       ]),
                         throwable: $throwable,
@@ -354,7 +360,7 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
                     return;
                 }
 
-                $attemptRequest = $this->requestForProviderDefinition($request, $nextProvider);
+                $attempt = $this->providerTargetResolver->fromDefinition($nextProvider, $request->model);
             }
         }
 
@@ -388,7 +394,7 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
                 }
 
                 if ($event instanceof StreamError) {
-                    $this->recordProviderFailure($attemptRequest->provider);
+                    $this->recordProviderFailure($attempt->policyIdentity());
 
                     $exception = RuntimeExecutionException::forRequest(
                         runId: $request->runId,
@@ -416,7 +422,7 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
                 }
             }
         } catch (Throwable $throwable) {
-            $this->recordProviderFailure($attemptRequest->provider);
+            $this->recordProviderFailure($attempt->policyIdentity());
 
             $wrapped = $this->wrapStreamFailure(
                 request: $attemptRequest,
@@ -444,7 +450,7 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
         $meta = $this->resolveStreamMeta($stream->events);
 
         if (!$meta instanceof Meta) {
-            $this->recordProviderFailure($attemptRequest->provider);
+            $this->recordProviderFailure($attempt->policyIdentity());
 
             $exception = RuntimeExecutionException::forRequest(
                 runId: $request->runId,
@@ -532,7 +538,7 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
             broadcastChannel: $broadcastChannel,
         );
 
-        $this->recordProviderSuccess($attemptRequest->provider);
+        $this->recordProviderSuccess($attempt->policyIdentity());
 
         yield new StreamComplete(
             runId: $request->runId,
@@ -549,9 +555,11 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
             'package_conversation_id' => $conversation?->id->toString(),
             'package_conversation_message_count' => $conversation?->messageCount(),
             'estimated_cost_usd' => $estimatedCostUsd,
-            'runtime_provider_attempts' => $attemptedProviders,
-            'runtime_final_provider' => $attemptRequest->provider,
-            'runtime_failover_attempted' => count($attemptedProviders) > 1,
+            'runtime_provider_attempts' => $attemptedProfiles,
+            'runtime_sdk_provider_attempts' => $attemptedSdkProviders,
+            'runtime_final_provider' => $attempt->policyIdentity(),
+            'runtime_final_sdk_provider' => $attempt->sdkProviderName,
+            'runtime_failover_attempted' => count($attemptedProfiles) > 1,
           ],
         );
     }
@@ -647,16 +655,45 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
         );
 
         if ($instructions === []) {
-            return 'You are the Laravel AI Agent Kit runtime bridge.';
+            return $this->configuredDefaultInstructions();
         }
 
         return implode("\n\n", $instructions);
     }
 
+    private function configuredDefaultInstructions(): string
+    {
+        try {
+            /** @var mixed $configured */
+            $configured = $this->container->make('config')->get('ai-agent-kit.runtime.default_instructions', []);
+        } catch (Throwable) {
+            return '';
+        }
+
+        if (is_string($configured)) {
+            return $configured;
+        }
+
+        if (!is_array($configured)) {
+            return '';
+        }
+
+        $parts = [];
+
+        foreach ($configured as $instruction) {
+            if (!is_string($instruction) || $instruction === '') {
+                continue;
+            }
+
+            $parts[] = $instruction;
+        }
+
+        return implode("\n\n", $parts);
+    }
+
     /**
      * @param iterable<mixed> $messages
      * @param iterable<mixed> $materializedTools
-     * @throws BindingResolutionException
      */
     private function buildAgent(
         ExecutionRequest $request,
@@ -664,18 +701,29 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
         string $instructions,
         iterable $messages,
         iterable $materializedTools,
+        ?GenerationOptions $generationOptions,
+        ?Closure $schemaClosure,
     ): AnonymousAgent {
-        if ($request->schema === null) {
+        if (!$schemaClosure instanceof Closure) {
             return new RuntimeTelemetryAgent(
                 instructions: $instructions,
                 messages: $messages,
                 tools: $materializedTools,
                 telemetryContext: $telemetryContext,
-                generationOptions: $request->generationOptions,
+                generationOptions: $generationOptions,
             );
         }
 
-        $schemaClosure = $this->normalizeSchema($request->schema);
+        if ($request->strictStructuredOutput) {
+            return new StrictStructuredRuntimeTelemetryAgent(
+                instructions: $instructions,
+                messages: $messages,
+                tools: $materializedTools,
+                schema: $schemaClosure,
+                telemetryContext: $telemetryContext,
+                generationOptions: $generationOptions,
+            );
+        }
 
         return new StructuredRuntimeTelemetryAgent(
             instructions: $instructions,
@@ -683,7 +731,7 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
             tools: $materializedTools,
             schema: $schemaClosure,
             telemetryContext: $telemetryContext,
-            generationOptions: $request->generationOptions,
+            generationOptions: $generationOptions,
         );
     }
 
@@ -740,50 +788,36 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
     }
 
     /**
-     * @throws BindingResolutionException
+     * Merge profile-default provider options with request overrides for one attempt.
      */
-    private function requestForInitialProviderAttempt(ExecutionRequest $request): ExecutionRequest
+    private function generationOptionsForAttempt(ExecutionRequest $request, ResolvedProviderTarget $attempt): GenerationOptions
     {
-        if ($request->provider !== null) {
-            return $this->requestForProviderName($request, $request->provider);
-        }
+        $base = $request->generationOptions ?? new GenerationOptions();
 
-        /** @var ProviderSelector $selector */
-        $selector = $this->container->make(ProviderSelector::class);
-
-        return $this->requestForProviderDefinition($request, $selector->selectDefault());
-    }
-
-    /**
-     * @throws BindingResolutionException
-     */
-    private function requestForProviderName(ExecutionRequest $request, string $providerName): ExecutionRequest
-    {
-        $definition = $this->providerDefinitionByName($providerName);
-
-        if ($definition instanceof ProviderDefinition) {
-            return $this->requestForProviderDefinition($request, $definition);
-        }
-
-        return $this->cloneRequestWithProvider(
-            request: $request,
-            provider: $providerName,
-            model: $request->model,
+        return $base->forProviderAttempt(
+            sdkProviderName: $attempt->sdkProviderName ?? '',
+            driver: $attempt->driver ?? '',
+            profileOptions: $attempt->providerOptions,
+            additionalScopeKeys: $this->providerOptionScopeKeys(),
         );
     }
 
     /**
-     * @throws BindingResolutionException
+     * @return list<string>
      */
-    private function providerDefinitionByName(string $providerName): ?ProviderDefinition
+    private function providerOptionScopeKeys(): array
     {
-        foreach ($this->failoverProviderSelector()->ordered() as $provider) {
-            if ($provider->name === $providerName) {
-                return $provider;
+        $keys = $this->providerTargetResolver->knownProviderScopeKeys();
+
+        foreach (Lab::cases() as $lab) {
+            if (in_array($lab->value, $keys, true)) {
+                continue;
             }
+
+            $keys[] = $lab->value;
         }
 
-        return null;
+        return $keys;
     }
 
     /**
@@ -795,39 +829,6 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
         $selector = $this->container->make(FailoverProviderSelector::class);
 
         return $selector;
-    }
-
-    private function requestForProviderDefinition(ExecutionRequest $request, ProviderDefinition $provider): ExecutionRequest
-    {
-        $configuredModel = $provider->options['model'] ?? null;
-
-        return $this->cloneRequestWithProvider(
-            request: $request,
-            provider: $provider->name,
-            model: $request->model ?? (is_string($configuredModel) && $configuredModel !== '' ? $configuredModel : null),
-        );
-    }
-
-    private function cloneRequestWithProvider(ExecutionRequest $request, ?string $provider, ?string $model): ExecutionRequest
-    {
-        return new ExecutionRequest(
-            runId: $request->runId,
-            prompt: $request->prompt,
-            instructions: $request->instructions,
-            provider: $provider,
-            model: $model,
-            toolNames: $request->toolNames,
-            input: $request->input,
-            metadata: $request->metadata,
-            timeout: $request->timeout,
-            conversationId: $request->conversationId,
-            storeConversation: $request->storeConversation,
-            continueConversation: $request->continueConversation,
-            generationOptions: $request->generationOptions,
-            schema: $request->schema,
-            attachments: $request->attachments,
-            providerToolNames: $request->providerToolNames,
-        );
     }
 
     private function recordProviderSuccess(?string $providerName): void

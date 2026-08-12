@@ -103,8 +103,18 @@ return [
     | Providers
     |--------------------------------------------------------------------------
     |
-    | Providers are referenced by name (array key). Each provider must declare
-    | a non-empty `driver`. Provider-specific settings go into `options`.
+    | Provider *profiles* are referenced by name (array key). Each profile is an
+    | Agent Kit policy identity and must declare a non-empty `driver`.
+    |
+    | These three identities must not be conflated:
+    |
+    | - profile name: Agent Kit failover, circuit breaker, and telemetry identity
+    | - sdk_provider: named Laravel AI provider instance (defaults to `driver`)
+    | - driver: underlying Laravel AI / provider driver
+    |
+    | Profile-specific settings go into `options`. Use `options.model` for the
+    | default model and `options.provider_options` for provider-native defaults
+    | that should apply only while this profile is the current attempt.
     |
     */
   'providers' => [
@@ -117,10 +127,14 @@ return [
 
       // 'openai-fast' => [
       //     'driver' => 'openai',
+      //     'sdk_provider' => 'openai',
       //     'enabled' => true,
       //     'capabilities' => ['text_generation', 'structured_output'],
       //     'options' => [
-      //         // e.g. 'model' => 'gpt-4o-mini',
+      //         // 'model' => 'gpt-4o-mini',
+      //         // 'provider_options' => [
+      //         //     'reasoning' => ['effort' => 'medium'],
+      //         // ],
       //     ],
       // ],
   ],
@@ -449,6 +463,13 @@ return [
     */
   'runtime' => [
     'middleware' => [],
+
+    /*
+    | Optional system instructions used only when a request supplies none.
+    | Empty by default so Agent Kit does not invent a persona. Set a string
+    | or list of strings to opt in to a package-level default.
+    */
+    'default_instructions' => [],
 
     'streaming' => [
       'broadcast_channel' => env('AI_AGENT_KIT_STREAMING_BROADCAST_CHANNEL'),

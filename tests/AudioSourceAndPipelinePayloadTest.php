@@ -11,6 +11,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\RunContext;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\HasStructuredOutput;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
 
 beforeEach(function (): void {
     config()->set('ai-agent-kit.media_input.url_allowed_hosts', []);
@@ -90,7 +91,7 @@ it('documents that fromPath remains a trusted-administrator surface', function (
 });
 
 it('fails closed for URL transcription sources before provider dispatch', function (): void {
-    $runtime = new SdkTranscriptionRuntime();
+    $runtime = new SdkTranscriptionRuntime(app(ProviderTargetResolver::class));
 
     $runtime->transcribe(
         TranscriptionRequest::fromAudioSource(

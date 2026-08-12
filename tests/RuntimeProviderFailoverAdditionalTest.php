@@ -19,6 +19,8 @@ use CreativeCrafts\LaravelAiAgentKit\Resilience\InMemoryCircuitBreakerManager;
 use Laravel\Ai\Ai;
 use Laravel\Ai\AiServiceProvider;
 use Laravel\Ai\Files\Base64Document;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderTargetResolver;
 
 it('preserves structured schema attachments generation options and timeout across prompt failover attempts', function (): void {
     app()->register(AiServiceProvider::class);
@@ -72,8 +74,10 @@ it('preserves structured schema attachments generation options and timeout acros
             && $prompt->model === 'claude-3-haiku'
             && $prompt->timeout === 17
             && $prompt->attachments->count() === 1
-            && ($options['temperature'] ?? null) === 0.4
-            && ($options['maxTokens'] ?? null) === 123;
+            && $prompt->agent instanceof StructuredRuntimeTelemetryAgent
+            && $prompt->agent->temperature() === 0.4
+            && $prompt->agent->maxTokens() === 123
+            && $options === [];
     });
 });
 
@@ -135,6 +139,8 @@ function refreshAdditionalRuntimeProviderBindings(): void
     app()->forgetInstance(ProviderSelector::class);
     app()->forgetInstance(ConfiguredFailoverProviderSelector::class);
     app()->forgetInstance(FailoverProviderSelector::class);
+    app()->forgetInstance(ConfiguredProviderTargetResolver::class);
+    app()->forgetInstance(ProviderTargetResolver::class);
     app()->forgetInstance(InMemoryCircuitBreakerManager::class);
     app()->forgetInstance(CircuitBreakerManager::class);
     app()->forgetInstance(SdkAiRuntime::class);

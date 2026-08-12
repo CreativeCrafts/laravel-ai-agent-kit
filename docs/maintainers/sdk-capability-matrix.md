@@ -6,10 +6,10 @@ This maintainer reference maps Laravel AI SDK surfaces to Agent Kit entry points
 
 | Field | Value |
 |-------|-------|
-| Audit target | `laravel/ai ^0.8` from `composer.json` (CI lockfile currently resolves `v0.8.1`) |
-| Lockfile status | This repository commits `composer.lock`. Record the resolved `laravel/ai` patch with `composer show laravel/ai` when updating maintainer inventories. |
-| Resolved SDK version | `v0.8.1` (`composer show laravel/ai`, 2026-06-30) |
-| Last parity sweep | 2026-06-30 — manual scan of `vendor/laravel/ai` v0.8.1 against this matrix, async inventory, and events/provider-tools inventory |
+| Audit target | `laravel/ai ^0.9` from `composer.json` |
+| Lockfile status | This repository does not commit `composer.lock`. Record the resolved `laravel/ai` patch with `composer show laravel/ai` when updating maintainer inventories. |
+| Resolved SDK version | `v0.9.1` (`composer show laravel/ai`, 2026-08-12) |
+| Last parity sweep | 2026-08-12 — Agent Kit provider-profile / SDK-provider identity split, typed generation options, and strict structured-output bridge |
 | Classification values | `package-owned`, `direct-SDK`, `deferred`, `out-of-scope` |
 
 ## Principle
@@ -30,10 +30,10 @@ Agent Kit does not mirror every SDK class. If an SDK surface does not need packa
 | Streaming reasoning, citations, and in-stream tool events | deferred | none (`SdkAiRuntime` forwards `TextDelta` only) | SDK v0.8.1 also emits `Reasoning*`, `Citation`, `ProviderToolEvent`, `ToolCall`, and `ToolResult` stream events. Add package `StreamChunk` types only if applications need first-class access without SDK listeners. |
 | SDK failover lifecycle events | direct-SDK | none (`SdkAiRuntime` owns failover) | SDK emits `AgentFailedOver` and `ProviderFailedOver`; package runtime retries via configured failover order without normalizing these SDK events. |
 | SDK broadcast agent jobs | direct-SDK | none | Use SDK jobs directly when the application wants SDK-specific broadcast-channel behavior instead of package runtime streaming. |
-| Generation options | package-owned | `GenerationOptions` on `ExecutionRequest` | Package runtime preserves options across provider attempts. |
+| Generation options | package-owned | `GenerationOptions` on `ExecutionRequest` | Typed fields map to Laravel AI agent methods (`maxTokens()`, `maxSteps()`, `temperature()`). Raw `providerOptions` stay on `HasProviderOptions`. Profile `options.provider_options` merge per attempt. |
+| Provider selection | package-owned | provider profiles, `ProviderSelector`, `FailoverProviderSelector`, `ProviderTargetResolver` | Package workflows reason over provider profiles. The Laravel AI bridge receives `sdk_provider` (defaulting to `driver`). |
 | SDK middleware / agent prompt internals | out-of-scope | package memory bridge and runtime middleware | Agent Kit owns runtime middleware and memory behavior rather than exposing SDK internals. |
 | Conversation context | package-owned | `ConversationStore`, `RuntimeConversationMemoryBridge` | Memory retention, encryption, and replay policy are package concerns. |
-| Provider selection | package-owned | provider profiles, `ProviderSelector`, `FailoverProviderSelector` | Package workflows reason over provider profiles and capability names. |
 | Provider failover execution | package-owned | `SdkAiRuntime` failover loop | Runtime retries provider-edge failures through configured failover order. |
 
 ## Modalities

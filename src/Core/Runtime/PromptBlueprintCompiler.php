@@ -43,6 +43,7 @@ final readonly class PromptBlueprintCompiler implements BlueprintCompiler
             schema: $blueprint->schema,
             attachments: $blueprint->attachments,
             providerToolNames: $blueprint->providerToolNames,
+            strictStructuredOutput: $blueprint->strictStructuredOutput,
         );
     }
 }

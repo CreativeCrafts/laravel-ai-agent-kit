@@ -77,7 +77,7 @@ By default, the blueprint returns the same package-owned evaluation shape as `Te
 - transcription and evaluation usage metadata
 - raw `structuredOutput`
 
-The transcription stage needs a provider profile with `audio_transcription`. The evaluation stage needs a provider profile with `structured_output`.
+The transcription stage needs a provider profile with `audio_transcription`. The evaluation stage needs a provider profile with `text_generation` and `structured_output`.
 
 ## Schema-driven audio evaluation
 
@@ -141,6 +141,7 @@ $result = AgentKit::evaluateAudioImage(
         transcriptionModel: 'gpt-4o-transcribe',
         evaluationProvider: 'openai-vision',
         evaluationModel: 'gpt-4.1-mini',
+        strictStructuredOutput: true,
     ),
 );
 
@@ -152,7 +153,13 @@ The workflow runs two package-owned stages:
 1. `TranscriptionRuntime` transcribes the `TranscriptionAudioSource`.
 2. `AiRuntime` evaluates the transcript plus `EvaluationImageInput` as a structured request.
 
-The evaluation provider must advertise `structured_output` and either `image_input` or `vision` when provider metadata is configured. The transcription provider must advertise `audio_transcription` when configured. If provider metadata is unavailable, the workflow lets the runtime/provider path handle the failure.
+The evaluation provider must advertise `text_generation`, `structured_output`, and either `image_input` or `vision` when provider metadata is configured. The transcription provider must advertise `audio_transcription` when configured. If provider metadata is unavailable, the workflow lets the runtime/provider path handle the failure.
+
+Put scoring or evaluation policy in `instructions`. `evaluationPrompt` is the user prompt. Agent Kit forwards those channels separately and does not invent a default system instruction.
+
+`strictStructuredOutput` defaults to `false` and is forwarded unchanged to `ExecutionRequest`. Set it to `true` when the evaluation schema must be emitted as Laravel AI strict structured output.
+
+The result keeps both `structuredOutput` and raw `output` so consumers can distinguish empty, malformed, and valid structured payloads.
 
 Empty transcripts are rejected by default. Set `allowEmptyTranscript: true` when the schema should classify empty or malformed audio itself, for example language-test scoring workflows that map empty audio to a low score.
 

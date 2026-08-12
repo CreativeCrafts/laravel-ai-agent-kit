@@ -31,6 +31,7 @@ php artisan migrate
 Open `config/ai-agent-kit.php` and make sure:
 
 - `providers` contains at least one enabled profile with the capabilities your workflows need. The bundled `null` profile has empty capabilities and is not sufficient for blueprint evaluation on its own — merge a preset from `examples/provider-profile-presets.php` or configure real profiles.
+- `sdk_provider` is set when the Agent Kit profile name is not the Laravel AI provider instance name; otherwise Agent Kit uses `driver`.
 - `default_provider` points at an enabled profile.
 - `failover_order` includes the default profile.
 - each workflow capability you need is represented in a compatible provider profile.

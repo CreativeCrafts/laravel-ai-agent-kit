@@ -43,6 +43,7 @@ After publishing `config/ai-agent-kit.php`, configure at least one enabled provi
 At minimum, make sure:
 
 - `providers` contains at least one enabled provider profile with the capabilities your workflows need. The bundled `null` profile has empty capabilities and is not sufficient for blueprint evaluation on its own — merge a preset from `examples/provider-profile-presets.php` or configure real profiles (see [Providers](docs/providers.md)).
+- `sdk_provider` names the Laravel AI provider instance when it differs from the Agent Kit profile name or driver.
 - `default_provider` references an enabled provider profile.
 - `failover_order` includes the default provider profile.
 - `memory.default_driver` is intentional. The default `in_memory` driver is process-local and non-persistent.
@@ -205,7 +206,7 @@ See [Agents and orchestration](docs/agents-and-orchestration.md) for agent defin
 
 ## Documentation
 
-Start with [Getting started](docs/getting-started.md), then move to the focused guide for the subsystem you need. Maintainer and contributor process documents live behind [CONTRIBUTING.md](CONTRIBUTING.md).
+Start with [Getting started](docs/getting-started.md), then move to the focused guide for the subsystem you need. Upgrade notes for 1.1.0 are in [UPGRADE.md](UPGRADE.md). Maintainer and contributor process documents live behind [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
