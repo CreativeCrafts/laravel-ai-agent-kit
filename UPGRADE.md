@@ -48,3 +48,7 @@ To restore a package-level default, set `runtime.default_instructions` in `confi
 ### Strict structured output
 
 `ExecutionRequest::$strictStructuredOutput` defaults to `false`. Set it to `true` on `ExecutionRequest`, `PromptBlueprint`, or `AudioImageStructuredEvaluationRequest` when you need Laravel AI strict schema output.
+
+### Disabled provider profiles
+
+A registered profile with `enabled => false` now raises `ProviderDisabledException` even when selected explicitly. Previously, explicit lookup could still invoke that profile.

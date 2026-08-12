@@ -56,12 +56,6 @@ First public release. Requires PHP 8.3+, Laravel 12 or 13, and `laravel/ai ^0.8`
 
 ## [Unreleased]
 
-### Fixed
-
-- Explicitly selected provider profiles with `enabled => false` now raise `ProviderDisabledException` instead of invoking the profile's SDK provider.
-- Scoped `providerOptions` keyed by Laravel AI instance names from `config/ai.php` are isolated per attempt even when those names are not Agent Kit profiles.
-- Audited capability conformance accepts `vision` as an alias for `image_input` on audio-image evaluation, matching `AudioImageStructuredEvaluation`.
-
 ## [1.1.0] - 2026-08-12
 
 Requires PHP 8.3+, Laravel 12 or 13, and `laravel/ai ^0.9`.
@@ -84,6 +78,12 @@ Requires PHP 8.3+, Laravel 12 or 13, and `laravel/ai ^0.9`.
 - Empty instructions no longer inject `You are the Laravel AI Agent Kit runtime bridge.`
 - `AudioImageStructuredEvaluation` requires `text_generation` and `structured_output`, plus `image_input` or `vision`.
 - Package tests cover profile names that deliberately differ from Laravel AI provider instance names.
+
+### Fixed
+
+- Explicitly selected provider profiles with `enabled => false` now raise `ProviderDisabledException` instead of invoking the profile's SDK provider.
+- Scoped `providerOptions` keyed by Laravel AI instance names from `config/ai.php` are isolated per attempt even when those names are not Agent Kit profiles.
+- Audited capability conformance accepts `vision` as an alias for `image_input` on audio-image evaluation, matching `AudioImageStructuredEvaluation`.
 
 ### Breaking
 
