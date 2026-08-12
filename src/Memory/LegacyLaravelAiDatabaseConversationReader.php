@@ -14,13 +14,15 @@ use DateTimeInterface;
 /**
  * Reads Laravel AI default conversation tables into package {@see Conversation} / {@see ConversationMessage}.
  *
- * Source schema matches {@see DatabaseConversationStore}: `agent_conversations` rows
- * (`id`, `user_id`, `title`, timestamps) and `agent_conversation_messages` (`id`, `conversation_id`, `user_id`,
- * `agent`, `role`, `content`, JSON `attachments`, `tool_calls`, `tool_results`, `usage`, `meta`).
+ * Source schema matches Laravel AI conversation tables: `agent_conversations` rows
+ * (`id`, `title`, timestamps, plus either legacy `user_id` or `participant_type` / `participant_id`) and
+ * `agent_conversation_messages` (`id`, `conversation_id`, `agent`, `role`, `content`, JSON `attachments`,
+ * `tool_calls`, `tool_results`, `usage`, `meta`, optional `approval_state`, and the same participant columns).
  *
  * Mapping to package DTOs:
  * - Conversation `id` uses the legacy UUID string (same as Laravel AI conversation id).
- * - Conversation `metadata['laravel_ai']` holds `title` and `user_id` (SDK-level context, not encrypted in legacy).
+ * - Conversation `metadata['laravel_ai']` holds `title`, optional legacy `user_id`, and optional
+ *   `participant_type` / `participant_id` (SDK-level context, not encrypted in legacy).
  * - Each row becomes one {@see ConversationMessage}; `role` maps `user`/`assistant` (other roles become user).
  * - Message `id` is the legacy message row `id` (UUID).
  * - Message `metadata['laravel_ai']` carries `message_row_id`, `agent`, and for user rows optional `attachments`;
@@ -56,7 +58,7 @@ final readonly class LegacyLaravelAiDatabaseConversationReader
         }
 
         $title = $this->stringField($conv, 'title', '');
-        $userId = $conv->user_id ?? null;
+        $participant = $this->participantContext($conv);
         $createdAt = $this->requireDateString($conv, 'created_at');
         $updatedAt = $this->requireDateString($conv, 'updated_at');
 
@@ -128,10 +130,10 @@ final readonly class LegacyLaravelAiDatabaseConversationReader
         }
 
         $conversationMetadata = [
-            'laravel_ai' => [
-                'title' => $title,
-                'user_id' => $userId,
-            ],
+            'laravel_ai' => array_merge(
+                ['title' => $title],
+                $participant,
+            ),
         ];
 
         return new Conversation(
@@ -146,6 +148,28 @@ final readonly class LegacyLaravelAiDatabaseConversationReader
     private function connection(): Connection
     {
         return $this->database->connection($this->connectionName);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function participantContext(object $record): array
+    {
+        $context = [];
+
+        if (property_exists($record, 'user_id')) {
+            $context['user_id'] = $record->user_id ?? null;
+        }
+
+        if (property_exists($record, 'participant_type')) {
+            $context['participant_type'] = $record->participant_type ?? null;
+        }
+
+        if (property_exists($record, 'participant_id')) {
+            $context['participant_id'] = $record->participant_id ?? null;
+        }
+
+        return $context;
     }
 
     private function requireDateString(object $record, string $field): string
