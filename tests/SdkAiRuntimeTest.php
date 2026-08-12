@@ -41,6 +41,8 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredAgentResponse;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderTargetResolver;
 
 it('binds the ai runtime contract to the sdk ai runtime', function () {
     app()->register(AiServiceProvider::class);
@@ -706,6 +708,8 @@ function refreshRuntimeProviderBindings(): void
     app()->forgetInstance(ProviderSelector::class);
     app()->forgetInstance(ConfiguredFailoverProviderSelector::class);
     app()->forgetInstance(FailoverProviderSelector::class);
+    app()->forgetInstance(ConfiguredProviderTargetResolver::class);
+    app()->forgetInstance(ProviderTargetResolver::class);
     app()->forgetInstance(SdkAiRuntime::class);
     app()->forgetInstance(AiRuntime::class);
 }

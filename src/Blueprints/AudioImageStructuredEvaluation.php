@@ -15,6 +15,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
 final readonly class AudioImageStructuredEvaluation
 {
     private const string CAPABILITY_AUDIO_TRANSCRIPTION = 'audio_transcription';
+    private const string CAPABILITY_TEXT_GENERATION = 'text_generation';
     private const string CAPABILITY_STRUCTURED_OUTPUT = 'structured_output';
     private const string CAPABILITY_IMAGE_INPUT = 'image_input';
     private const string CAPABILITY_VISION = 'vision';
@@ -75,6 +76,7 @@ final readonly class AudioImageStructuredEvaluation
                 generationOptions: $request->generationOptions,
                 schema: $this->imageAttachmentFactory->executionSchema($request->schema),
                 attachments: [$this->imageAttachmentFactory->make($request->image)],
+                strictStructuredOutput: $request->strictStructuredOutput,
             ),
         );
 
@@ -124,7 +126,10 @@ final readonly class AudioImageStructuredEvaluation
         }
 
         $definition = $this->providerRegistry->get($provider);
-        $missing = $definition->missingCapabilities([self::CAPABILITY_STRUCTURED_OUTPUT]);
+        $missing = $definition->missingCapabilities([
+            self::CAPABILITY_TEXT_GENERATION,
+            self::CAPABILITY_STRUCTURED_OUTPUT,
+        ]);
 
         if ($missing !== []) {
             throw AudioImageStructuredEvaluationException::missingProviderCapabilities($provider, $missing);

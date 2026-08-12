@@ -5,14 +5,21 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Modality;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\EmbeddingsRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
 use Laravel\Ai\Embeddings;
 use RuntimeException;
 
 final readonly class SdkEmbeddingsRuntime implements EmbeddingsRuntime
 {
+    public function __construct(
+        private ProviderTargetResolver $providerTargetResolver,
+    ) {
+    }
+
     public function embed(EmbeddingsRequest $request): EmbeddingsResult
     {
         $pending = Embeddings::for($request->inputs);
+        $target = $this->providerTargetResolver->resolveExplicit($request->provider, $request->model);
 
         if ($request->dimensions !== null) {
             $pending = $pending->dimensions($request->dimensions);
@@ -22,7 +29,7 @@ final readonly class SdkEmbeddingsRuntime implements EmbeddingsRuntime
             $pending = $pending->timeout($request->timeout);
         }
 
-        $response = $pending->generate($request->provider, $request->model);
+        $response = $pending->generate($target->sdkProviderName, $target->model);
 
         $provider = $response->meta->provider ?? 'unknown';
         $model = $response->meta->model ?? 'unknown';

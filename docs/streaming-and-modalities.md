@@ -84,6 +84,8 @@ Configure per modality:
 
 You may replace a modality driver with a class that implements the corresponding package contract.
 
+When a modality request names an Agent Kit provider profile, Agent Kit resolves that profile to a Laravel AI provider instance and model before invoking the SDK. The profile name, SDK provider name, and driver can differ. See [Providers](providers.md).
+
 ## Transcription audio sources
 
 Use `TranscriptionAudioSource` when audio is already stored, local, uploaded, or base64 encoded. This keeps applications on Agent Kit contracts and prevents direct calls to the underlying Laravel AI SDK transcription constructors.

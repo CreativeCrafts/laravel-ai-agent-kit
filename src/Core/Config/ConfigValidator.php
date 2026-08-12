@@ -83,8 +83,35 @@ final readonly class ConfigValidator
                 throw InvalidConfigurationException::invalidType("providers.{$name}.enabled", 'bool');
             }
 
+            if (array_key_exists('sdk_provider', $provider)) {
+                if (!is_string($provider['sdk_provider']) || $provider['sdk_provider'] === '') {
+                    throw InvalidConfigurationException::invalidValue(
+                        "providers.{$name}.sdk_provider",
+                        'Must be a non-empty string Laravel AI provider instance name.',
+                    );
+                }
+            }
+
             if (array_key_exists('options', $provider) && !is_array($provider['options'])) {
                 throw InvalidConfigurationException::invalidType("providers.{$name}.options", 'array');
+            }
+
+            if (is_array($provider['options'] ?? null) && array_key_exists('provider_options', $provider['options'])) {
+                if (!is_array($provider['options']['provider_options'])) {
+                    throw InvalidConfigurationException::invalidType(
+                        "providers.{$name}.options.provider_options",
+                        'array',
+                    );
+                }
+
+                foreach (array_keys($provider['options']['provider_options']) as $optionKey) {
+                    if (!is_string($optionKey) || $optionKey === '') {
+                        throw InvalidConfigurationException::invalidValue(
+                            "providers.{$name}.options.provider_options",
+                            'Keys must be non-empty strings.',
+                        );
+                    }
+                }
             }
 
             if (array_key_exists('capabilities', $provider)) {
@@ -1331,6 +1358,25 @@ final readonly class ConfigValidator
         }
 
         $runtime = $config['runtime'];
+
+        if (array_key_exists('default_instructions', $runtime)) {
+            $defaultInstructions = $runtime['default_instructions'];
+
+            if (is_string($defaultInstructions)) {
+                // A single opt-in instruction string is allowed.
+            } elseif (!is_array($defaultInstructions)) {
+                throw InvalidConfigurationException::invalidType('runtime.default_instructions', 'array or string');
+            } else {
+                foreach ($defaultInstructions as $index => $instruction) {
+                    if (!is_string($instruction) || $instruction === '') {
+                        throw InvalidConfigurationException::invalidValue(
+                            "runtime.default_instructions.{$index}",
+                            'Must be a non-empty string.',
+                        );
+                    }
+                }
+            }
+        }
 
         if (array_key_exists('middleware', $runtime)) {
             if (!is_array($runtime['middleware'])) {

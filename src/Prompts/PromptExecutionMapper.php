@@ -48,6 +48,7 @@ final readonly class PromptExecutionMapper
         Closure|ObjectSchema|string|null $schema = null,
         array $attachments = [],
         array $providerToolNames = [],
+        bool $strictStructuredOutput = false,
     ): ExecutionRequest {
         $template = $this->promptRepository->get($name, $version);
         $renderedPrompt = $template->render($variables);
@@ -83,6 +84,7 @@ final readonly class PromptExecutionMapper
             schema: $schema,
             attachments: $attachments,
             providerToolNames: $providerToolNames,
+            strictStructuredOutput: $strictStructuredOutput,
         );
     }
 

@@ -41,6 +41,7 @@ final readonly class PromptBlueprint
         public Closure|ObjectSchema|string|null $schema = null,
         public array $attachments = [],
         public array $providerToolNames = [],
+        public bool $strictStructuredOutput = false,
     ) {
         if ($this->promptName === '') {
             throw new InvalidArgumentException('Prompt blueprints require a non-empty prompt name.');
@@ -100,6 +101,7 @@ final readonly class PromptBlueprint
             schema: $this->schema,
             attachments: $this->attachments,
             providerToolNames: $this->providerToolNames,
+            strictStructuredOutput: $this->strictStructuredOutput,
         );
     }
 
@@ -124,6 +126,7 @@ final readonly class PromptBlueprint
             schema: $this->schema,
             attachments: $this->attachments,
             providerToolNames: $this->providerToolNames,
+            strictStructuredOutput: $this->strictStructuredOutput,
         );
     }
 
@@ -159,6 +162,7 @@ final readonly class PromptBlueprint
             schema: $this->schema,
             attachments: $this->attachments,
             providerToolNames: $this->providerToolNames,
+            strictStructuredOutput: $this->strictStructuredOutput,
         );
     }
 
@@ -194,6 +198,7 @@ final readonly class PromptBlueprint
             schema: $this->schema,
             attachments: $this->attachments,
             providerToolNames: $this->providerToolNames,
+            strictStructuredOutput: $this->strictStructuredOutput,
         );
     }
 
@@ -218,6 +223,7 @@ final readonly class PromptBlueprint
             schema: $this->schema,
             attachments: $this->attachments,
             providerToolNames: $this->providerToolNames,
+            strictStructuredOutput: $this->strictStructuredOutput,
         );
     }
 
@@ -242,6 +248,7 @@ final readonly class PromptBlueprint
             schema: $this->schema,
             attachments: $this->attachments,
             providerToolNames: $this->providerToolNames,
+            strictStructuredOutput: $this->strictStructuredOutput,
         );
     }
 
@@ -277,6 +284,7 @@ final readonly class PromptBlueprint
             schema: $this->schema,
             attachments: $this->attachments,
             providerToolNames: $this->providerToolNames,
+            strictStructuredOutput: $this->strictStructuredOutput,
         );
     }
 
@@ -312,6 +320,7 @@ final readonly class PromptBlueprint
             schema: $this->schema,
             attachments: $this->attachments,
             providerToolNames: $this->normalizeStringList($providerToolNames),
+            strictStructuredOutput: $this->strictStructuredOutput,
         );
     }
 
@@ -347,6 +356,7 @@ final readonly class PromptBlueprint
             schema: $this->schema,
             attachments: $this->attachments,
             providerToolNames: $this->providerToolNames,
+            strictStructuredOutput: $this->strictStructuredOutput,
         );
     }
 
@@ -382,6 +392,7 @@ final readonly class PromptBlueprint
             schema: $this->schema,
             attachments: $this->attachments,
             providerToolNames: $this->providerToolNames,
+            strictStructuredOutput: $this->strictStructuredOutput,
         );
     }
 
@@ -406,6 +417,7 @@ final readonly class PromptBlueprint
             schema: $this->schema,
             attachments: $this->attachments,
             providerToolNames: $this->providerToolNames,
+            strictStructuredOutput: $this->strictStructuredOutput,
         );
     }
 
@@ -430,6 +442,7 @@ final readonly class PromptBlueprint
             schema: $this->schema,
             attachments: $this->attachments,
             providerToolNames: $this->providerToolNames,
+            strictStructuredOutput: $this->strictStructuredOutput,
         );
     }
 
@@ -454,6 +467,32 @@ final readonly class PromptBlueprint
             schema: $schema,
             attachments: $this->attachments,
             providerToolNames: $this->providerToolNames,
+            strictStructuredOutput: $this->strictStructuredOutput,
+        );
+    }
+
+    public function withStrictStructuredOutput(bool $strictStructuredOutput): self
+    {
+        return new self(
+            promptName: $this->promptName,
+            runId: $this->runId,
+            version: $this->version,
+            variables: $this->variables,
+            instructions: $this->instructions,
+            provider: $this->provider,
+            model: $this->model,
+            toolNames: $this->toolNames,
+            input: $this->input,
+            metadata: $this->metadata,
+            timeout: $this->timeout,
+            conversationId: $this->conversationId,
+            storeConversation: $this->storeConversation,
+            continueConversation: $this->continueConversation,
+            generationOptions: $this->generationOptions,
+            schema: $this->schema,
+            attachments: $this->attachments,
+            providerToolNames: $this->providerToolNames,
+            strictStructuredOutput: $strictStructuredOutput,
         );
     }
 
@@ -489,6 +528,7 @@ final readonly class PromptBlueprint
             schema: $this->schema,
             attachments: $attachments,
             providerToolNames: $this->providerToolNames,
+            strictStructuredOutput: $this->strictStructuredOutput,
         );
     }
 
@@ -513,6 +553,7 @@ final readonly class PromptBlueprint
             schema: $this->schema,
             attachments: $this->attachments,
             providerToolNames: $this->providerToolNames,
+            strictStructuredOutput: $this->strictStructuredOutput,
         );
     }
 
@@ -537,6 +578,7 @@ final readonly class PromptBlueprint
             schema: $this->schema,
             attachments: $this->attachments,
             providerToolNames: $this->providerToolNames,
+            strictStructuredOutput: $this->strictStructuredOutput,
         );
     }
 
@@ -561,6 +603,7 @@ final readonly class PromptBlueprint
             schema: $this->schema,
             attachments: $this->attachments,
             providerToolNames: $this->providerToolNames,
+            strictStructuredOutput: $this->strictStructuredOutput,
         );
     }
 

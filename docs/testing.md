@@ -204,4 +204,6 @@ Use SDK fakes directly when your application intentionally uses direct Laravel A
 - Avoid credential-bearing environment assumptions.
 - Assert package-owned DTOs, exceptions, events, and traces.
 
+When testing the Agent Kit → Laravel AI bridge itself, use Laravel AI fakes and assert the SDK provider instance, typed generation options, and instructions the SDK actually received. Do not configure Agent Kit profile names to match Laravel AI provider names in those tests; that topology hides identity bugs.
+
 Contributor-focused testing doctrine lives in `docs/maintainers/testing-strategy.md`.

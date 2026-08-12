@@ -36,6 +36,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\AgentProviderProfileSel
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\CircuitBreakerManager;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\RetryPolicyResolver;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\EncryptionService;
@@ -61,6 +62,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\SynchronousPipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredAgentProviderProfileSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredFailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderTargetResolver;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\CompiledBlueprintRunner;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\MiddlewareExecutingAiRuntime;
@@ -421,6 +423,17 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 
         $this->app->singleton(FailoverProviderSelector::class, function (Application $app): FailoverProviderSelector {
             return $app->make(ConfiguredFailoverProviderSelector::class);
+        });
+
+        $this->app->singleton(ConfiguredProviderTargetResolver::class, function (Application $app): ConfiguredProviderTargetResolver {
+            return new ConfiguredProviderTargetResolver(
+                providerRegistry: $app->make(ProviderRegistry::class),
+                providerSelector: $app->make(ProviderSelector::class),
+            );
+        });
+
+        $this->app->singleton(ProviderTargetResolver::class, function (Application $app): ProviderTargetResolver {
+            return $app->make(ConfiguredProviderTargetResolver::class);
         });
     }
 
@@ -984,11 +997,21 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             );
         });
 
-        $this->app->singleton(SdkAudioGenerationRuntime::class, static fn (): SdkAudioGenerationRuntime => new SdkAudioGenerationRuntime());
-        $this->app->singleton(SdkEmbeddingsRuntime::class, static fn (): SdkEmbeddingsRuntime => new SdkEmbeddingsRuntime());
-        $this->app->singleton(SdkImageGenerationRuntime::class, static fn (): SdkImageGenerationRuntime => new SdkImageGenerationRuntime());
-        $this->app->singleton(SdkRerankingRuntime::class, static fn (): SdkRerankingRuntime => new SdkRerankingRuntime());
-        $this->app->singleton(SdkTranscriptionRuntime::class, static fn (): SdkTranscriptionRuntime => new SdkTranscriptionRuntime());
+        $this->app->singleton(SdkAudioGenerationRuntime::class, function (Application $app): SdkAudioGenerationRuntime {
+            return new SdkAudioGenerationRuntime($app->make(ProviderTargetResolver::class));
+        });
+        $this->app->singleton(SdkEmbeddingsRuntime::class, function (Application $app): SdkEmbeddingsRuntime {
+            return new SdkEmbeddingsRuntime($app->make(ProviderTargetResolver::class));
+        });
+        $this->app->singleton(SdkImageGenerationRuntime::class, function (Application $app): SdkImageGenerationRuntime {
+            return new SdkImageGenerationRuntime($app->make(ProviderTargetResolver::class));
+        });
+        $this->app->singleton(SdkRerankingRuntime::class, function (Application $app): SdkRerankingRuntime {
+            return new SdkRerankingRuntime($app->make(ProviderTargetResolver::class));
+        });
+        $this->app->singleton(SdkTranscriptionRuntime::class, function (Application $app): SdkTranscriptionRuntime {
+            return new SdkTranscriptionRuntime($app->make(ProviderTargetResolver::class));
+        });
 
         $this->app->singleton(TranscriptionRuntime::class, function (Application $app): TranscriptionRuntime {
             return $this->resolveModalityRuntime(
@@ -1042,6 +1065,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
                 runtimeConversationMemoryBridge: $app->make(RuntimeConversationMemoryBridge::class),
                 runtimeBudgetEnforcer: $app->make(RuntimeBudgetEnforcer::class),
                 container: $app,
+                providerTargetResolver: $app->make(ProviderTargetResolver::class),
                 events: $app->make(Dispatcher::class),
                 redactor: $app->make(Redactor::class),
             );

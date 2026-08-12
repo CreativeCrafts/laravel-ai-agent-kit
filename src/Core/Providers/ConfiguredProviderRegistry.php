@@ -56,6 +56,7 @@ final class ConfiguredProviderRegistry implements ProviderRegistry
             $enabled = $provider['enabled'] ?? true;
             $options = $provider['options'] ?? [];
             $capabilities = $provider['capabilities'] ?? [];
+            $sdkProvider = $provider['sdk_provider'] ?? null;
 
             $normalizedOptions = [];
 
@@ -83,6 +84,7 @@ final class ConfiguredProviderRegistry implements ProviderRegistry
                 enabled: is_bool($enabled) && $enabled,
                 options: $normalizedOptions,
                 capabilities: $normalizedCapabilities,
+                sdkProvider: is_string($sdkProvider) && $sdkProvider !== '' ? $sdkProvider : null,
             );
         }
 

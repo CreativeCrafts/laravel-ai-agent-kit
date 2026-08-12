@@ -34,6 +34,7 @@ it('round-trips all four new blueprint fields into the execution request', funct
         ->withVariables(['name' => 'Prince'])
         ->withGenerationOptions($options)
         ->withSchema($closure)
+        ->withStrictStructuredOutput(true)
         ->withAttachment($image)
         ->withProviderTools(['web-search.default']),
     );
@@ -43,7 +44,8 @@ it('round-trips all four new blueprint fields into the execution request', funct
       ->and($request->generationOptions)->toBe($options)
       ->and($request->schema)->toBe($closure)
       ->and($request->attachments)->toBe([$image])
-      ->and($request->providerToolNames)->toBe(['web-search.default']);
+      ->and($request->providerToolNames)->toBe(['web-search.default'])
+      ->and($request->strictStructuredOutput)->toBeTrue();
 });
 
 it('leaves new fields at null/empty when the blueprint has not set them', function () {
@@ -66,5 +68,6 @@ it('leaves new fields at null/empty when the blueprint has not set them', functi
     expect($request->generationOptions)->toBeNull()
       ->and($request->schema)->toBeNull()
       ->and($request->attachments)->toBe([])
-      ->and($request->providerToolNames)->toBe([]);
+      ->and($request->providerToolNames)->toBe([])
+      ->and($request->strictStructuredOutput)->toBeFalse();
 });

@@ -56,6 +56,36 @@ First public release. Requires PHP 8.3+, Laravel 12 or 13, and `laravel/ai ^0.8`
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-12
+
+Requires PHP 8.3+, Laravel 12 or 13, and `laravel/ai ^0.9`.
+
+### Added
+
+- **Provider identity resolver** — `ProviderTargetResolver` maps Agent Kit provider profiles to Laravel AI provider instances, drivers, models, and profile `provider_options` without conflating those identities.
+- **`sdk_provider` profile key** — optional Laravel AI provider instance name. When omitted, Agent Kit uses the profile `driver`.
+- **`options.provider_options`** — profile-default provider-native options applied only to the current attempt.
+- **Scoped `GenerationOptions::$providerOptions`** — maps keyed by SDK provider or driver are isolated per attempt; unscoped maps remain backwards compatible.
+- **`ExecutionRequest::$strictStructuredOutput`** — per-request Laravel AI strict structured output, default `false`. Forwarded by `PromptBlueprint` and `AudioImageStructuredEvaluationRequest`.
+- **SDK attempt telemetry** — `runtime_sdk_provider_attempts` and `runtime_final_sdk_provider` alongside existing profile-oriented attempt metadata.
+- **`runtime.default_instructions`** — opt-in package-level system instructions used only when a request supplies none.
+
+### Changed
+
+- Explicit profile lookup uses `ProviderRegistry`, not `failover_order`. A registered profile resolves even when it is absent from failover.
+- Text and modality runtimes invoke Laravel AI with the resolved SDK provider name, not the Agent Kit profile name.
+- Typed `GenerationOptions` fields (`temperature`, `maxTokens`, `maxSteps`) are exposed as Laravel AI agent methods. They are no longer mixed into `HasProviderOptions`.
+- Empty instructions no longer inject `You are the Laravel AI Agent Kit runtime bridge.`
+- `AudioImageStructuredEvaluation` requires `text_generation` and `structured_output`, plus `image_input` or `vision`.
+- Package tests cover profile names that deliberately differ from Laravel AI provider instance names.
+
+### Breaking
+
+- Requests with no instructions no longer receive a hidden Agent Kit system persona. Opt in with `runtime.default_instructions` if you relied on that text.
+- Agent Kit profile names are no longer forwarded as Laravel AI provider names. If you previously created a Laravel AI provider whose name matched an Agent Kit profile as a workaround, set `sdk_provider` to that Laravel AI instance name.
+
+See [UPGRADE.md](UPGRADE.md).
+
 ## [1.0.0] - 2026-07-01
 
 First public release. Requires PHP 8.3+, Laravel 12 or 13, and `laravel/ai ^0.8`.

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Modality;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\TranscriptionRuntime;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\Exceptions\UnsupportedTranscriptionAudioSourceException;
 use Illuminate\Http\UploadedFile;
 use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
@@ -12,11 +13,17 @@ use Laravel\Ai\Transcription;
 
 final readonly class SdkTranscriptionRuntime implements TranscriptionRuntime
 {
+    public function __construct(
+        private ProviderTargetResolver $providerTargetResolver,
+    ) {
+    }
+
     public function transcribe(TranscriptionRequest $request): TranscriptionResult
     {
         $source = $request->resolvedAudioSource();
         $pending = $this->pendingFromSource($source);
-        $providerOptions = [];
+        $target = $this->providerTargetResolver->resolveExplicit($request->provider, $request->model);
+        $providerOptions = $target->providerOptions;
 
         if ($request->prompt !== null) {
             $providerOptions['prompt'] = $request->prompt;
@@ -42,7 +49,7 @@ final readonly class SdkTranscriptionRuntime implements TranscriptionRuntime
             $pending = $pending->timeout($request->timeout);
         }
 
-        $response = $pending->generate($request->provider, $request->model);
+        $response = $pending->generate($target->sdkProviderName, $target->model);
 
         $segments = [];
 

@@ -37,6 +37,7 @@ final readonly class ExecutionRequest
         public Closure|ObjectSchema|string|null $schema = null,
         public array $attachments = [],
         public array $providerToolNames = [],
+        public bool $strictStructuredOutput = false,
     ) {
         if ($this->runId === '') {
             throw new InvalidArgumentException('Execution requests require a non-empty runId.');
@@ -92,6 +93,30 @@ final readonly class ExecutionRequest
             schema: $this->schema,
             attachments: $this->attachments,
             providerToolNames: $this->providerToolNames,
+            strictStructuredOutput: $this->strictStructuredOutput,
+        );
+    }
+
+    public function withProviderIdentity(?string $provider, ?string $model): self
+    {
+        return new self(
+            runId: $this->runId,
+            prompt: $this->prompt,
+            instructions: $this->instructions,
+            provider: $provider,
+            model: $model,
+            toolNames: $this->toolNames,
+            input: $this->input,
+            metadata: $this->metadata,
+            timeout: $this->timeout,
+            conversationId: $this->conversationId,
+            storeConversation: $this->storeConversation,
+            continueConversation: $this->continueConversation,
+            generationOptions: $this->generationOptions,
+            schema: $this->schema,
+            attachments: $this->attachments,
+            providerToolNames: $this->providerToolNames,
+            strictStructuredOutput: $this->strictStructuredOutput,
         );
     }
 

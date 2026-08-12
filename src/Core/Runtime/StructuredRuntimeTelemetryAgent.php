@@ -8,7 +8,7 @@ use Closure;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\StructuredAnonymousAgent;
 
-final class StructuredRuntimeTelemetryAgent extends StructuredAnonymousAgent implements CarriesRuntimeTelemetry, HasProviderOptions
+class StructuredRuntimeTelemetryAgent extends StructuredAnonymousAgent implements CarriesRuntimeTelemetry, HasProviderOptions
 {
     use CarriesGenerationOptions;
     use HasRuntimeTelemetryContext;

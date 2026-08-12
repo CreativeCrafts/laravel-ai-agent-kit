@@ -36,6 +36,7 @@ Telemetry should expose safe operational metadata such as:
 
 - run IDs and orchestration IDs
 - provider profile names
+- Laravel AI provider instance names where recorded
 - model identifiers where appropriate
 - tool names
 - input and metadata key lists
@@ -44,7 +45,14 @@ Telemetry should expose safe operational metadata such as:
 
 Telemetry should avoid sensitive payload values, raw prompt bodies, raw file bodies, credential material, and provider-native diagnostic payloads.
 
-## Files and Stores telemetry
+## Runtime attempt metadata
+
+Text runtime results include profile-oriented and SDK-oriented attempt metadata:
+
+- `runtime_provider_attempts` / `runtime_final_provider` — Agent Kit provider profiles
+- `runtime_sdk_provider_attempts` / `runtime_final_sdk_provider` — Laravel AI provider instances
+
+Circuit-breaker keys use the profile identity (`providers.<profile-name>`), not the driver.
 
 `LaravelAiFilesService` and `LaravelAiStoresService` emit redacted gateway operation events. The events include operation name, provider, resource identifiers, success status, and bounded error text when applicable.
 

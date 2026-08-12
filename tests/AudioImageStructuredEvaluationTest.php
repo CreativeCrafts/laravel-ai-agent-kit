@@ -106,7 +106,7 @@ it('evaluates audio and image with structured output through Agent Kit runtimes'
         'openai-vision' => [
             'driver' => 'openai',
             'enabled' => true,
-            'capabilities' => ['structured_output', 'vision'],
+            'capabilities' => ['text_generation', 'structured_output', 'vision'],
         ],
     ]);
 
@@ -114,11 +114,61 @@ it('evaluates audio and image with structured output through Agent Kit runtimes'
 
     expect($result->transcript)->toBe('Jag ser en person vid ett bord.')
         ->and($result->structuredOutput)->toBe(['level' => 'A2'])
+        ->and($result->output)->toBe('{"level":"A2"}')
         ->and($result->usage['transcription_prompt_tokens'])->toBe(3)
         ->and($result->usage['evaluation_total_tokens'])->toBe(18)
         ->and($runtime->lastRequest()?->attachments[0])->toBeInstanceOf(RemoteImage::class)
         ->and($runtime->lastRequest()?->schema)->toBe(TestAudioImageEvaluationSchema::class)
+        ->and($runtime->lastRequest()?->strictStructuredOutput)->toBeFalse()
+        ->and($runtime->lastRequest()?->instructions)->toBe(['Return strict JSON.'])
         ->and($transcriptions->lastRequest()?->resolvedAudioSource()->kind())->toBe(TranscriptionAudioSourceKind::Storage);
+});
+
+it('forwards strict structured output from the audio-image request to the evaluation runtime', function (): void {
+    app()->instance(TranscriptionRuntime::class, new FakeTranscriptionRuntime([
+        new TranscriptionResult(
+            runId: 'score-strict:transcription',
+            transcript: 'A person sits at a table.',
+            provider: 'openai',
+            model: 'gpt-4o-transcribe',
+            promptTokens: 1,
+            completionTokens: 1,
+        ),
+    ]));
+
+    $runtime = new FakeAiRuntime([
+        new ExecutionResult(
+            runId: 'score-strict:evaluation',
+            output: '{"level":"A2"}',
+            provider: 'openai',
+            model: 'gpt-4.1-mini',
+            structuredOutput: ['level' => 'A2'],
+        ),
+    ]);
+
+    app()->instance(AiRuntime::class, $runtime);
+
+    config()->set('ai-agent-kit.providers', [
+        'openai-vision' => [
+            'driver' => 'openai',
+            'enabled' => true,
+            'capabilities' => ['text_generation', 'structured_output', 'vision'],
+        ],
+    ]);
+
+    app(AudioImageStructuredEvaluation::class)->evaluate(
+        new AudioImageStructuredEvaluationRequest(
+            runId: 'score-strict',
+            audio: TranscriptionAudioSource::fromBase64(base64_encode('audio'), 'audio/wav'),
+            image: EvaluationImageInput::fromUrl('https://example.com/image.jpg'),
+            evaluationPrompt: 'Evaluate.',
+            schema: TestAudioImageEvaluationSchema::class,
+            evaluationProvider: 'openai-vision',
+            strictStructuredOutput: true,
+        ),
+    );
+
+    expect($runtime->lastRequest()?->strictStructuredOutput)->toBeTrue();
 });
 
 it('rejects empty transcripts by default and allows them when requested', function (): void {
@@ -191,7 +241,7 @@ it('fails closed when configured providers lack required capabilities', function
         'no-image' => [
             'driver' => 'openai',
             'enabled' => true,
-            'capabilities' => ['structured_output'],
+            'capabilities' => ['text_generation', 'structured_output'],
         ],
     ]);
 
@@ -219,6 +269,24 @@ it('fails closed when configured providers lack required capabilities', function
 
     expect(fn () => app(AudioImageStructuredEvaluation::class)->evaluate($request))
         ->toThrow(AudioImageStructuredEvaluationException::class, 'image input capability');
+
+    config()->set('ai-agent-kit.providers.no-text', [
+        'driver' => 'openai',
+        'enabled' => true,
+        'capabilities' => ['structured_output', 'vision'],
+    ]);
+
+    $request = new AudioImageStructuredEvaluationRequest(
+        runId: 'capability-check-text',
+        audio: TranscriptionAudioSource::fromBase64(base64_encode('audio'), 'audio/wav'),
+        image: EvaluationImageInput::fromUrl('https://example.com/image.jpg'),
+        evaluationPrompt: 'Evaluate.',
+        schema: TestAudioImageEvaluationSchema::class,
+        evaluationProvider: 'no-text',
+    );
+
+    expect(fn () => app(AudioImageStructuredEvaluation::class)->evaluate($request))
+        ->toThrow(AudioImageStructuredEvaluationException::class, 'text_generation');
 });
 
 it('stores results from the audio-image pipeline step in RunContext state', function (): void {

@@ -174,6 +174,14 @@ final readonly class AuditedProviderCapabilityMatrix
               'evaluation' => ['text_generation', 'structured_output'],
             ],
           ),
+          'audio_image_structured_evaluation' => new ProviderCapabilityMatrixEntry(
+              capability: 'audio_image_structured_evaluation',
+              description: 'Staged transcription plus structured image evaluation. The evaluation stage requires text_generation, structured_output, and image_input. The audio-image blueprint also accepts vision as an alias for image_input.',
+              stageRequirements: [
+              'transcription' => ['audio_transcription'],
+              'evaluation' => ['text_generation', 'structured_output', 'image_input'],
+            ],
+          ),
         ];
     }
 }

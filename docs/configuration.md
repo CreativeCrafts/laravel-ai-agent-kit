@@ -12,24 +12,36 @@ The package validates `config/ai-agent-kit.php` during boot by default. Invalid 
 
 The published config ships a `null` driver profile with **empty** capabilities. That profile is useful for bootstrapping and deterministic package tests, but **blueprints and agents require capability-bearing profiles** (for example `text_generation` and `structured_output` for text evaluation).
 
-For local or production workflows, merge a preset from `examples/provider-profile-presets.php` or define real profiles:
+For local or production workflows, merge a preset from `examples/provider-profile-presets.php` or define real profiles. Keep the Agent Kit profile name, Laravel AI provider instance, and driver distinct when they are not the same string:
 
 ~~~php
 'providers' => [
-    'openai-structured' => [
+    'primary-image-scorer' => [
         'driver' => 'openai',
+        'sdk_provider' => 'openai-production',
         'enabled' => true,
-        'capabilities' => ['text_generation', 'structured_output'],
-        'options' => [],
+        'capabilities' => [
+            'text_generation',
+            'structured_output',
+            'vision',
+        ],
+        'options' => [
+            'model' => 'gpt-example',
+            'provider_options' => [
+                'reasoning' => [
+                    'effort' => 'medium',
+                ],
+            ],
+        ],
     ],
 ],
 
-'default_provider' => 'openai-structured',
+'default_provider' => 'primary-image-scorer',
 
-'failover_order' => ['openai-structured'],
+'failover_order' => ['primary-image-scorer'],
 ~~~
 
-See [Providers](providers.md) for capability names, presets, and failover.
+`sdk_provider` names the Laravel AI instance in `config/ai.php`. When omitted, Agent Kit uses `driver`. See [Providers](providers.md) for the identity model, capability names, presets, and failover.
 
 ## Validation
 
@@ -142,13 +154,14 @@ Failover and circuit-breaker behavior are package-owned policies. Provider SDK e
     'middleware' => [
         // \App\Runtime\LogAiRuntimeRequest::class,
     ],
+    'default_instructions' => [],
     'streaming' => [
         'broadcast_channel' => env('AI_AGENT_KIT_STREAMING_BROADCAST_CHANNEL'),
     ],
 ],
 ~~~
 
-Runtime middleware wraps package `AiRuntime` execution. Streaming is covered in [Streaming and modalities](streaming-and-modalities.md).
+Runtime middleware wraps package `AiRuntime` execution. `default_instructions` is empty by default so Agent Kit does not invent a system persona. Set a string or list of strings only when you want an explicit package-level default for requests that supply no instructions. Streaming is covered in [Streaming and modalities](streaming-and-modalities.md).
 
 ## Modalities
 

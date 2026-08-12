@@ -4,9 +4,10 @@ Review this checklist before running real workloads with Agent Kit.
 
 ## Providers
 
-- Configure real Laravel AI provider credentials outside the package config.
-- Map provider profiles to package capabilities such as `text_generation`, `structured_output`, and `audio_transcription`.
-- Keep model names and provider-specific options inside provider profile `options`.
+- Configure real Laravel AI provider credentials in Laravel AI config, not as Agent Kit profile names.
+- Map Agent Kit provider profiles to package capabilities such as `text_generation`, `structured_output`, and `audio_transcription`.
+- Use `sdk_provider` when the Agent Kit profile name differs from the Laravel AI provider instance name.
+- Keep model names in profile `options.model` and provider-native defaults in `options.provider_options`.
 - Configure failover order intentionally.
 - Ensure every provider that may participate in runtime failover appears in `failover_order`.
 - Configure circuit-breaker failover filtering when you want open breakers to skip unhealthy providers.
