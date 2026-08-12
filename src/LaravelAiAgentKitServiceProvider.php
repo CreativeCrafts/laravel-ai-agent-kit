@@ -429,6 +429,7 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return new ConfiguredProviderTargetResolver(
                 providerRegistry: $app->make(ProviderRegistry::class),
                 providerSelector: $app->make(ProviderSelector::class),
+                config: $app->make(ConfigRepository::class),
             );
         });
 

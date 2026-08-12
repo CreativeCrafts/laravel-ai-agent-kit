@@ -87,7 +87,7 @@ Resolution is deterministic:
 2. Otherwise the configured Agent Kit default profile, when the request omits a provider.
 3. An unregistered name is treated as a direct Laravel AI provider instance name for backwards compatibility.
 
-`failover_order` does **not** decide whether a profile exists. An explicitly selected profile resolves even when it is absent from failover order. Failover membership only controls whether a later attempt is eligible after a provider-edge failure.
+A registered profile with `enabled => false` raises `ProviderDisabledException`, including when that profile is selected explicitly. `failover_order` does **not** decide whether a profile exists. An explicitly selected enabled profile resolves even when it is absent from failover order. Failover membership only controls whether a later attempt is eligible after a provider-edge failure.
 
 SDK provider resolution:
 
@@ -130,7 +130,7 @@ new GenerationOptions(
 
 Typed fields (`temperature`, `maxTokens`, `maxSteps`) are forwarded as Laravel AI agent methods. Laravel AI performs provider-specific translation, for example mapping `maxTokens` to OpenAI `max_output_tokens`. Agent Kit does not rename those fields itself.
 
-Raw `providerOptions` are the provider-native channel. Prefer maps keyed by Laravel AI provider instance name or driver. Unscoped maps are preserved for backwards compatibility and apply to every attempt.
+Raw `providerOptions` are the provider-native channel. Prefer maps keyed by Laravel AI provider instance name or driver, including names that exist only in `config/ai.php`. Agent Kit treats those keys as scoped even when they are not Agent Kit profile names, so options for `openai-eu` are not forwarded as native fields to `openai-us` or Anthropic. Unscoped maps are preserved for backwards compatibility and apply to every attempt.
 
 Merge precedence for raw options on one attempt:
 

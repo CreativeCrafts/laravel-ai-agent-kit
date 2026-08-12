@@ -14,6 +14,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredFailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderDisabledException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeBudgetExceededException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeExecutionException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
@@ -688,6 +689,33 @@ it('wraps sdk runtime failures in a typed runtime execution exception', function
             ),
         ))
       ->toThrow(RuntimeExecutionException::class, 'AI runtime execution failed for run [run-bridge-failure]');
+});
+
+it('rejects an explicitly selected disabled provider profile', function () {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai-agent-kit.default_provider', 'openai');
+    configureRuntimeProvider('openai', 'openai', 'gpt-4o-mini');
+    config()->set('ai-agent-kit.providers.scorer-disabled', [
+      'driver' => 'openai',
+      'enabled' => false,
+      'capabilities' => ['text_generation'],
+      'options' => ['model' => 'gpt-disabled'],
+    ]);
+    refreshRuntimeProviderBindings();
+
+    /** @var AiRuntime $runtime */
+    $runtime = app(AiRuntime::class);
+
+    expect(fn ()
+        => $runtime->execute(
+            new ExecutionRequest(
+                runId: 'run-disabled-profile',
+                prompt: 'Do not use a deactivated profile.',
+                provider: 'scorer-disabled',
+            ),
+        ))
+      ->toThrow(ProviderDisabledException::class, 'Provider [scorer-disabled] is disabled.');
 });
 
 function configureRuntimeProvider(string $name, string $driver, string $model): void

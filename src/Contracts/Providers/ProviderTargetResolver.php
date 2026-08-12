@@ -31,6 +31,11 @@ interface ProviderTargetResolver
     public function fromDefinition(ProviderDefinition $definition, ?string $requestModel = null): ResolvedProviderTarget;
 
     /**
+     * Names that mark a `providerOptions` map as scoped to specific providers.
+     *
+     * Includes Agent Kit profile names, drivers, `sdk_provider` values, and
+     * Laravel AI provider instance names from `config/ai.php`.
+     *
      * @return list<string>
      */
     public function knownProviderScopeKeys(): array;

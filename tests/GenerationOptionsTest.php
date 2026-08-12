@@ -63,6 +63,21 @@ it('does not leak scoped provider options to another provider', function () {
     expect($options->providerOptionsFor('anthropic', 'anthropic', ['openai', 'anthropic']))->toBe([]);
 });
 
+it('isolates scoped options keyed by laravel ai instance names that are not agent kit profiles', function () {
+    $options = new GenerationOptions(
+        providerOptions: [
+          'openai-eu' => ['reasoning' => ['effort' => 'medium']],
+          'openai-us' => ['service_tier' => 'flex'],
+        ],
+    );
+
+    expect($options->providerOptionsFor('openai-eu', 'openai'))->toBe([
+      'reasoning' => ['effort' => 'medium'],
+    ])->and($options->providerOptionsFor('openai-us', 'openai'))->toBe([
+      'service_tier' => 'flex',
+    ])->and($options->providerOptionsFor('anthropic', 'anthropic', ['openai-eu', 'openai-us', 'openai', 'anthropic']))->toBe([]);
+});
+
 it('applies unscoped provider options to every attempt for backwards compatibility', function () {
     $options = new GenerationOptions(
         providerOptions: ['top_p' => 0.9],

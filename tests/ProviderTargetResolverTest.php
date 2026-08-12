@@ -6,6 +6,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderTargetResolver;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderDisabledException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ProviderDefinition;
 use Illuminate\Config\Repository;
 
@@ -157,7 +158,27 @@ it('leaves modality targets unset when no provider is declared', function (): vo
       ->and($target->policyIdentity())->toBe('default');
 });
 
-it('exposes known provider scope keys from profiles without using failover order', function (): void {
+it('rejects an explicitly selected disabled profile', function (): void {
+    $resolver = resolverWithProviders([
+      'scorer-primary' => [
+        'driver' => 'openai',
+        'enabled' => true,
+      ],
+      'scorer-disabled' => [
+        'driver' => 'openai',
+        'sdk_provider' => 'openai-disabled',
+        'enabled' => false,
+      ],
+    ], 'scorer-primary');
+
+    expect(fn () => $resolver->resolve('scorer-disabled'))
+      ->toThrow(ProviderDisabledException::class, 'Provider [scorer-disabled] is disabled.');
+
+    expect(fn () => $resolver->resolveExplicit('scorer-disabled'))
+      ->toThrow(ProviderDisabledException::class, 'Provider [scorer-disabled] is disabled.');
+});
+
+it('exposes known provider scope keys from profiles and laravel ai instances', function (): void {
     $resolver = resolverWithProviders([
       'scorer-primary' => [
         'driver' => 'openai',
@@ -168,7 +189,10 @@ it('exposes known provider scope keys from profiles without using failover order
         'driver' => 'anthropic',
         'enabled' => true,
       ],
-    ], 'scorer-primary');
+    ], 'scorer-primary', [
+      'openai-eu' => ['driver' => 'openai'],
+      'openai-us' => ['driver' => 'openai'],
+    ]);
 
     expect($resolver->knownProviderScopeKeys())->toEqualCanonicalizing([
       'scorer-primary',
@@ -176,6 +200,8 @@ it('exposes known provider scope keys from profiles without using failover order
       'openai-test',
       'scorer-secondary',
       'anthropic',
+      'openai-eu',
+      'openai-us',
     ]);
 });
 
@@ -202,13 +228,17 @@ it('builds a target from an explicit provider definition', function (): void {
 
 /**
  * @param array<string, array<string, mixed>> $providers
+ * @param array<string, array<string, mixed>> $laravelAiProviders
  */
-function resolverWithProviders(array $providers, string $default): ProviderTargetResolver
+function resolverWithProviders(array $providers, string $default, array $laravelAiProviders = []): ProviderTargetResolver
 {
     $config = new Repository([
       'ai-agent-kit' => [
         'providers' => $providers,
         'default_provider' => $default,
+      ],
+      'ai' => [
+        'providers' => $laravelAiProviders,
       ],
     ]);
 
@@ -217,5 +247,6 @@ function resolverWithProviders(array $providers, string $default): ProviderTarge
     return new ConfiguredProviderTargetResolver(
         providerRegistry: $registry,
         providerSelector: new DefaultProviderSelector($config, $registry),
+        config: $config,
     );
 }

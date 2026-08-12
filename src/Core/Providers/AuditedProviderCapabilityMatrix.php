@@ -9,6 +9,15 @@ use InvalidArgumentException;
 final readonly class AuditedProviderCapabilityMatrix
 {
     /**
+     * Canonical required capability => advertised names that also satisfy it.
+     *
+     * @var array<string, list<string>>
+     */
+    private const array REQUIREMENT_ALIASES = [
+        'image_input' => ['vision'],
+    ];
+
+    /**
      * @var array<string, ProviderCapabilityMatrixEntry>
      */
     private array $entries;
@@ -47,7 +56,8 @@ final readonly class AuditedProviderCapabilityMatrix
      */
     public function missingProfileRequirements(ProviderDefinition $providerDefinition, string $capability): array
     {
-        return $providerDefinition->missingCapabilities(
+        return $this->missingRequirements(
+            $providerDefinition,
             $this->get($capability)->requirementsForProfile(),
         );
     }
@@ -86,7 +96,7 @@ final readonly class AuditedProviderCapabilityMatrix
                 continue;
             }
 
-            $missingRequirements = $providerDefinition->missingCapabilities($requirements);
+            $missingRequirements = $this->missingRequirements($providerDefinition, $requirements);
 
             if ($missingRequirements !== []) {
                 $missingByStage[$stage] = $missingRequirements;
@@ -110,7 +120,7 @@ final readonly class AuditedProviderCapabilityMatrix
                 continue;
             }
 
-            if ($providerDefinition->missingCapabilities($requirements) === []) {
+            if ($this->missingRequirements($providerDefinition, $requirements) === []) {
                 $conformed[] = $entry->capability;
             }
         }
@@ -176,12 +186,46 @@ final readonly class AuditedProviderCapabilityMatrix
           ),
           'audio_image_structured_evaluation' => new ProviderCapabilityMatrixEntry(
               capability: 'audio_image_structured_evaluation',
-              description: 'Staged transcription plus structured image evaluation. The evaluation stage requires text_generation, structured_output, and image_input. The audio-image blueprint also accepts vision as an alias for image_input.',
+              description: 'Staged transcription plus structured image evaluation. The evaluation stage requires text_generation, structured_output, and image_input or vision.',
               stageRequirements: [
               'transcription' => ['audio_transcription'],
               'evaluation' => ['text_generation', 'structured_output', 'image_input'],
             ],
           ),
         ];
+    }
+
+    /**
+     * @param list<string> $requirements
+     * @return list<string>
+     */
+    private function missingRequirements(ProviderDefinition $providerDefinition, array $requirements): array
+    {
+        $missing = [];
+
+        foreach ($requirements as $requirement) {
+            if ($this->satisfiesRequirement($providerDefinition, $requirement)) {
+                continue;
+            }
+
+            $missing[] = $requirement;
+        }
+
+        return $missing;
+    }
+
+    private function satisfiesRequirement(ProviderDefinition $providerDefinition, string $requirement): bool
+    {
+        if ($providerDefinition->supportsCapability($requirement)) {
+            return true;
+        }
+
+        foreach (self::REQUIREMENT_ALIASES[$requirement] ?? [] as $alias) {
+            if ($providerDefinition->supportsCapability($alias)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

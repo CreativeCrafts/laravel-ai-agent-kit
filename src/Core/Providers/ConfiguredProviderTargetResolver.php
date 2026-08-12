@@ -7,12 +7,15 @@ namespace CreativeCrafts\LaravelAiAgentKit\Core\Providers;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderDisabledException;
+use Illuminate\Contracts\Config\Repository as ConfigRepository;
 
 final readonly class ConfiguredProviderTargetResolver implements ProviderTargetResolver
 {
     public function __construct(
         private ProviderRegistry $providerRegistry,
         private ProviderSelector $providerSelector,
+        private ConfigRepository $config,
     ) {
     }
 
@@ -66,6 +69,18 @@ final readonly class ConfiguredProviderTargetResolver implements ProviderTargetR
             $keys[] = $definition->sdkProviderName();
         }
 
+        $laravelAiProviders = $this->config->get('ai.providers', []);
+
+        if (is_array($laravelAiProviders)) {
+            foreach (array_keys($laravelAiProviders) as $name) {
+                if (!is_string($name)) {
+                    continue;
+                }
+
+                $keys[] = $name;
+            }
+        }
+
         $unique = [];
 
         foreach ($keys as $key) {
@@ -82,7 +97,13 @@ final readonly class ConfiguredProviderTargetResolver implements ProviderTargetR
     private function resolveNamed(string $requestedName, ?string $requestModel): ResolvedProviderTarget
     {
         if ($this->providerRegistry->has($requestedName)) {
-            return $this->fromDefinition($this->providerRegistry->get($requestedName), $requestModel);
+            $definition = $this->providerRegistry->get($requestedName);
+
+            if (!$definition->enabled) {
+                throw ProviderDisabledException::named($requestedName);
+            }
+
+            return $this->fromDefinition($definition, $requestModel);
         }
 
         return new ResolvedProviderTarget(

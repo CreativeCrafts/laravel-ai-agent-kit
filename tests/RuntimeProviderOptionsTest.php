@@ -112,3 +112,85 @@ it('forwards unscoped raw provider options without mixing typed fields', functio
           && $agent->providerOptions('openai') === ['top_p' => 0.9];
     });
 });
+
+it('does not forward laravel ai instance wrappers as native provider options', function (): void {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai.providers.openai-eu', [
+      'driver' => 'openai',
+      'key' => 'test-key-for-ci',
+    ]);
+    config()->set('ai.providers.openai-us', [
+      'driver' => 'openai',
+      'key' => 'test-key-for-ci',
+    ]);
+
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, ['Bridge response'])->preventStrayPrompts();
+
+    /** @var AiRuntime $runtime */
+    $runtime = app(AiRuntime::class);
+
+    $runtime->execute(
+        new ExecutionRequest(
+            runId: 'run-provider-options-direct-sdk-aliases',
+            prompt: 'Use the EU OpenAI instance.',
+            provider: 'openai-eu',
+            generationOptions: new GenerationOptions(
+                providerOptions: [
+                  'openai-eu' => ['reasoning' => ['effort' => 'medium']],
+                  'openai-us' => ['service_tier' => 'flex'],
+                ],
+            ),
+        ),
+    );
+
+    Ai::assertAgentWasPrompted(RuntimeTelemetryAgent::class, function ($prompt): bool {
+        $agent = $prompt->agent;
+
+        return $agent instanceof HasProviderOptions
+          && $agent instanceof RuntimeTelemetryAgent
+          && $agent->providerOptions('openai-eu') === ['reasoning' => ['effort' => 'medium']]
+          && !array_key_exists('openai-eu', $agent->providerOptions('openai-eu'))
+          && !array_key_exists('openai-us', $agent->providerOptions('openai-eu'));
+    });
+});
+
+it('does not leak laravel ai instance wrappers onto an unmatched provider attempt', function (): void {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai.providers.openai-eu', [
+      'driver' => 'openai',
+      'key' => 'test-key-for-ci',
+    ]);
+    config()->set('ai.providers.openai-us', [
+      'driver' => 'openai',
+      'key' => 'test-key-for-ci',
+    ]);
+
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, ['Bridge response'])->preventStrayPrompts();
+
+    /** @var AiRuntime $runtime */
+    $runtime = app(AiRuntime::class);
+
+    $runtime->execute(
+        new ExecutionRequest(
+            runId: 'run-provider-options-unmatched-sdk-aliases',
+            prompt: 'Use Anthropic instead.',
+            provider: 'anthropic',
+            generationOptions: new GenerationOptions(
+                providerOptions: [
+                  'openai-eu' => ['reasoning' => ['effort' => 'medium']],
+                  'openai-us' => ['service_tier' => 'flex'],
+                ],
+            ),
+        ),
+    );
+
+    Ai::assertAgentWasPrompted(RuntimeTelemetryAgent::class, function ($prompt): bool {
+        $agent = $prompt->agent;
+
+        return $agent instanceof HasProviderOptions
+          && $agent instanceof RuntimeTelemetryAgent
+          && $agent->providerOptions('anthropic') === [];
+    });
+});

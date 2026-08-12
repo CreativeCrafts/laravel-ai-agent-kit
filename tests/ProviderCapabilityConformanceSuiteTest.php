@@ -306,6 +306,43 @@ it('fails explicitly when a staged workflow uses incompatible provider profiles'
     }
 });
 
+it('accepts vision as an image_input alias for audio-image evaluation conformance', function (): void {
+    $suite = providerCapabilityConformanceSuite(new Repository([
+      'ai-agent-kit' => [
+        'providers' => [
+          'audio-transcriber' => [
+            'driver' => 'openai',
+            'enabled' => true,
+            'capabilities' => ['audio_transcription'],
+            'options' => [],
+          ],
+          'vision-evaluator' => [
+            'driver' => 'openai',
+            'enabled' => true,
+            'capabilities' => [
+              'text_generation',
+              'structured_output',
+              'vision',
+            ],
+            'options' => [],
+          ],
+        ],
+      ],
+    ]));
+
+    $suite->assertStagesConform(
+        capability: 'audio_image_structured_evaluation',
+        profilesByStage: [
+        'transcription' => 'audio-transcriber',
+        'evaluation' => 'vision-evaluator',
+      ],
+        probe: static function (array $providerDefinitionsByStage): void {
+          /** @var array<string, ProviderDefinition> $providerDefinitionsByStage */
+          expect($providerDefinitionsByStage['evaluation']->supportsCapability('vision'))->toBeTrue();
+      },
+    );
+});
+
 function providerCapabilityConformanceSuite(Repository $config): ProviderCapabilityConformanceSuite
 {
     return new ProviderCapabilityConformanceSuite(

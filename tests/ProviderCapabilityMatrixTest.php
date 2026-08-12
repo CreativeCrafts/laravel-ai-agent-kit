@@ -147,7 +147,7 @@ it('requires text generation structured output and image input for audio-image e
         driver: 'openai',
         enabled: true,
         options: [],
-        capabilities: ['structured_output', 'vision'],
+        capabilities: ['structured_output'],
     );
 
     expect(
@@ -161,4 +161,34 @@ it('requires text generation structured output and image input for audio-image e
     )->toBe([
       'evaluation' => ['text_generation', 'image_input'],
     ]);
+});
+
+it('accepts vision as an image_input alias for audio-image evaluation', function (): void {
+    $matrix = new AuditedProviderCapabilityMatrix();
+
+    $transcriptionProvider = new ProviderDefinition(
+        name: 'audio-only',
+        driver: 'openai',
+        enabled: true,
+        options: [],
+        capabilities: ['audio_transcription'],
+    );
+
+    $evaluationProvider = new ProviderDefinition(
+        name: 'vision-evaluator',
+        driver: 'openai',
+        enabled: true,
+        options: [],
+        capabilities: ['text_generation', 'structured_output', 'vision'],
+    );
+
+    expect(
+        $matrix->missingStageRequirements(
+            [
+          'transcription' => $transcriptionProvider,
+          'evaluation' => $evaluationProvider,
+        ],
+            'audio_image_structured_evaluation',
+        ),
+    )->toBe([]);
 });
