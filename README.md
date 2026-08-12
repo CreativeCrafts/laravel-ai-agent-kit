@@ -4,7 +4,8 @@
 [![GitHub CI](https://img.shields.io/github/actions/workflow/status/creativecrafts/laravel-ai-agent-kit/ci.yml?branch=main&label=ci&style=flat-square)](https://github.com/creativecrafts/laravel-ai-agent-kit/actions/workflows/ci.yml)
 [![Total Downloads](https://img.shields.io/packagist/dt/creativecrafts/laravel-ai-agent-kit.svg?style=flat-square)](https://packagist.org/packages/creativecrafts/laravel-ai-agent-kit)
 
-Laravel AI Agent Kit is a Laravel package for building AI-powered application workflows on top of the official Laravel AI SDK. It gives your app package-owned blueprints, agents, provider profiles, tools, memory, queues, vector retrieval, and redacted telemetry without exposing provider SDK details as your public workflow API.
+Laravel AI Agent Kit is a Laravel package for building AI-powered application workflows on top of the official Laravel AI SDK. It gives your app package-owned blueprints, agents, provider profiles,
+tools, memory, queues, vector retrieval, and redacted telemetry without exposing provider SDK details as your public workflow API.
 
 Use it when you want Laravel-native AI workflows that are explicit, testable, and safe by default.
 
@@ -38,12 +39,13 @@ php artisan vendor:publish --tag="ai-agent-kit-views"
 
 ## Minimal configuration
 
-After publishing `config/ai-agent-kit.php`, configure at least one enabled provider profile. The default local/test setup can use the bundled `null` provider profile. Production apps should configure real Laravel AI provider credentials through Laravel AI and map package provider profiles to the capabilities your workflows need.
+After publishing `config/ai-agent-kit.php`, configure at least one enabled provider profile. The default local/test setup can use the bundled `null` provider profile. Production apps should configure
+real Laravel AI provider credentials through Laravel AI and map package provider profiles to the capabilities your workflows need.
 
 At minimum, make sure:
 
-- `providers` contains at least one enabled provider profile with the capabilities your workflows need. The bundled `null` profile has empty capabilities and is not sufficient for blueprint evaluation on its own — merge a preset from `examples/provider-profile-presets.php` or configure real profiles (see [Providers](docs/providers.md)).
-- `sdk_provider` names the Laravel AI provider instance when it differs from the Agent Kit profile name or driver.
+- `providers` contains at least one enabled provider profile with the capabilities your workflows need. The bundled `null` profile has empty capabilities and is not sufficient for blueprint evaluation
+  on its own — merge a preset from `examples/provider-profile-presets.php` or configure real profiles (see [Providers](docs/providers.md)).
 - `default_provider` references an enabled provider profile.
 - `failover_order` includes the default provider profile.
 - `memory.default_driver` is intentional. The default `in_memory` driver is process-local and non-persistent.
@@ -181,20 +183,20 @@ See [Agents and orchestration](docs/agents-and-orchestration.md) for agent defin
 
 ## Core concepts
 
-| Concept | What it gives you | Guide |
-|--------|--------------------|-------|
-| Provider profiles | Capability-based provider selection and failover | [Providers](docs/providers.md) |
-| Blueprints | Ready-made workflows such as text and audio evaluation | [Blueprints](docs/blueprints.md) |
-| Agents | Package-owned multi-agent workflow participants | [Agents and orchestration](docs/agents-and-orchestration.md) |
-| Prompts | Versioned templates and explicit variables | [Prompts](docs/prompts.md) |
-| Tools | Explicit registration, schema validation, and authorization | [Tools](docs/tools.md) |
-| Memory | Conversation continuation with in-memory, database, or Redis drivers | [Memory](docs/memory.md) |
-| Pipelines and queues | Structured sync or queued execution with `RunContext` | [Pipelines and queues](docs/pipelines-and-queues.md) |
-| Vectors and retrieval | Application-owned vector stores plus provider Files/Stores boundaries | [Vectors and retrieval](docs/vectors-and-retrieval.md) |
+| Concept                  | What it gives you                                                                  | Guide                                                        |
+|--------------------------|------------------------------------------------------------------------------------|--------------------------------------------------------------|
+| Provider profiles        | Capability-based provider selection and failover                                   | [Providers](docs/providers.md)                               |
+| Blueprints               | Ready-made workflows such as text and audio evaluation                             | [Blueprints](docs/blueprints.md)                             |
+| Agents                   | Package-owned multi-agent workflow participants                                    | [Agents and orchestration](docs/agents-and-orchestration.md) |
+| Prompts                  | Versioned templates and explicit variables                                         | [Prompts](docs/prompts.md)                                   |
+| Tools                    | Explicit registration, schema validation, and authorization                        | [Tools](docs/tools.md)                                       |
+| Memory                   | Conversation continuation with in-memory, database, or Redis drivers               | [Memory](docs/memory.md)                                     |
+| Pipelines and queues     | Structured sync or queued execution with `RunContext`                              | [Pipelines and queues](docs/pipelines-and-queues.md)         |
+| Vectors and retrieval    | Application-owned vector stores plus provider Files/Stores boundaries              | [Vectors and retrieval](docs/vectors-and-retrieval.md)       |
 | Streaming and modalities | Streaming text, transcription, embeddings, images, reranking, and audio generation | [Streaming and modalities](docs/streaming-and-modalities.md) |
-| Errors and telemetry | Typed failure categories and redacted package events | [Errors and telemetry](docs/errors-and-telemetry.md) |
-| Testing | Package fakes and deterministic app tests | [Testing](docs/testing.md) |
-| Production | Operational defaults and deployment checks | [Production](docs/production.md) |
+| Errors and telemetry     | Typed failure categories and redacted package events                               | [Errors and telemetry](docs/errors-and-telemetry.md)         |
+| Testing                  | Package fakes and deterministic app tests                                          | [Testing](docs/testing.md)                                   |
+| Production               | Operational defaults and deployment checks                                         | [Production](docs/production.md)                             |
 
 ## Security and privacy defaults
 
@@ -206,7 +208,13 @@ See [Agents and orchestration](docs/agents-and-orchestration.md) for agent defin
 
 ## Documentation
 
-Start with [Getting started](docs/getting-started.md), then move to the focused guide for the subsystem you need. Upgrade notes for 1.1.0 are in [UPGRADE.md](UPGRADE.md). Maintainer and contributor process documents live behind [CONTRIBUTING.md](CONTRIBUTING.md).
+Start with [Getting started](docs/getting-started.md), then move to the focused guide for the subsystem you need. Maintainer and contributor process documents live
+behind [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Credits
+
+- [Godspower Oduose](https://github.com/rockblings)
+- [All Contributors](../../contributors)
 
 ## License
 
