@@ -50,7 +50,8 @@ it('loads legacy Laravel AI conversation rows when package store misses and fall
 
     DB::table('agent_conversations')->insert([
         'id' => $convId,
-        'user_id' => null,
+        'participant_type' => null,
+        'participant_id' => null,
         'title' => 'Legacy chat',
         'created_at' => $now,
         'updated_at' => $now,
@@ -60,7 +61,8 @@ it('loads legacy Laravel AI conversation rows when package store misses and fall
         [
             'id' => '019b2f00-0000-7000-8000-000000000011',
             'conversation_id' => $convId,
-            'user_id' => null,
+            'participant_type' => null,
+            'participant_id' => null,
             'agent' => 'App\\Agents\\LegacyAgent',
             'role' => 'user',
             'content' => 'Hello from legacy',
@@ -69,13 +71,15 @@ it('loads legacy Laravel AI conversation rows when package store misses and fall
             'tool_results' => '[]',
             'usage' => '[]',
             'meta' => '[]',
+            'approval_state' => null,
             'created_at' => $now,
             'updated_at' => $now,
         ],
         [
             'id' => '019b2f00-0000-7000-8000-000000000012',
             'conversation_id' => $convId,
-            'user_id' => null,
+            'participant_type' => null,
+            'participant_id' => null,
             'agent' => 'App\\Agents\\LegacyAgent',
             'role' => 'assistant',
             'content' => 'Legacy reply',
@@ -99,6 +103,7 @@ it('loads legacy Laravel AI conversation rows when package store misses and fall
             ]),
             'usage' => json_encode(['prompt_tokens' => 1, 'completion_tokens' => 2]),
             'meta' => json_encode(['provider' => 'openai', 'model' => 'gpt-4o']),
+            'approval_state' => null,
             'created_at' => $now,
             'updated_at' => $now,
         ],
@@ -139,7 +144,8 @@ it('prefers package database rows over legacy when both exist', function (): voi
 
     DB::table('agent_conversations')->insert([
         'id' => $convId,
-        'user_id' => null,
+        'participant_type' => null,
+        'participant_id' => null,
         'title' => 'Legacy only',
         'created_at' => $now,
         'updated_at' => $now,
@@ -148,7 +154,8 @@ it('prefers package database rows over legacy when both exist', function (): voi
     DB::table('agent_conversation_messages')->insert([
         'id' => '019b2f00-0000-7000-8000-000000000021',
         'conversation_id' => $convId,
-        'user_id' => null,
+        'participant_type' => null,
+        'participant_id' => null,
         'agent' => 'X',
         'role' => 'user',
         'content' => 'Legacy user',
@@ -157,6 +164,7 @@ it('prefers package database rows over legacy when both exist', function (): voi
         'tool_results' => '[]',
         'usage' => '[]',
         'meta' => '[]',
+        'approval_state' => null,
         'created_at' => $now,
         'updated_at' => $now,
     ]);
