@@ -157,6 +157,48 @@ The evaluation provider must advertise `text_generation`, `structured_output`, a
 
 Put scoring or evaluation policy in `instructions`. `evaluationPrompt` is the user prompt. Agent Kit forwards those channels separately and does not invent a default system instruction.
 
+When `evaluationInputTemplate` is omitted (`null`), the evaluator user prompt is composed exactly as:
+
+~~~text
+<evaluationPrompt>
+
+Transcript:
+<transcript>
+~~~
+
+That default path does not trim, escape, or otherwise normalize the evaluation prompt or transcript.
+
+Set optional `evaluationInputTemplate` when the application must control the exact user message. Custom templates are literal string substitution, not Blade, Twig, or another template engine. Only these exact placeholders are recognized:
+
+- `{{transcript}}` (required)
+- `{{evaluation_prompt}}` (optional)
+
+Unknown `{{...}}` placeholders, including whitespace or camelCase variants such as `{{ transcript }}` or `{{evaluationPrompt}}`, fail request construction before transcription or evaluation dispatch.
+
+`evaluationPrompt` remains required in default mode and whenever the custom template contains `{{evaluation_prompt}}`. It may be empty when a custom template omits that placeholder, which is the intended JobMatch-style split between instructions (policy) and user evidence:
+
+~~~php
+new AudioImageStructuredEvaluationRequest(
+    runId: 'language-score-001',
+    audio: TranscriptionAudioSource::fromStorage(
+        path: 'language-tests/answers/audio.mp3',
+        disk: 's3-audios',
+        mimeType: 'audio/mpeg',
+    ),
+    image: EvaluationImageInput::fromUrl('https://example.test/question-image.jpg'),
+    evaluationPrompt: '',
+    schema: SwedishEvaluationSchema::class,
+    instructions: [
+        'Score the spoken description against the image.',
+        'Return strict structured output only.',
+    ],
+    evaluationInputTemplate: 'Transcribed Audio Text: "{{transcript}}"',
+    strictStructuredOutput: true,
+);
+~~~
+
+Substitution is a single non-recursive pass. Literal `{{transcript}}` or `{{evaluation_prompt}}` text inside the transcript or evaluation prompt is preserved after insertion.
+
 `strictStructuredOutput` defaults to `false` and is forwarded unchanged to `ExecutionRequest`. Set it to `true` when the evaluation schema must be emitted as Laravel AI strict structured output.
 
 The result keeps both `structuredOutput` and raw `output` so consumers can distinguish empty, malformed, and valid structured payloads.

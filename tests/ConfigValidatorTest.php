@@ -6,6 +6,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Config\ConfigValidator;
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\Exceptions\InvalidConfigurationException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\DelegationPolicyMode;
 use CreativeCrafts\LaravelAiAgentKit\Tools\DenyAllToolAuthorizer;
+use CreativeCrafts\LaravelAiAgentKit\LaravelAiAgentKitServiceProvider;
 
 it('validates a minimal configuration', function () {
     /** @var ConfigValidator $validator */
@@ -1232,3 +1233,158 @@ it('rejects non-array profile provider_options', function (): void {
       ],
     ]);
 })->throws(InvalidConfigurationException::class, 'providers.openai-fast.options.provider_options');
+
+it('accepts a provider profile with only options.model', function (): void {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate(configValidatorProviderOptionsFixture([
+        'model' => 'gpt-example',
+    ]));
+
+    expect(true)->toBeTrue();
+});
+
+it('accepts a provider profile with only options.provider_options', function (): void {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate(configValidatorProviderOptionsFixture([
+        'provider_options' => [
+            'reasoning' => ['effort' => 'medium'],
+        ],
+    ]));
+
+    expect(true)->toBeTrue();
+});
+
+it('accepts a provider profile with both supported option keys', function (): void {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate(configValidatorProviderOptionsFixture([
+        'model' => 'gpt-example',
+        'provider_options' => [
+            'reasoning' => ['effort' => 'medium'],
+        ],
+    ]));
+
+    expect(true)->toBeTrue();
+});
+
+it('rejects unsupported provider profile option siblings', function (): void {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate(configValidatorProviderOptionsFixture(
+        [
+            'reasoning_effort' => 'medium',
+        ],
+        'primary-image-scorer',
+    ));
+})->throws(
+    InvalidConfigurationException::class,
+    'Invalid value for config key: providers.primary-image-scorer.options.reasoning_effort. Unsupported provider profile option. Supported keys are [model, provider_options]. Provider-native options must be nested under providers.primary-image-scorer.options.provider_options.',
+);
+
+it('rejects an unknown option sibling even when supported keys are also present', function (): void {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate(configValidatorProviderOptionsFixture([
+        'model' => 'gpt-example',
+        'provider_options' => [],
+        'temperature' => 0.2,
+    ]));
+})->throws(InvalidConfigurationException::class, 'providers.primary-image-scorer.options.temperature');
+
+it('accepts the same key when nested under provider_options', function (): void {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate(configValidatorProviderOptionsFixture([
+        'provider_options' => [
+            'reasoning_effort' => 'medium',
+            'future_native_option' => ['enabled' => true],
+        ],
+    ]));
+
+    expect(true)->toBeTrue();
+});
+
+it('rejects numeric provider profile option keys', function (): void {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate(configValidatorProviderOptionsFixture([
+        0 => 'model',
+    ]));
+})->throws(InvalidConfigurationException::class, 'providers.primary-image-scorer.options.0');
+
+it('rejects empty nested provider_options keys', function (): void {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate(configValidatorProviderOptionsFixture([
+        'provider_options' => [
+            '' => 'value',
+        ],
+    ]));
+})->throws(InvalidConfigurationException::class, 'providers.primary-image-scorer.options.provider_options');
+
+it('rejects non-string nested provider_options keys', function (): void {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate(configValidatorProviderOptionsFixture([
+        'provider_options' => [
+            0 => 'value',
+        ],
+    ]));
+})->throws(InvalidConfigurationException::class, 'Keys must be non-empty strings.');
+
+it('skips current-config validation at boot when validation is disabled', function (): void {
+    config()->set('ai-agent-kit.providers.null.options', [
+        'reasoning_effort' => 'medium',
+    ]);
+
+    $provider = app()->getProvider(LaravelAiAgentKitServiceProvider::class);
+
+    expect($provider)->toBeInstanceOf(LaravelAiAgentKitServiceProvider::class);
+
+    expect(fn () => $provider->packageBooted())
+        ->toThrow(InvalidConfigurationException::class, 'providers.null.options.reasoning_effort');
+
+    config()->set('ai-agent-kit.validation.enabled', false);
+
+    $provider->packageBooted();
+
+    expect(config('ai-agent-kit.providers.null.options.reasoning_effort'))->toBe('medium');
+});
+
+/**
+ * @param array<int|string, mixed> $options
+ * @return array<string, mixed>
+ */
+function configValidatorProviderOptionsFixture(array $options, string $profile = 'primary-image-scorer'): array
+{
+    return [
+        'providers' => [
+            $profile => [
+                'driver' => 'openai',
+                'enabled' => true,
+                'options' => $options,
+            ],
+        ],
+        'default_provider' => $profile,
+        'failover_order' => [$profile],
+        'budgets' => [
+            'max_steps' => 1,
+            'max_tool_calls' => 1,
+            'max_retries_per_step' => 1,
+            'max_total_timeout_seconds' => 1,
+            'max_tokens' => null,
+            'max_cost_usd' => null,
+        ],
+    ];
+}

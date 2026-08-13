@@ -115,6 +115,7 @@ return [
     | Profile-specific settings go into `options`. Use `options.model` for the
     | default model and `options.provider_options` for provider-native defaults
     | that should apply only while this profile is the current attempt.
+    | Validation rejects any other immediate key under `options`.
     |
     */
   'providers' => [
