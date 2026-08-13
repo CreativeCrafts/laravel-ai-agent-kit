@@ -110,37 +110,35 @@ final readonly class ConfigValidator
 
             $options = $provider['options'] ?? [];
 
-            if (is_array($options)) {
-                foreach (array_keys($options) as $optionKey) {
-                    if (is_string($optionKey) && in_array($optionKey, self::PROVIDER_OPTION_KEYS, true)) {
-                        continue;
-                    }
+            foreach (array_keys($options) as $optionKey) {
+                if (is_string($optionKey) && in_array($optionKey, self::PROVIDER_OPTION_KEYS, true)) {
+                    continue;
+                }
 
-                    throw InvalidConfigurationException::invalidValue(
-                        "providers.{$name}.options.{$optionKey}",
-                        sprintf(
-                            'Unsupported provider profile option. Supported keys are [%s]. Provider-native options must be nested under providers.%s.options.provider_options.',
-                            implode(', ', self::PROVIDER_OPTION_KEYS),
-                            $name,
-                        ),
+                throw InvalidConfigurationException::invalidValue(
+                    "providers.{$name}.options.{$optionKey}",
+                    sprintf(
+                        'Unsupported provider profile option. Supported keys are [%s]. Provider-native options must be nested under providers.%s.options.provider_options.',
+                        implode(', ', self::PROVIDER_OPTION_KEYS),
+                        $name,
+                    ),
+                );
+            }
+
+            if (array_key_exists('provider_options', $options)) {
+                if (!is_array($options['provider_options'])) {
+                    throw InvalidConfigurationException::invalidType(
+                        "providers.{$name}.options.provider_options",
+                        'array',
                     );
                 }
 
-                if (array_key_exists('provider_options', $options)) {
-                    if (!is_array($options['provider_options'])) {
-                        throw InvalidConfigurationException::invalidType(
+                foreach (array_keys($options['provider_options']) as $optionKey) {
+                    if (!is_string($optionKey) || $optionKey === '') {
+                        throw InvalidConfigurationException::invalidValue(
                             "providers.{$name}.options.provider_options",
-                            'array',
+                            'Keys must be non-empty strings.',
                         );
-                    }
-
-                    foreach (array_keys($options['provider_options']) as $optionKey) {
-                        if (!is_string($optionKey) || $optionKey === '') {
-                            throw InvalidConfigurationException::invalidValue(
-                                "providers.{$name}.options.provider_options",
-                                'Keys must be non-empty strings.',
-                            );
-                        }
                     }
                 }
             }
