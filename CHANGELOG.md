@@ -11,6 +11,7 @@ All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 ### Fixed
 
 - Provider configuration validation now rejects unsupported keys under `providers.*.options` and directs provider-native options to `options.provider_options`, preventing silently ignored profile settings.
+- Queued `AudioImageStructuredEvaluationRequest` payloads serialized before `evaluationInputTemplate` existed now restore that field to `null` instead of throwing on uninitialized property access.
 
 See [UPGRADE.md](UPGRADE.md).
 

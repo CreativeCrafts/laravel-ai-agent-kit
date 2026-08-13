@@ -165,6 +165,57 @@ it('preserves a custom evaluation input template through queued RunContext seria
         ->and($restoredRequest->evaluationPrompt)->toBe('');
 });
 
+it('initializes evaluationInputTemplate when unserializing a pre-upgrade queued request', function (): void {
+    $request = new AudioImageStructuredEvaluationRequest(
+        runId: 'queued-audio-image-legacy',
+        audio: TranscriptionAudioSource::fromStorage('answers/audio.mp3', 's3-audios', 'audio/mpeg'),
+        image: EvaluationImageInput::fromUrl('https://example.invalid/question.jpg'),
+        evaluationPrompt: 'Evaluate transcript and image.',
+        schema: TestQueuedPayloadAudioImageSchema::class,
+    );
+
+    $context = new RunContext(
+        runId: 'queued-audio-image-legacy',
+        input: [
+            'audio_image_structured_evaluation_request' => $request,
+        ],
+    );
+
+    $legacy = withoutSerializedPublicNullProperty(
+        serialize($context),
+        AudioImageStructuredEvaluationRequest::class,
+        'evaluationInputTemplate',
+    );
+
+    expect($legacy)->not->toContain('evaluationInputTemplate');
+
+    $restored = unserialize($legacy);
+    $restoredRequest = $restored->inputValue('audio_image_structured_evaluation_request');
+
+    expect($restored)->toBeInstanceOf(RunContext::class)
+        ->and($restoredRequest)->toBeInstanceOf(AudioImageStructuredEvaluationRequest::class)
+        ->and($restoredRequest->evaluationInputTemplate)->toBeNull()
+        ->and($restoredRequest->evaluationPrompt)->toBe('Evaluate transcript and image.');
+});
+
+function withoutSerializedPublicNullProperty(string $serialized, string $class, string $property): string
+{
+    $header = 'O:' . strlen($class) . ':"' . $class . '":';
+
+    $updated = preg_replace_callback(
+        '/' . preg_quote($header, '/') . '(\d+):\{/',
+        static fn (array $matches): string => $header . ((int) $matches[1] - 1) . ':{',
+        $serialized,
+        1,
+    );
+
+    if (!is_string($updated)) {
+        throw new RuntimeException('Failed to rewrite the serialized payload header.');
+    }
+
+    return str_replace('s:' . strlen($property) . ':"' . $property . '";N;', '', $updated);
+}
+
 final class TestQueuedPayloadAudioImageSchema implements HasStructuredOutput
 {
     public function schema(JsonSchema $schema): array

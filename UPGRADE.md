@@ -32,6 +32,8 @@ Typed generation controls such as `temperature` belong on `GenerationOptions`, n
 
 `AudioImageStructuredEvaluationRequest` now accepts optional `evaluationInputTemplate` as the last constructor argument. Existing requests with no template still render as `<evaluationPrompt>\n\nTranscript:\n<transcript>`.
 
+Queued jobs that already contain a serialized `AudioImageStructuredEvaluationRequest` remain compatible: missing `evaluationInputTemplate` is restored as `null` and uses the default prompt composition.
+
 ## 1.0.x to 1.1.0
 
 Agent Kit 1.1.0 requires `laravel/ai ^0.9` and makes the Laravel AI bridge semantically transparent. Most applications keep working. Review the items below if you configured provider profiles, generation options, or relied on the previous default system instruction.

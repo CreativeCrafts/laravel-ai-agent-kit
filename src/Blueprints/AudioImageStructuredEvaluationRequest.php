@@ -8,6 +8,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionAudioSource;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionProviderOptions;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\GenerationOptions;
 use InvalidArgumentException;
+use ReflectionProperty;
 
 /**
  * @param list<string> $instructions
@@ -78,6 +79,15 @@ final readonly class AudioImageStructuredEvaluationRequest
 
         if ($this->evaluationTimeout !== null && $this->evaluationTimeout < 1) {
             throw new InvalidArgumentException('Audio-image structured evaluation timeout must be null or >= 1.');
+        }
+    }
+
+    public function __wakeup(): void
+    {
+        $property = new ReflectionProperty($this, 'evaluationInputTemplate');
+
+        if (!$property->isInitialized($this)) {
+            $property->setValue($this, null);
         }
     }
 
