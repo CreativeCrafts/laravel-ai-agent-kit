@@ -57,6 +57,37 @@ Configure the matching Laravel AI provider instance separately:
 
 The package validates that the default provider profile exists, is enabled, and appears in failover order.
 
+`providers.<profile>.options` is an Agent Kit-owned schema. When configuration validation is enabled, it accepts only:
+
+- `model`
+- `provider_options`
+
+Unknown sibling keys fail fast. Provider-native settings must be nested under `options.provider_options`. Typed generation controls such as `temperature` belong on `GenerationOptions`, not as profile option siblings.
+
+Invalid (silently ignored before 1.1.1, rejected when validation is enabled):
+
+~~~php
+'options' => [
+    'model' => 'gpt-example',
+    'reasoning_effort' => 'medium',
+],
+~~~
+
+Correct provider-native channel:
+
+~~~php
+'options' => [
+    'model' => 'gpt-example',
+    'provider_options' => [
+        'reasoning' => [
+            'effort' => 'medium',
+        ],
+    ],
+],
+~~~
+
+Agent Kit does not whitelist provider-native key names inside `options.provider_options`. Nested keys must be non-empty strings.
+
 Do not assume the profile name is a Laravel AI provider name. Agent Kit resolves the selected provider profile to a Laravel AI provider instance before invoking the SDK.
 
 ## Capability-based selection

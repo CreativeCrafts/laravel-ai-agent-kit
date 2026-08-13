@@ -1,5 +1,37 @@
 # Upgrade guide
 
+## 1.1.0 to 1.1.1
+
+### Unsupported provider profile option keys now fail validation
+
+When `validation.enabled` is true (the default), `providers.<profile>.options` accepts only `model` and `provider_options`. Sibling keys such as `reasoning_effort` or `temperature` that previously passed validation were ignored at runtime.
+
+Move provider-native settings under `options.provider_options`:
+
+~~~php
+// Invalid
+'options' => [
+    'model' => 'gpt-example',
+    'reasoning_effort' => 'medium',
+],
+
+// Correct
+'options' => [
+    'model' => 'gpt-example',
+    'provider_options' => [
+        'reasoning' => [
+            'effort' => 'medium',
+        ],
+    ],
+],
+~~~
+
+Typed generation controls such as `temperature` belong on `GenerationOptions`, not on the provider profile. Applications that set `validation.enabled` to `false` keep the previous permissive registry behavior.
+
+### Optional audio-image evaluation input templates
+
+`AudioImageStructuredEvaluationRequest` now accepts optional `evaluationInputTemplate` as the last constructor argument. Existing requests with no template still render as `<evaluationPrompt>\n\nTranscript:\n<transcript>`.
+
 ## 1.0.x to 1.1.0
 
 Agent Kit 1.1.0 requires `laravel/ai ^0.9` and makes the Laravel AI bridge semantically transparent. Most applications keep working. Review the items below if you configured provider profiles, generation options, or relied on the previous default system instruction.

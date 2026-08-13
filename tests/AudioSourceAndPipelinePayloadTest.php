@@ -127,6 +127,44 @@ it('keeps queued audio-image workflow payloads in Agent Kit DTO terms', function
         ->not->toContain('Laravel\\Ai\\Transcription');
 });
 
+it('preserves a custom evaluation input template through queued RunContext serialization', function (): void {
+    $template = 'Transcribed Audio Text: "{{transcript}}"';
+
+    $request = new AudioImageStructuredEvaluationRequest(
+        runId: 'queued-audio-image-template',
+        audio: TranscriptionAudioSource::fromStorage('answers/audio.mp3', 's3-audios', 'audio/mpeg'),
+        image: EvaluationImageInput::fromUrl('https://example.invalid/question.jpg'),
+        evaluationPrompt: '',
+        schema: TestQueuedPayloadAudioImageSchema::class,
+        evaluationInputTemplate: $template,
+    );
+
+    $context = new RunContext(
+        runId: 'queued-audio-image-template',
+        input: [
+            'audio_image_structured_evaluation_request' => $request,
+        ],
+    );
+
+    $serialized = serialize($context);
+    $restored = unserialize($serialized);
+
+    expect($restored)->toBeInstanceOf(RunContext::class);
+
+    $restoredRequest = $restored->inputValue('audio_image_structured_evaluation_request');
+
+    expect($serialized)
+        ->toContain(AudioImageStructuredEvaluationRequest::class)
+        ->toContain(TranscriptionAudioSource::class)
+        ->toContain(EvaluationImageInput::class)
+        ->toContain($template)
+        ->not->toContain('Laravel\\Ai\\Files\\')
+        ->not->toContain('Laravel\\Ai\\Transcription')
+        ->and($restoredRequest)->toBeInstanceOf(AudioImageStructuredEvaluationRequest::class)
+        ->and($restoredRequest->evaluationInputTemplate)->toBe($template)
+        ->and($restoredRequest->evaluationPrompt)->toBe('');
+});
+
 final class TestQueuedPayloadAudioImageSchema implements HasStructuredOutput
 {
     public function schema(JsonSchema $schema): array

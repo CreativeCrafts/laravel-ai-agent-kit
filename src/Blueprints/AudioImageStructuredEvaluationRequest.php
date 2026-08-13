@@ -15,6 +15,10 @@ use InvalidArgumentException;
  */
 final readonly class AudioImageStructuredEvaluationRequest
 {
+    private const string EVALUATION_PROMPT_PLACEHOLDER = '{{evaluation_prompt}}';
+
+    private const string TRANSCRIPT_PLACEHOLDER = '{{transcript}}';
+
     /**
      * @param list<string> $instructions
      * @param array<string, mixed> $metadata
@@ -40,14 +44,13 @@ final readonly class AudioImageStructuredEvaluationRequest
         public bool $allowEmptyTranscript = false,
         public array $metadata = [],
         public bool $strictStructuredOutput = false,
+        public ?string $evaluationInputTemplate = null,
     ) {
         if ($this->runId === '') {
             throw new InvalidArgumentException('Audio-image structured evaluation requests require a non-empty runId.');
         }
 
-        if ($this->evaluationPrompt === '') {
-            throw new InvalidArgumentException('Audio-image structured evaluation requests require a non-empty evaluation prompt.');
-        }
+        $this->validateEvaluationInputTemplate();
 
         foreach ($this->instructions as $index => $instruction) {
             if ($instruction === '') {
@@ -76,5 +79,50 @@ final readonly class AudioImageStructuredEvaluationRequest
         if ($this->evaluationTimeout !== null && $this->evaluationTimeout < 1) {
             throw new InvalidArgumentException('Audio-image structured evaluation timeout must be null or >= 1.');
         }
+    }
+
+    private function validateEvaluationInputTemplate(): void
+    {
+        if ($this->evaluationInputTemplate === null) {
+            if ($this->evaluationPrompt === '') {
+                throw new InvalidArgumentException('Audio-image structured evaluation requests require a non-empty evaluation prompt.');
+            }
+
+            return;
+        }
+
+        if (!str_contains($this->evaluationInputTemplate, self::TRANSCRIPT_PLACEHOLDER)) {
+            throw new InvalidArgumentException('Audio-image structured evaluation input template must contain {{transcript}}.');
+        }
+
+        foreach ($this->evaluationInputPlaceholders($this->evaluationInputTemplate) as $placeholder) {
+            if ($placeholder !== self::TRANSCRIPT_PLACEHOLDER && $placeholder !== self::EVALUATION_PROMPT_PLACEHOLDER) {
+                throw new InvalidArgumentException(
+                    sprintf(
+                        'Audio-image structured evaluation input template contains unsupported placeholder %s. Supported placeholders are {{evaluation_prompt}} and {{transcript}}.',
+                        $placeholder,
+                    ),
+                );
+            }
+        }
+
+        if (str_contains($this->evaluationInputTemplate, self::EVALUATION_PROMPT_PLACEHOLDER) && $this->evaluationPrompt === '') {
+            throw new InvalidArgumentException(
+                'Audio-image structured evaluation requests require a non-empty evaluation prompt when the input template contains {{evaluation_prompt}}.',
+            );
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function evaluationInputPlaceholders(string $template): array
+    {
+        preg_match_all('/\{\{[^{}]+\}\}/', $template, $matches);
+
+        /** @var list<string> $placeholders */
+        $placeholders = $matches[0];
+
+        return $placeholders;
     }
 }

@@ -2,6 +2,18 @@
 
 All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
+## [1.1.1] - 2026-08-13
+
+### Added
+
+- Added deterministic `evaluationInputTemplate` support to audio-image structured evaluation with `{{transcript}}` and optional `{{evaluation_prompt}}` placeholders while preserving the existing default prompt composition.
+
+### Fixed
+
+- Provider configuration validation now rejects unsupported keys under `providers.*.options` and directs provider-native options to `options.provider_options`, preventing silently ignored profile settings.
+
+See [UPGRADE.md](UPGRADE.md).
+
 ## [1.1.0] - 2026-08-12
 
 Requires PHP 8.3+, Laravel 12 or 13, and `laravel/ai ^0.10`.

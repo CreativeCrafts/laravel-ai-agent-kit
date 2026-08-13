@@ -142,6 +142,18 @@ final readonly class AudioImageStructuredEvaluation
 
     private function evaluationPrompt(AudioImageStructuredEvaluationRequest $request, string $transcript): string
     {
-        return $request->evaluationPrompt . "\n\nTranscript:\n" . $transcript;
+        if ($request->evaluationInputTemplate === null) {
+            return $request->evaluationPrompt . "\n\nTranscript:\n" . $transcript;
+        }
+
+        return $this->renderCustomEvaluationInput($request->evaluationInputTemplate, $request->evaluationPrompt, $transcript);
+    }
+
+    private function renderCustomEvaluationInput(string $template, string $evaluationPrompt, string $transcript): string
+    {
+        return strtr($template, [
+            '{{evaluation_prompt}}' => $evaluationPrompt,
+            '{{transcript}}' => $transcript,
+        ]);
     }
 }

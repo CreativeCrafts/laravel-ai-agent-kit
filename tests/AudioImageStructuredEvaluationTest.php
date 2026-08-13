@@ -333,6 +333,347 @@ it('stores results from the audio-image pipeline step in RunContext state', func
         ->and($context->stateValue('audio_image_structured_evaluation_result')->structuredOutput)->toBe(['ok' => true]);
 });
 
+it('preserves the default evaluation prompt composition when no input template is supplied', function (): void {
+    $runtime = bindAudioImageEvaluationRuntime(
+        runId: 'default-prompt',
+        transcript: 'A person sits at a table.',
+    );
+
+    app(AudioImageStructuredEvaluation::class)->evaluate(
+        new AudioImageStructuredEvaluationRequest(
+            runId: 'default-prompt',
+            audio: TranscriptionAudioSource::fromBase64(base64_encode('audio'), 'audio/wav'),
+            image: EvaluationImageInput::fromUrl('https://example.com/image.jpg'),
+            evaluationPrompt: 'Evaluate.',
+            schema: TestAudioImageEvaluationSchema::class,
+        ),
+    );
+
+    expect($runtime->lastRequest()?->prompt)->toBe("Evaluate.\n\nTranscript:\nA person sits at a table.");
+});
+
+it('renders a JobMatch-style custom evaluation input template exactly', function (): void {
+    $runtime = bindAudioImageEvaluationRuntime(
+        runId: 'jobmatch-framing',
+        transcript: 'Jag beskriver en bild.',
+    );
+
+    config()->set('ai-agent-kit.providers', [
+        'openai-vision' => [
+            'driver' => 'openai',
+            'enabled' => true,
+            'capabilities' => ['text_generation', 'structured_output', 'vision'],
+        ],
+    ]);
+
+    app(AudioImageStructuredEvaluation::class)->evaluate(
+        new AudioImageStructuredEvaluationRequest(
+            runId: 'jobmatch-framing',
+            audio: TranscriptionAudioSource::fromBase64(base64_encode('audio'), 'audio/wav'),
+            image: EvaluationImageInput::fromUrl('https://example.com/image.jpg'),
+            evaluationPrompt: '',
+            schema: TestAudioImageEvaluationSchema::class,
+            instructions: ['Score the spoken description against the image.'],
+            evaluationProvider: 'openai-vision',
+            evaluationModel: 'gpt-4.1-mini',
+            strictStructuredOutput: true,
+            evaluationInputTemplate: 'Transcribed Audio Text: "{{transcript}}"',
+        ),
+    );
+
+    $evaluationRequest = $runtime->lastRequest();
+
+    expect($evaluationRequest?->prompt)->toBe('Transcribed Audio Text: "Jag beskriver en bild."')
+        ->and($evaluationRequest?->instructions)->toBe(['Score the spoken description against the image.'])
+        ->and($evaluationRequest?->attachments)->toHaveCount(1)
+        ->and($evaluationRequest?->attachments[0])->toBeInstanceOf(RemoteImage::class)
+        ->and($evaluationRequest?->schema)->toBe(TestAudioImageEvaluationSchema::class)
+        ->and($evaluationRequest?->provider)->toBe('openai-vision')
+        ->and($evaluationRequest?->model)->toBe('gpt-4.1-mini')
+        ->and($evaluationRequest?->strictStructuredOutput)->toBeTrue();
+});
+
+it('renders both supported evaluation input placeholders exactly', function (): void {
+    $runtime = bindAudioImageEvaluationRuntime(
+        runId: 'both-placeholders',
+        transcript: 'Evidence text.',
+    );
+
+    app(AudioImageStructuredEvaluation::class)->evaluate(
+        new AudioImageStructuredEvaluationRequest(
+            runId: 'both-placeholders',
+            audio: TranscriptionAudioSource::fromBase64(base64_encode('audio'), 'audio/wav'),
+            image: EvaluationImageInput::fromUrl('https://example.com/image.jpg'),
+            evaluationPrompt: 'Evaluate the evidence.',
+            schema: TestAudioImageEvaluationSchema::class,
+            evaluationInputTemplate: "{{evaluation_prompt}}\n\nEvidence: {{transcript}}",
+        ),
+    );
+
+    expect($runtime->lastRequest()?->prompt)->toBe("Evaluate the evidence.\n\nEvidence: Evidence text.");
+});
+
+it('allows an empty evaluation prompt when the custom template omits it', function (): void {
+    $runtime = bindAudioImageEvaluationRuntime(
+        runId: 'omit-prompt',
+        transcript: 'Only the transcript.',
+    );
+
+    $request = new AudioImageStructuredEvaluationRequest(
+        runId: 'omit-prompt',
+        audio: TranscriptionAudioSource::fromBase64(base64_encode('audio'), 'audio/wav'),
+        image: EvaluationImageInput::fromUrl('https://example.com/image.jpg'),
+        evaluationPrompt: '',
+        schema: TestAudioImageEvaluationSchema::class,
+        evaluationInputTemplate: '{{transcript}}',
+    );
+
+    app(AudioImageStructuredEvaluation::class)->evaluate($request);
+
+    expect($request->evaluationPrompt)->toBe('')
+        ->and($runtime->lastRequest()?->prompt)->toBe('Only the transcript.');
+});
+
+it('still requires a non-empty evaluation prompt in default mode', function (): void {
+    expect(fn () => new AudioImageStructuredEvaluationRequest(
+        runId: 'missing-prompt',
+        audio: TranscriptionAudioSource::fromBase64(base64_encode('audio'), 'audio/wav'),
+        image: EvaluationImageInput::fromUrl('https://example.com/image.jpg'),
+        evaluationPrompt: '',
+        schema: TestAudioImageEvaluationSchema::class,
+    ))->toThrow(
+        InvalidArgumentException::class,
+        'Audio-image structured evaluation requests require a non-empty evaluation prompt.',
+    );
+});
+
+it('requires a non-empty evaluation prompt when the template references it', function (): void {
+    expect(fn () => new AudioImageStructuredEvaluationRequest(
+        runId: 'required-prompt-placeholder',
+        audio: TranscriptionAudioSource::fromBase64(base64_encode('audio'), 'audio/wav'),
+        image: EvaluationImageInput::fromUrl('https://example.com/image.jpg'),
+        evaluationPrompt: '',
+        schema: TestAudioImageEvaluationSchema::class,
+        evaluationInputTemplate: '{{evaluation_prompt}} -- {{transcript}}',
+    ))->toThrow(
+        InvalidArgumentException::class,
+        'Audio-image structured evaluation requests require a non-empty evaluation prompt when the input template contains {{evaluation_prompt}}.',
+    );
+});
+
+it('rejects a custom evaluation input template that omits the transcript placeholder', function (): void {
+    $runtime = bindAudioImageEvaluationRuntime(runId: 'missing-transcript-placeholder', transcript: 'unused');
+
+    expect(fn () => new AudioImageStructuredEvaluationRequest(
+        runId: 'missing-transcript-placeholder',
+        audio: TranscriptionAudioSource::fromBase64(base64_encode('audio'), 'audio/wav'),
+        image: EvaluationImageInput::fromUrl('https://example.com/image.jpg'),
+        evaluationPrompt: 'Evaluate.',
+        schema: TestAudioImageEvaluationSchema::class,
+        evaluationInputTemplate: '{{evaluation_prompt}} only',
+    ))->toThrow(
+        InvalidArgumentException::class,
+        'Audio-image structured evaluation input template must contain {{transcript}}.',
+    );
+
+    expect($runtime->requests())->toBe([]);
+});
+
+it('rejects unknown evaluation input placeholders with a diagnostic', function (): void {
+    expect(fn () => new AudioImageStructuredEvaluationRequest(
+        runId: 'unknown-placeholder',
+        audio: TranscriptionAudioSource::fromBase64(base64_encode('audio'), 'audio/wav'),
+        image: EvaluationImageInput::fromUrl('https://example.com/image.jpg'),
+        evaluationPrompt: 'Evaluate.',
+        schema: TestAudioImageEvaluationSchema::class,
+        evaluationInputTemplate: '{{transcript}} {{image_caption}}',
+    ))->toThrow(
+        InvalidArgumentException::class,
+        'Audio-image structured evaluation input template contains unsupported placeholder {{image_caption}}. Supported placeholders are {{evaluation_prompt}} and {{transcript}}.',
+    );
+});
+
+it('rejects whitespace and camelCase placeholder typos', function (string $template): void {
+    expect(fn () => new AudioImageStructuredEvaluationRequest(
+        runId: 'placeholder-typo',
+        audio: TranscriptionAudioSource::fromBase64(base64_encode('audio'), 'audio/wav'),
+        image: EvaluationImageInput::fromUrl('https://example.com/image.jpg'),
+        evaluationPrompt: 'Evaluate.',
+        schema: TestAudioImageEvaluationSchema::class,
+        evaluationInputTemplate: $template,
+    ))->toThrow(InvalidArgumentException::class);
+})->with([
+    'whitespace transcript placeholder' => ['{{ transcript }}'],
+    'whitespace transcript sibling' => ['{{transcript}} {{ transcript }}'],
+    'camelCase evaluation prompt' => ['{{transcript}} {{evaluationPrompt}}'],
+]);
+
+it('preserves quotes, newlines, and transcript whitespace in custom templates', function (): void {
+    $transcript = "  Jag sa \"hej\".\nSedan gick jag hem.\r\n  ";
+    $runtime = bindAudioImageEvaluationRuntime(
+        runId: 'literal-bytes',
+        transcript: $transcript,
+    );
+
+    app(AudioImageStructuredEvaluation::class)->evaluate(
+        new AudioImageStructuredEvaluationRequest(
+            runId: 'literal-bytes',
+            audio: TranscriptionAudioSource::fromBase64(base64_encode('audio'), 'audio/wav'),
+            image: EvaluationImageInput::fromUrl('https://example.com/image.jpg'),
+            evaluationPrompt: '',
+            schema: TestAudioImageEvaluationSchema::class,
+            evaluationInputTemplate: "Transcribed Audio Text: \"{{transcript}}\"",
+        ),
+    );
+
+    expect($runtime->lastRequest()?->prompt)->toBe("Transcribed Audio Text: \"  Jag sa \"hej\".\nSedan gick jag hem.\r\n  \"");
+});
+
+it('does not recursively interpret placeholder-looking transcript text', function (): void {
+    $runtime = bindAudioImageEvaluationRuntime(
+        runId: 'no-recursion',
+        transcript: 'literal {{evaluation_prompt}} and {{transcript}}',
+    );
+
+    app(AudioImageStructuredEvaluation::class)->evaluate(
+        new AudioImageStructuredEvaluationRequest(
+            runId: 'no-recursion',
+            audio: TranscriptionAudioSource::fromBase64(base64_encode('audio'), 'audio/wav'),
+            image: EvaluationImageInput::fromUrl('https://example.com/image.jpg'),
+            evaluationPrompt: 'Keep policy here.',
+            schema: TestAudioImageEvaluationSchema::class,
+            evaluationInputTemplate: 'Input={{transcript}}; Prompt={{evaluation_prompt}}',
+        ),
+    );
+
+    expect($runtime->lastRequest()?->prompt)->toBe(
+        'Input=literal {{evaluation_prompt}} and {{transcript}}; Prompt=Keep policy here.',
+    );
+});
+
+it('renders an empty transcript through a custom template when allowed', function (): void {
+    $runtime = bindAudioImageEvaluationRuntime(
+        runId: 'empty-allowed-template',
+        transcript: '',
+    );
+
+    app(AudioImageStructuredEvaluation::class)->evaluate(
+        new AudioImageStructuredEvaluationRequest(
+            runId: 'empty-allowed-template',
+            audio: TranscriptionAudioSource::fromBase64(base64_encode('audio'), 'audio/wav'),
+            image: EvaluationImageInput::fromUrl('https://example.com/image.jpg'),
+            evaluationPrompt: '',
+            schema: TestAudioImageEvaluationSchema::class,
+            allowEmptyTranscript: true,
+            evaluationInputTemplate: 'Transcribed Audio Text: "{{transcript}}"',
+        ),
+    );
+
+    expect($runtime->lastRequest()?->prompt)->toBe('Transcribed Audio Text: ""');
+});
+
+it('rejects empty transcripts before evaluation even when a custom template is supplied', function (): void {
+    $runtime = bindAudioImageEvaluationRuntime(
+        runId: 'empty-rejected-template',
+        transcript: '',
+    );
+
+    expect(fn () => app(AudioImageStructuredEvaluation::class)->evaluate(
+        new AudioImageStructuredEvaluationRequest(
+            runId: 'empty-rejected-template',
+            audio: TranscriptionAudioSource::fromBase64(base64_encode('audio'), 'audio/wav'),
+            image: EvaluationImageInput::fromUrl('https://example.com/image.jpg'),
+            evaluationPrompt: '',
+            schema: TestAudioImageEvaluationSchema::class,
+            allowEmptyTranscript: false,
+            evaluationInputTemplate: 'Transcribed Audio Text: "{{transcript}}"',
+        ),
+    ))->toThrow(AudioImageStructuredEvaluationException::class);
+
+    expect($runtime->requests())->toBe([]);
+});
+
+it('maps pre-patch positional constructor arguments to the same fields', function (): void {
+    $request = new AudioImageStructuredEvaluationRequest(
+        'positional-compat',
+        TranscriptionAudioSource::fromBase64(base64_encode('audio'), 'audio/wav'),
+        EvaluationImageInput::fromUrl('https://example.com/image.jpg'),
+        'Evaluate.',
+        TestAudioImageEvaluationSchema::class,
+        ['Keep policy in instructions.'],
+        null,
+        null,
+        null,
+        'openai-vision',
+        'gpt-4.1-mini',
+        null,
+        null,
+        null,
+        false,
+        null,
+        null,
+        false,
+        [],
+        true,
+    );
+
+    expect($request->runId)->toBe('positional-compat')
+        ->and($request->evaluationPrompt)->toBe('Evaluate.')
+        ->and($request->instructions)->toBe(['Keep policy in instructions.'])
+        ->and($request->evaluationProvider)->toBe('openai-vision')
+        ->and($request->evaluationModel)->toBe('gpt-4.1-mini')
+        ->and($request->strictStructuredOutput)->toBeTrue()
+        ->and($request->evaluationInputTemplate)->toBeNull();
+});
+
+it('renders multiple transcript placeholders by literal substitution', function (): void {
+    $runtime = bindAudioImageEvaluationRuntime(
+        runId: 'repeated-transcript',
+        transcript: 'said once',
+    );
+
+    app(AudioImageStructuredEvaluation::class)->evaluate(
+        new AudioImageStructuredEvaluationRequest(
+            runId: 'repeated-transcript',
+            audio: TranscriptionAudioSource::fromBase64(base64_encode('audio'), 'audio/wav'),
+            image: EvaluationImageInput::fromUrl('https://example.com/image.jpg'),
+            evaluationPrompt: '',
+            schema: TestAudioImageEvaluationSchema::class,
+            evaluationInputTemplate: 'First={{transcript}}; Second={{transcript}}',
+        ),
+    );
+
+    expect($runtime->lastRequest()?->prompt)->toBe('First=said once; Second=said once');
+});
+
+function bindAudioImageEvaluationRuntime(string $runId, string $transcript): FakeAiRuntime
+{
+    app()->instance(TranscriptionRuntime::class, new FakeTranscriptionRuntime([
+        new TranscriptionResult(
+            runId: $runId . ':transcription',
+            transcript: $transcript,
+            provider: 'openai',
+            model: 'gpt-4o-transcribe',
+            promptTokens: 1,
+            completionTokens: 1,
+        ),
+    ]));
+
+    $runtime = new FakeAiRuntime([
+        new ExecutionResult(
+            runId: $runId . ':evaluation',
+            output: '{"level":"A2"}',
+            provider: 'openai',
+            model: 'gpt-4.1-mini',
+            structuredOutput: ['level' => 'A2'],
+        ),
+    ]);
+
+    app()->instance(AiRuntime::class, $runtime);
+
+    return $runtime;
+}
+
 final class TestAudioImageEvaluationSchema implements HasStructuredOutput
 {
     public function schema(JsonSchema $schema): array
