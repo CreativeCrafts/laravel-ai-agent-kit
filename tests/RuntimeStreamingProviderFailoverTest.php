@@ -26,8 +26,8 @@ it('fails over when stream creation has a classified connection failure', functi
     app()->register(AiServiceProvider::class);
 
     app(AiManager::class)->extend(
-      'broken',
-      fn(): never => throw new ConnectionException('stream connection failed'),
+        'broken',
+        fn (): never => throw new ConnectionException('stream connection failed'),
     );
 
     config()->set('ai-agent-kit.default_provider', 'broken-provider');
@@ -39,12 +39,12 @@ it('fails over when stream creation has a classified connection failure', functi
     Ai::fakeAgent(RuntimeTelemetryAgent::class, ['Recovered stream response'])->preventStrayPrompts();
 
     $events = iterator_to_array(
-      app(StreamingAiRuntime::class)->executeStream(
-        new ExecutionRequest(
-          runId: 'run-stream-creation-failover-001',
-          prompt: 'Recover stream creation.',
+        app(StreamingAiRuntime::class)->executeStream(
+            new ExecutionRequest(
+                runId: 'run-stream-creation-failover-001',
+                prompt: 'Recover stream creation.',
+            ),
         ),
-      ),
     );
 
     $terminal = $events[array_key_last($events)];
@@ -61,8 +61,8 @@ it('preserves broad stream creation failover only in explicit legacy mode', func
     app()->register(AiServiceProvider::class);
 
     app(AiManager::class)->extend(
-      'broken',
-      fn(): never => throw new RuntimeException('unknown stream creation failure'),
+        'broken',
+        fn (): never => throw new RuntimeException('unknown stream creation failure'),
     );
 
     config()->set('ai-agent-kit.default_provider', 'broken-provider');
@@ -75,12 +75,12 @@ it('preserves broad stream creation failover only in explicit legacy mode', func
     Ai::fakeAgent(RuntimeTelemetryAgent::class, ['Recovered stream response'])->preventStrayPrompts();
 
     $events = iterator_to_array(
-      app(StreamingAiRuntime::class)->executeStream(
-        new ExecutionRequest(
-          runId: 'run-stream-creation-legacy-failover-001',
-          prompt: 'Recover stream creation in legacy mode.',
+        app(StreamingAiRuntime::class)->executeStream(
+            new ExecutionRequest(
+                runId: 'run-stream-creation-legacy-failover-001',
+                prompt: 'Recover stream creation in legacy mode.',
+            ),
         ),
-      ),
     );
 
     $terminal = $events[array_key_last($events)];
@@ -112,12 +112,12 @@ it('emits one terminal stream failure and does not retry once stream iteration h
     ])->preventStrayPrompts();
 
     $events = iterator_to_array(
-      app(StreamingAiRuntime::class)->executeStream(
-        new ExecutionRequest(
-          runId: 'run-stream-no-iteration-retry-001',
-          prompt: 'Do not retry iterator failure.',
+        app(StreamingAiRuntime::class)->executeStream(
+            new ExecutionRequest(
+                runId: 'run-stream-no-iteration-retry-001',
+                prompt: 'Do not retry iterator failure.',
+            ),
         ),
-      ),
     );
 
     expect($attempts)
