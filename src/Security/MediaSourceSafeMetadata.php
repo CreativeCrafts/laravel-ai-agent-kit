@@ -9,10 +9,15 @@ final class MediaSourceSafeMetadata
     /**
      * @return array<string, mixed>
      */
-    public static function referenceFields(string $reference, bool $isUrl): array
-    {
+    public static function referenceFields(
+        string $reference,
+        bool $isUrl,
+        bool $includeDiagnosticNames = false,
+    ): array {
         if ($isUrl) {
-            $fields = [];
+            $fields = [
+                'reference_fingerprint' => hash('sha256', $reference),
+            ];
 
             $scheme = parse_url($reference, PHP_URL_SCHEME);
             if (is_string($scheme) && $scheme !== '') {
@@ -27,11 +32,15 @@ final class MediaSourceSafeMetadata
             return $fields;
         }
 
-        $normalized = str_replace('\\', '/', $reference);
-
-        return [
-            'reference_basename' => basename($normalized),
+        $fields = [
             'reference_fingerprint' => hash('sha256', $reference),
         ];
+
+        if ($includeDiagnosticNames) {
+            $normalized = str_replace('\\', '/', $reference);
+            $fields['reference_basename'] = basename($normalized);
+        }
+
+        return $fields;
     }
 }

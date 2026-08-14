@@ -8,6 +8,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationRetentionPurge
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\EncryptionService;
 use CreativeCrafts\LaravelAiAgentKit\Memory\Exceptions\ConversationStoreException;
+use CreativeCrafts\LaravelAiAgentKit\Memory\Exceptions\ConversationWriteConflictException;
 use DateMalformedStringException;
 use DateTimeImmutable;
 use Illuminate\Contracts\Container\BindingResolutionException;
@@ -18,6 +19,42 @@ use Throwable;
 
 final readonly class RedisConversationStore implements ConversationRetentionPurger, ConversationStore
 {
+    private const string COMPARE_AND_SET_SCRIPT = <<<'LUA'
+local current = redis.call('GET', KEYS[1])
+local expected = tonumber(ARGV[1])
+local ttl = tonumber(ARGV[4])
+
+local function store(value)
+    if ttl ~= nil and ttl > 0 then
+        redis.call('SET', KEYS[1], value, 'EX', ttl)
+    else
+        redis.call('SET', KEYS[1], value)
+    end
+end
+
+if current == false then
+    if expected ~= 0 then
+        return 0
+    end
+
+    store(ARGV[2])
+    return 1
+end
+
+local decodedOk, decoded = pcall(cjson.decode, current)
+if not decodedOk or type(decoded) ~= 'table' then
+    return -2
+end
+
+local actual = tonumber(decoded.revision or 0)
+if actual ~= expected then
+    return 0
+end
+
+store(ARGV[3])
+return 2
+LUA;
+
     private EncryptionService $encryptionService;
 
     private bool $encryptPayloads;
@@ -97,6 +134,7 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
     {
         $payload = [
             'conversation_id' => $conversation->id->toString(),
+            'revision' => $conversation->revision,
             'driver' => $this->driverName,
             'retention_until' => $this->retentionTimestamp($conversation),
             'created_at' => $conversation->createdAt->format(DATE_ATOM),
@@ -120,14 +158,22 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
         ];
 
         try {
-            $encodedPayload = json_encode($payload, JSON_THROW_ON_ERROR);
+            $initialPayload = $payload;
+            $initialPayload['revision'] = 0;
+            $updatedPayload = $payload;
+            $updatedPayload['revision'] = $conversation->revision + 1;
+            $encodedInitialPayload = json_encode($initialPayload, JSON_THROW_ON_ERROR);
+            $encodedUpdatedPayload = json_encode($updatedPayload, JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
             throw ConversationStoreException::payloadEncodingFailed('redis.payload', $exception);
         }
 
-        $this->setValue(
+        $this->compareAndSetValue(
             key: $this->keyFor($conversation->id),
-            value: $this->encodeStoredPayload($encodedPayload),
+            conversationId: $conversation->id->toString(),
+            expectedRevision: $conversation->revision,
+            initialValue: $this->encodeStoredPayload($encodedInitialPayload, 0),
+            updatedValue: $this->encodeStoredPayload($encodedUpdatedPayload, $conversation->revision + 1),
             ttlSeconds: $this->retentionTtlSeconds($conversation),
         );
     }
@@ -157,7 +203,7 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
                 continue;
             }
 
-            if (new DateTimeImmutable($retentionUntil) <= $threshold) {
+            if ($this->date($retentionUntil, 'redis.payload.retention_until') <= $threshold) {
                 $this->deleteKey($key);
                 $purged++;
             }
@@ -215,10 +261,13 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
         try {
             $plaintext = $this->encryptionService->decryptString($encryptedPayload);
         } catch (Throwable $throwable) {
-            throw ConversationStoreException::payloadDecodingFailed('redis.payload.payload', $throwable);
+            throw ConversationStoreException::payloadDecryptionFailed('redis.payload.payload', $throwable);
         }
 
-        return $this->decodeJsonPayload($plaintext, 'redis.payload.decrypted');
+        $decrypted = $this->decodeJsonPayload($plaintext, 'redis.payload.decrypted');
+        $decrypted['revision'] = $decoded['revision'] ?? 0;
+
+        return $decrypted;
     }
 
     /**
@@ -246,7 +295,7 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
     /**
      * @throws ConversationStoreException
      */
-    private function encodeStoredPayload(string $encodedPayload): string
+    private function encodeStoredPayload(string $encodedPayload, int $revision): string
     {
         if (!$this->encryptPayloads) {
             return $encodedPayload;
@@ -255,6 +304,7 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
         try {
             return json_encode([
                 'encrypted' => true,
+                'revision' => $revision,
                 'payload' => $this->encryptionService->encryptString($encodedPayload),
             ], JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
@@ -274,7 +324,7 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
             return false;
         }
 
-        return new DateTimeImmutable($retentionUntil) <= new DateTimeImmutable();
+        return $this->date($retentionUntil, 'redis.payload.retention_until') <= new DateTimeImmutable();
     }
 
     /**
@@ -293,7 +343,14 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
     {
         $messages = [];
 
-        $rawMessages = $payload['messages'] ?? [];
+        if (!array_key_exists('messages', $payload)) {
+            throw ConversationStoreException::payloadDecodingFailed(
+                'redis.payload.messages',
+                new RuntimeException('Redis conversation payload requires a messages field.'),
+            );
+        }
+
+        $rawMessages = $payload['messages'];
         if (!is_array($rawMessages)) {
             throw ConversationStoreException::payloadDecodingFailed(
                 'redis.payload.messages',
@@ -319,15 +376,31 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
 
             /** @var array<string, mixed> $metadata */
             $attachments = $messagePayload['attachments'] ?? [];
-            if (is_array($attachments) && $attachments !== []) {
+            if (!is_array($attachments)) {
+                throw ConversationStoreException::payloadDecodingFailed(
+                    "redis.payload.messages.{$index}.attachments",
+                    new RuntimeException('Redis message attachments must be an array.'),
+                );
+            }
+
+            foreach ($attachments as $attachment) {
+                if (!is_array($attachment)) {
+                    throw ConversationStoreException::payloadDecodingFailed(
+                        "redis.payload.messages.{$index}.attachments",
+                        new RuntimeException('Redis message attachment entries must be arrays.'),
+                    );
+                }
+            }
+
+            if ($attachments !== []) {
                 $metadata['attachments'] = array_values($attachments);
             }
 
             $messages[] = new ConversationMessage(
-                id: new MessageId($messageId),
-                role: ConversationMessageRole::from($role),
+                id: $this->messageId($messageId, "redis.payload.messages.{$index}.id"),
+                role: $this->messageRole($role, "redis.payload.messages.{$index}.role"),
                 content: $content,
-                createdAt: new DateTimeImmutable($createdAt),
+                createdAt: $this->date($createdAt, "redis.payload.messages.{$index}.created_at"),
                 metadata: $metadata,
             );
         }
@@ -346,12 +419,66 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
 
         /** @var array<string, mixed> $metadata */
         return new Conversation(
-            id: new ConversationId($conversationId),
-            createdAt: new DateTimeImmutable($createdAt),
-            updatedAt: new DateTimeImmutable($updatedAt),
+            id: $this->conversationId($conversationId, 'redis.payload.conversation_id'),
+            createdAt: $this->date($createdAt, 'redis.payload.created_at'),
+            updatedAt: $this->date($updatedAt, 'redis.payload.updated_at'),
             messages: $messages,
             metadata: $metadata,
+            revision: $this->requireRevision($payload),
         );
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function requireRevision(array $payload): int
+    {
+        $revision = $payload['revision'] ?? 0;
+
+        if (is_int($revision) && $revision >= 0) {
+            return $revision;
+        }
+
+        throw ConversationStoreException::payloadDecodingFailed(
+            'redis.payload.revision',
+            new RuntimeException('Redis conversation revision must be a non-negative integer.'),
+        );
+    }
+
+    private function messageRole(string $role, string $field): ConversationMessageRole
+    {
+        try {
+            return ConversationMessageRole::from($role);
+        } catch (Throwable $throwable) {
+            throw ConversationStoreException::payloadDecodingFailed($field, $throwable);
+        }
+    }
+
+    private function date(string $value, string $field): DateTimeImmutable
+    {
+        try {
+            return new DateTimeImmutable($value);
+        } catch (Throwable $throwable) {
+            throw ConversationStoreException::payloadDecodingFailed($field, $throwable);
+        }
+    }
+
+    private function messageId(string $value, string $field): MessageId
+    {
+        try {
+            return new MessageId($value);
+        } catch (Throwable $throwable) {
+            throw ConversationStoreException::payloadDecodingFailed($field, $throwable);
+        }
+    }
+
+    private function conversationId(string $value, string $field): ConversationId
+    {
+        try {
+            return new ConversationId($value);
+        } catch (Throwable $throwable) {
+            throw ConversationStoreException::payloadDecodingFailed($field, $throwable);
+        }
     }
 
     /**
@@ -420,15 +547,39 @@ final readonly class RedisConversationStore implements ConversationRetentionPurg
     /**
      * @throws Throwable
      */
-    private function setValue(string $key, string $value, ?int $ttlSeconds = null): void
-    {
-        if ($ttlSeconds === null) {
-            $this->command('SET', [$key, $value]);
+    private function compareAndSetValue(
+        string $key,
+        string $conversationId,
+        int $expectedRevision,
+        string $initialValue,
+        string $updatedValue,
+        ?int $ttlSeconds = null,
+    ): void {
+        $result = $this->command('EVAL', [
+            self::COMPARE_AND_SET_SCRIPT,
+            1,
+            $key,
+            (string)$expectedRevision,
+            $initialValue,
+            $updatedValue,
+            $ttlSeconds === null ? '' : (string)$ttlSeconds,
+        ]);
 
+        if (in_array($result, [1, 2, '1', '2'], true)) {
             return;
         }
 
-        $this->command('SET', [$key, $value, 'EX', $ttlSeconds]);
+        if ($result === -2 || $result === '-2') {
+            throw ConversationStoreException::payloadDecodingFailed(
+                'redis.payload.revision',
+                new RuntimeException('Stored Redis conversation payload is not valid JSON.'),
+            );
+        }
+
+        throw ConversationWriteConflictException::forRevision(
+            conversationId: $conversationId,
+            expectedRevision: $expectedRevision,
+        );
     }
 
     /**

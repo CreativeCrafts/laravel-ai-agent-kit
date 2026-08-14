@@ -18,6 +18,7 @@ final readonly class Conversation
         public DateTimeImmutable $updatedAt,
         public array $messages = [],
         public array $metadata = [],
+        public int $revision = 0,
     ) {
     }
 
@@ -65,6 +66,7 @@ final readonly class Conversation
             updatedAt: $updatedAt ?? $this->updatedAt,
             messages: $messages,
             metadata: $this->metadata,
+            revision: $this->revision,
         );
     }
 
@@ -87,6 +89,19 @@ final readonly class Conversation
             updatedAt: $updatedAt ?? $this->updatedAt,
             messages: $this->messages,
             metadata: $metadata,
+            revision: $this->revision,
+        );
+    }
+
+    public function withRevision(int $revision): self
+    {
+        return new self(
+            id: $this->id,
+            createdAt: $this->createdAt,
+            updatedAt: $this->updatedAt,
+            messages: $this->messages,
+            metadata: $this->metadata,
+            revision: $revision,
         );
     }
 }

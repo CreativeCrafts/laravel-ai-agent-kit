@@ -62,6 +62,20 @@ final readonly class AuditedProviderCapabilityMatrix
         );
     }
 
+    /**
+     * Resolve raw execution requirements through the same canonical aliases
+     * used by audited workflow capability checks.
+     *
+     * @param list<string> $requiredCapabilities
+     * @return list<string>
+     */
+    public function missingDeclaredCapabilities(
+        ProviderDefinition $providerDefinition,
+        array $requiredCapabilities,
+    ): array {
+        return $this->missingRequirements($providerDefinition, $requiredCapabilities);
+    }
+
     public function get(string $capability): ProviderCapabilityMatrixEntry
     {
         $entry = $this->entries[$capability] ?? null;

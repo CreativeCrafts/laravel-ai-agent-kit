@@ -7,6 +7,7 @@ namespace CreativeCrafts\LaravelAiAgentKit\Resilience;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeBudgetExceededException;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use RuntimeException;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\enums\CostBudgetMode;
 
 final readonly class RuntimeBudgetEnforcer
 {
@@ -16,11 +17,31 @@ final readonly class RuntimeBudgetEnforcer
     ) {
     }
 
-    public function assertResponseWithinBudgets(
+    public function assertPreflight(string $runId, ?CostEstimate $costEstimate): void
+    {
+        $maxCostUsd = $this->nullableNumericConfigValue($this->configKey . '.budgets.max_cost_usd');
+
+        if ($maxCostUsd === null) {
+            return;
+        }
+
+        if (!$costEstimate instanceof CostEstimate) {
+            if ($this->costBudgetMode() === CostBudgetMode::Strict) {
+                throw RuntimeBudgetExceededException::forMissingEstimatedCost($runId, $maxCostUsd);
+            }
+
+            return;
+        }
+
+        if ($costEstimate->amountUsd > $maxCostUsd) {
+            throw RuntimeBudgetExceededException::forMaxCostUsd($runId, $maxCostUsd, $costEstimate->amountUsd);
+        }
+    }
+
+    public function assertPostflight(
         string $runId,
         int $totalTokens,
         int $toolCallCount,
-        ?float $estimatedCostUsd,
     ): void {
         $maxTokens = $this->nullableNumericConfigValue($this->configKey . '.budgets.max_tokens');
 
@@ -34,19 +55,45 @@ final readonly class RuntimeBudgetEnforcer
             throw RuntimeBudgetExceededException::forMaxToolCalls($runId, $maxToolCalls, $toolCallCount);
         }
 
-        $maxCostUsd = $this->nullableNumericConfigValue($this->configKey . '.budgets.max_cost_usd');
+    }
 
-        if ($maxCostUsd === null) {
-            return;
+    /**
+     * Backward-compatible combined check for direct consumers of the enforcer.
+     */
+    public function assertResponseWithinBudgets(
+        string $runId,
+        int $totalTokens,
+        int $toolCallCount,
+        ?float $estimatedCostUsd,
+    ): void {
+        $estimate = $estimatedCostUsd === null
+            ? null
+            : new CostEstimate($estimatedCostUsd, 'legacy_argument');
+
+        $this->assertPreflight($runId, $estimate);
+        $this->assertPostflight($runId, $totalTokens, $toolCallCount);
+    }
+
+    public function isCostBudgetConfigured(): bool
+    {
+        return $this->nullableNumericConfigValue($this->configKey . '.budgets.max_cost_usd') !== null;
+    }
+
+    public function costBudgetMode(): CostBudgetMode
+    {
+        $value = $this->config->get(
+            $this->configKey . '.budgets.cost_estimation_mode',
+            CostBudgetMode::Strict->value,
+        );
+
+        if (!is_string($value) || CostBudgetMode::tryFrom($value) === null) {
+            throw new RuntimeException(sprintf(
+                'Configuration key [%s.budgets.cost_estimation_mode] must be strict or advisory.',
+                $this->configKey,
+            ));
         }
 
-        if ($estimatedCostUsd === null) {
-            throw RuntimeBudgetExceededException::forMissingEstimatedCost($runId, $maxCostUsd);
-        }
-
-        if ($estimatedCostUsd > $maxCostUsd) {
-            throw RuntimeBudgetExceededException::forMaxCostUsd($runId, $maxCostUsd, $estimatedCostUsd);
-        }
+        return CostBudgetMode::from($value);
     }
 
     private function nullableNumericConfigValue(string $key): int|float|null

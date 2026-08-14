@@ -12,6 +12,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Modality\AudioGenerationResult;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\EmbeddingsRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\ImageGenerationRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\RerankingRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionAudioSource;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionProviderOptions;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionRequest;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\TranscriptionResult;
@@ -19,6 +20,7 @@ use Illuminate\Support\Facades\Config;
 use Laravel\Ai\AiServiceProvider;
 use Laravel\Ai\Audio;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Files\StoredAudio;
 use Laravel\Ai\Image;
 use Laravel\Ai\Prompts\TranscriptionPrompt;
 use Laravel\Ai\Reranking;
@@ -72,6 +74,39 @@ it('transcribes base64 audio through the sdk transcription runtime', function ()
       ->toBe('hello modality')
       ->and($result->runId)->toBe('mod-tx-1')
       ->and($result->provider)->not->toBe('');
+});
+
+it('uses the official SDK MIME override for stored transcription audio when available', function (): void {
+    Transcription::fake(function (TranscriptionPrompt $prompt): string {
+        expect($prompt->audio)
+            ->toBeInstanceOf(StoredAudio::class)
+            ->and($prompt->audio->path)->toBe('answers/audio-without-extension')
+            ->and($prompt->audio->disk)->toBe('audio-disk')
+            ->and($prompt->audio->mime)->toBe('audio/mpeg');
+
+        return 'stored audio transcript';
+    })->preventStrayTranscriptions();
+
+    app()->forgetInstance(TranscriptionRuntime::class);
+
+    /** @var TranscriptionRuntime $runtime */
+    $runtime = app(TranscriptionRuntime::class);
+
+    $result = $runtime->transcribe(
+        TranscriptionRequest::fromAudioSource(
+            runId: 'mod-tx-storage-mime',
+            audioSource: TranscriptionAudioSource::fromStorage(
+                'answers/audio-without-extension',
+                'audio-disk',
+                'audio/mpeg',
+            ),
+            provider: 'openai',
+            model: 'whisper-1',
+        ),
+    );
+
+    expect($result->transcript)->toBe('stored audio transcript')
+        ->and($result->metadata['audio_source']['mime_type'])->toBe('audio/mpeg');
 });
 
 it('stores transcription prompts on the request and rejects blank prompts', function (): void {

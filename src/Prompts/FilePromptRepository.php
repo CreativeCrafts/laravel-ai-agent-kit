@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace CreativeCrafts\LaravelAiAgentKit\Prompts;
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Prompts\PromptRepository;
+use CreativeCrafts\LaravelAiAgentKit\Prompts\Exceptions\InvalidPromptManifestException;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\Exceptions\PromptNotFoundException;
+use CreativeCrafts\LaravelAiAgentKit\Prompts\Exceptions\UndeclaredPromptVariableException;
+use CreativeCrafts\LaravelAiAgentKit\Prompts\Exceptions\UnusedPromptVariableDeclarationException;
 use FilesystemIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
+use Throwable;
 
 final readonly class FilePromptRepository implements PromptRepository
 {
@@ -18,9 +22,16 @@ final readonly class FilePromptRepository implements PromptRepository
      */
     private array $templates;
 
+    /**
+     * @var array<string, PromptManifest>
+     */
+    private array $manifests;
+
     public function __construct(private string $rootPath)
     {
-        $this->templates = $this->discoverTemplates();
+        $discoveredPrompts = $this->discoverPrompts();
+        $this->templates = $discoveredPrompts['templates'];
+        $this->manifests = $discoveredPrompts['manifests'];
     }
 
     public function has(string $name, ?string $version = null): bool
@@ -46,7 +57,8 @@ final readonly class FilePromptRepository implements PromptRepository
             return $versions[$version] ?? throw PromptNotFoundException::forName($name, $version);
         }
 
-        $resolvedVersion = $this->resolveLatestVersion(array_keys($versions));
+        $currentVersion = $this->manifests[$name]->currentVersion ?? null;
+        $resolvedVersion = $currentVersion ?? $this->resolveLatestVersion(array_keys($versions));
 
         return $versions[$resolvedVersion] ?? throw PromptNotFoundException::forName($name);
     }
@@ -60,15 +72,23 @@ final readonly class FilePromptRepository implements PromptRepository
     }
 
     /**
-     * @return array<string, array<string, PromptTemplate>>
+     * @return array{
+     *     templates: array<string, array<string, PromptTemplate>>,
+     *     manifests: array<string, PromptManifest>
+     * }
      */
-    private function discoverTemplates(): array
+    private function discoverPrompts(): array
     {
         if (!is_dir($this->rootPath)) {
-            return [];
+            return [
+              'templates' => [],
+              'manifests' => [],
+            ];
         }
 
         $templates = [];
+        $manifests = [];
+        $metadataPaths = [];
         $iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($this->rootPath, FilesystemIterator::SKIP_DOTS),
         );
@@ -84,59 +104,65 @@ final readonly class FilePromptRepository implements PromptRepository
                 continue;
             }
 
-            $metadataPath = $file->getPathname();
+            $metadataPaths[] = $file->getPathname();
+        }
+
+        sort($metadataPaths);
+
+        foreach ($metadataPaths as $metadataPath) {
             $metadata = $this->loadMetadata($metadataPath);
-            $promptName = $this->resolvePromptName($metadata, dirname($metadataPath));
+            $manifest = PromptManifest::fromMetadata(
+                metadata: $metadata,
+                fallbackName: $this->resolveFallbackPromptName(dirname($metadataPath)),
+                metadataPath: $metadataPath,
+            );
 
-            if ($promptName === '') {
-                continue;
+            if (isset($manifests[$manifest->name])) {
+                throw InvalidPromptManifestException::forField(
+                    $metadataPath,
+                    'name',
+                    "duplicates the already discovered prompt [{$manifest->name}]",
+                );
             }
 
-            $versions = $metadata['versions'] ?? null;
+            $resolvedVersions = [];
 
-            if (!is_array($versions)) {
-                continue;
-            }
+            foreach ($manifest->versions as $definition) {
+                $templatePath = dirname($metadataPath) . DIRECTORY_SEPARATOR . $definition->templateFile;
 
-            foreach ($versions as $version => $details) {
-                if (!is_string($version)) {
-                    continue;
-                }
-                if ($version === '') {
-                    continue;
-                }
-                if (!is_array($details)) {
-                    continue;
-                }
-                $templateFile = $details['template'] ?? ($version . '.md');
-                if (!is_string($templateFile)) {
-                    continue;
-                }
-                if ($templateFile === '') {
-                    continue;
-                }
-
-                $templatePath = dirname($metadataPath) . DIRECTORY_SEPARATOR . $templateFile;
-
-                if (!is_file($templatePath)) {
-                    continue;
+                if (!is_file($templatePath) || !is_readable($templatePath)) {
+                    throw InvalidPromptManifestException::forMissingTemplate(
+                        $manifest->name,
+                        $definition->version,
+                        $templatePath,
+                    );
                 }
 
                 $content = file_get_contents($templatePath);
 
                 if (!is_string($content)) {
-                    continue;
+                    throw InvalidPromptManifestException::forMissingTemplate(
+                        $manifest->name,
+                        $definition->version,
+                        $templatePath,
+                    );
                 }
 
-                $templates[$promptName][$version] = PromptTemplate::fromContent(
-                    name: $promptName,
-                    version: $version,
+                $resolvedVersions[$definition->version] = $this->createTemplate(
+                    manifest: $manifest,
+                    definition: $definition,
                     content: $content,
                 );
             }
+
+            $templates[$manifest->name] = $resolvedVersions;
+            $manifests[$manifest->name] = $manifest;
         }
 
-        return $templates;
+        return [
+          'templates' => $templates,
+          'manifests' => $manifests,
+        ];
     }
 
     /**
@@ -144,17 +170,29 @@ final readonly class FilePromptRepository implements PromptRepository
      */
     private function loadMetadata(string $metadataPath): array
     {
-        $metadata = include $metadataPath;
+        try {
+            $metadata = include $metadataPath;
+        } catch (Throwable $throwable) {
+            throw InvalidPromptManifestException::forLoadFailure($metadataPath, $throwable);
+        }
 
         if (!is_array($metadata)) {
-            return [];
+            throw InvalidPromptManifestException::forField(
+                $metadataPath,
+                'return',
+                'must be an array',
+            );
         }
 
         $normalized = [];
 
         foreach ($metadata as $key => $value) {
             if (!is_string($key)) {
-                continue;
+                throw InvalidPromptManifestException::forField(
+                    $metadataPath,
+                    'return',
+                    'must use string keys',
+                );
             }
 
             $normalized[$key] = $value;
@@ -163,20 +201,56 @@ final readonly class FilePromptRepository implements PromptRepository
         return $normalized;
     }
 
-    /**
-     * @param array<string, mixed> $metadata
-     */
-    private function resolvePromptName(array $metadata, string $promptDirectory): string
+    private function resolveFallbackPromptName(string $promptDirectory): string
     {
-        $name = $metadata['name'] ?? null;
-
-        if (is_string($name) && $name !== '') {
-            return $name;
-        }
-
         $relativeDirectory = ltrim(str_replace($this->rootPath, '', $promptDirectory), DIRECTORY_SEPARATOR);
 
         return str_replace(DIRECTORY_SEPARATOR, '.', $relativeDirectory);
+    }
+
+    private function createTemplate(
+        PromptManifest $manifest,
+        PromptVersionDefinition $definition,
+        string $content,
+    ): PromptTemplate {
+        $parsedTemplate = (new PromptTemplateParser())->parse($content);
+        $declaredVariables = $definition->variables;
+
+        if ($declaredVariables === null) {
+            return new PromptTemplate(
+                name: $manifest->name,
+                version: $definition->version,
+                content: $content,
+                variables: $parsedTemplate->variables,
+            );
+        }
+
+        $undeclaredVariables = array_values(array_diff($parsedTemplate->variables, $declaredVariables));
+
+        if ($undeclaredVariables !== []) {
+            throw UndeclaredPromptVariableException::forTemplate(
+                $manifest->name,
+                $definition->version,
+                $undeclaredVariables,
+            );
+        }
+
+        $unusedVariables = array_values(array_diff($declaredVariables, $parsedTemplate->variables));
+
+        if ($unusedVariables !== []) {
+            throw UnusedPromptVariableDeclarationException::forTemplate(
+                $manifest->name,
+                $definition->version,
+                $unusedVariables,
+            );
+        }
+
+        return new PromptTemplate(
+            name: $manifest->name,
+            version: $definition->version,
+            content: $content,
+            variables: $declaredVariables,
+        );
     }
 
     /**

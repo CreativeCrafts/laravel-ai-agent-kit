@@ -13,6 +13,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderTargetResolver;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeExecutionException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\GenerationOptions;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\RuntimeTelemetryAgent;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\SdkAiRuntime;
@@ -31,6 +32,7 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredAgentResponse;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\JsonSchema\Types\BooleanType;
 use Laravel\Ai\Contracts\Agent;
 
@@ -129,6 +131,41 @@ it('resolves explicit profiles independently of failover membership', function (
     });
 });
 
+it('does not enter profile failover from a direct sdk provider primary', function (): void {
+    config()->set('ai-agent-kit.default_provider', 'scorer-primary');
+    config()->set('ai-agent-kit.failover_order', ['scorer-primary', 'scorer-secondary']);
+    configureBridgeProfile('scorer-primary', 'openai', 'openai-test', 'gpt-primary');
+    configureBridgeProfile('scorer-secondary', 'anthropic', 'anthropic-test', 'claude-secondary');
+    refreshBridgeProviderBindings();
+
+    $attempts = 0;
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, [
+      static function () use (&$attempts): string {
+          $attempts++;
+
+          throw new ConnectionException('direct provider unavailable');
+      },
+    ])->preventStrayPrompts();
+
+    try {
+        app(AiRuntime::class)->execute(
+            new ExecutionRequest(
+                runId: 'ak-direct-sdk-no-profile-failover',
+                prompt: 'Use a direct SDK provider.',
+                provider: 'openai-test',
+                model: 'gpt-direct',
+            ),
+        );
+    } catch (RuntimeExecutionException $exception) {
+        expect($attempts)->toBe(1)
+            ->and($exception->getPrevious())->toBeInstanceOf(ConnectionException::class);
+
+        return;
+    }
+
+    throw new RuntimeException('Expected direct SDK provider failure to remain outside profile failover.');
+});
+
 it('uses the configured default profile and sdk provider when a request omits provider', function (): void {
     config()->set('ai-agent-kit.default_provider', 'scorer-primary');
     config()->set('ai-agent-kit.failover_order', ['scorer-primary']);
@@ -166,7 +203,7 @@ it('preserves profile identity while using sdk provider identity during failover
           $attempts++;
 
           if ($attempts === 1) {
-              throw new RuntimeException('primary unavailable');
+              throw new ConnectionException('primary unavailable');
           }
 
           return 'failover ok';
@@ -203,7 +240,7 @@ it('keys circuit breakers by profile not driver', function (): void {
           $attempts++;
 
           if ($attempts === 1) {
-              throw new RuntimeException('primary unavailable');
+              throw new ConnectionException('primary unavailable');
           }
 
           return 'secondary still available';
@@ -374,7 +411,7 @@ it('does not leak provider options across failover attempts', function (): void 
           $attempts++;
 
           if ($attempts === 1) {
-              throw new RuntimeException('openai unavailable');
+              throw new ConnectionException('openai unavailable');
           }
 
           return 'anthropic ok';

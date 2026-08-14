@@ -48,6 +48,8 @@ final readonly class EvaluationImageInput
             $url,
             'Evaluation image URL input',
             MediaInputSecurityConfig::urlAllowedHosts(),
+            MediaInputSecurityConfig::requireHttps(),
+            MediaInputSecurityConfig::hostMatchMode(),
         );
 
         return new self(EvaluationImageInputKind::Url, $url);
@@ -130,13 +132,19 @@ final readonly class EvaluationImageInput
                 ...MediaSourceSafeMetadata::referenceFields(
                     $this->payload,
                     $this->kind === EvaluationImageInputKind::Url,
+                    MediaInputSecurityConfig::includeDiagnosticNames(),
                 ),
             ];
         }
 
         if ($this->kind === EvaluationImageInputKind::Upload && $this->payload instanceof UploadedFile) {
-            $metadata['client_original_name'] = $this->payload->getClientOriginalName();
-            $metadata['client_mime_type'] = $this->payload->getClientMimeType();
+            $metadata['mime_type'] ??= $this->payload->getClientMimeType();
+            $metadata['byte_length'] = $this->payload->getSize();
+            $metadata['reference_fingerprint'] = hash('sha256', $this->payload->getPathname());
+
+            if (MediaInputSecurityConfig::includeDiagnosticNames()) {
+                $metadata['client_original_name'] = $this->payload->getClientOriginalName();
+            }
         }
 
         return array_filter(

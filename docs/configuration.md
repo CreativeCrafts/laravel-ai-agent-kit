@@ -43,6 +43,8 @@ For local or production workflows, merge a preset from `examples/provider-profil
 
 `sdk_provider` names the Laravel AI instance in `config/ai.php`. When omitted, Agent Kit uses `driver`. See [Providers](providers.md) for the identity model, capability names, presets, and failover.
 
+`resilience.failover.model_policy` controls whether an explicit request model is reused after provider failover. Its default, `initial_only`, isolates fallback profiles. `preserve_when_same_sdk_provider` reuses the model only when both profiles resolve to the same Laravel AI provider, while `preserve_always_legacy` restores the previous broad propagation behavior.
+
 ## Validation
 
 ~~~php
@@ -66,15 +68,18 @@ Optional one-time-per-process warnings when in-memory memory or vector drivers a
 
 ## Media input security
 
-Optional host allowlist for URL-bearing DTOs (`EvaluationImageInput::fromUrl()`, `TranscriptionAudioSource::fromUrl()`). When empty, only built-in SSRF guards apply. When set, the URL host must match an entry exactly or as a subdomain:
+URL-bearing DTOs (`EvaluationImageInput::fromUrl()`, `TranscriptionAudioSource::fromUrl()`) support explicit transport and allowlist policies. The shipped values preserve 1.x behavior; production applications can opt into the recommended secure profile with HTTPS and exact host matching:
 
 ~~~php
 'media_input' => [
+    'require_https' => true,
+    'host_match' => 'exact_only',
+    'include_diagnostic_names' => false,
     'url_allowed_hosts' => ['cdn.example.com', 'example.test'],
 ],
 ~~~
 
-Environment variable: `AI_AGENT_KIT_MEDIA_URL_ALLOWED_HOSTS=cdn.example.com,example.test`
+`exact_and_subdomains` preserves the compatibility behavior where `cdn.example.com` matches an `example.com` entry. Diagnostic filenames and path basenames are omitted by default because they may contain personal or tenant data.
 
 See [Streaming and modalities](streaming-and-modalities.md#media-input-trust-boundaries).
 
@@ -94,7 +99,7 @@ Budgets protect workflows from unbounded execution:
 ],
 ~~~
 
-Runtime execution enforces token and tool-call ceilings when usage metadata is available. Cost ceilings are fail-closed: when `max_cost_usd` is configured, requests must provide numeric cost metadata so the package can make deterministic decisions.
+Runtime execution separates preflight cost checks from postflight token and tool-call checks. `CostEstimator` is package-owned and defaults to the compatibility `RequestMetadataCostEstimator`, which reads `cost_usd` or `estimated_cost_usd` as a declared estimate—not actual billed cost. With `cost_estimation_mode=strict`, a missing or over-limit estimate fails before provider dispatch. `advisory` mode dispatches an unknown estimate and returns `cost_unknown=true` telemetry.
 
 ## Orchestration
 
@@ -125,6 +130,9 @@ See [Agents and orchestration](agents-and-orchestration.md).
 
 ~~~php
 'resilience' => [
+    'failure_classification' => [
+        'unknown_failure_mode' => 'strict',
+    ],
     'retry' => [
         'enabled' => true,
         'max_attempts' => 3,
@@ -137,6 +145,10 @@ See [Agents and orchestration](agents-and-orchestration.md).
     ],
     'circuit_breaker' => [
         'enabled' => true,
+        'driver' => 'cache',
+        'cache_store' => 'redis',
+        'key_prefix' => 'ai-agent-kit:circuit-breaker:',
+        'lock_seconds' => 5,
         'apply_to_failover' => false,
         'failure_threshold' => 3,
         'reset_timeout_seconds' => 60,
@@ -145,7 +157,9 @@ See [Agents and orchestration](agents-and-orchestration.md).
 ],
 ~~~
 
-Failover and circuit-breaker behavior are package-owned policies. Provider SDK exceptions should be normalized before they become application-facing workflow behavior.
+Failover and circuit-breaker behavior are package-owned policies. Use the `cache` circuit-breaker driver with a shared lock-capable cache store for state shared across HTTP and queue workers. The compatibility default, `in_memory`, is process-local and does not share state between workers. Cache state transitions are performed under atomic cache locks; manager resolution fails if the selected store cannot provide them.
+
+In `strict` failure-classification mode, an unclassified throwable fails closed without consuming fallback profiles or damaging provider health. `legacy_failover` temporarily restores the previous broad failover behavior for unclassified throwables while an application migrates to typed failures.
 
 ## Runtime
 
@@ -311,6 +325,9 @@ Every setting above can be driven from `.env`. The tables below map each variabl
 | `AI_AGENT_KIT_DEFAULT_PROVIDER` | `default_provider` | `null` |
 | `AI_AGENT_KIT_FAILOVER_ORDER` | `failover_order` | `null` |
 | `AI_AGENT_KIT_MEDIA_URL_ALLOWED_HOSTS` | `media_input.url_allowed_hosts` | *(empty)* |
+| `AI_AGENT_KIT_MEDIA_REQUIRE_HTTPS` | `media_input.require_https` | `false` |
+| `AI_AGENT_KIT_MEDIA_HOST_MATCH` | `media_input.host_match` | `exact_and_subdomains` |
+| `AI_AGENT_KIT_MEDIA_INCLUDE_DIAGNOSTIC_NAMES` | `media_input.include_diagnostic_names` | `false` |
 
 ### Budgets and orchestration
 
@@ -323,6 +340,7 @@ Every setting above can be driven from `.env`. The tables below map each variabl
 | `AI_AGENT_KIT_MAX_TOTAL_TIMEOUT_SECONDS` | `budgets.max_total_timeout_seconds` | `120` |
 | `AI_AGENT_KIT_MAX_TOKENS` | `budgets.max_tokens` | `null` |
 | `AI_AGENT_KIT_MAX_COST_USD` | `budgets.max_cost_usd` | `null` |
+| `AI_AGENT_KIT_COST_ESTIMATION_MODE` | `budgets.cost_estimation_mode` | `strict` |
 | `AI_AGENT_KIT_ORCHESTRATION_DELEGATION_POLICY_MODE` | `orchestration.delegation_policy.mode` | `static_only` |
 | `AI_AGENT_KIT_ORCHESTRATION_ALLOW_DYNAMIC_DELEGATION` | `orchestration.delegation_policy.allow_dynamic_delegation` | `false` |
 
@@ -330,6 +348,7 @@ Every setting above can be driven from `.env`. The tables below map each variabl
 
 | Variable | Config key | Default |
 |---|---|---|
+| `AI_AGENT_KIT_UNKNOWN_FAILURE_MODE` | `resilience.failure_classification.unknown_failure_mode` | `strict` |
 | `AI_AGENT_KIT_RETRY_ENABLED` | `resilience.retry.enabled` | `true` |
 | `AI_AGENT_KIT_RETRY_MAX_ATTEMPTS` | `resilience.retry.max_attempts` | `3` |
 | `AI_AGENT_KIT_RETRY_BACKOFF_STRATEGY` | `resilience.retry.backoff.strategy` | `exponential` |
@@ -337,6 +356,10 @@ Every setting above can be driven from `.env`. The tables below map each variabl
 | `AI_AGENT_KIT_RETRY_BACKOFF_MAX_DELAY_MS` | `resilience.retry.backoff.max_delay_ms` | `2000` |
 | `AI_AGENT_KIT_RETRY_BACKOFF_MULTIPLIER` | `resilience.retry.backoff.multiplier` | `2.0` |
 | `AI_AGENT_KIT_CIRCUIT_BREAKER_ENABLED` | `resilience.circuit_breaker.enabled` | `true` |
+| `AI_AGENT_KIT_CIRCUIT_BREAKER_DRIVER` | `resilience.circuit_breaker.driver` | `in_memory` |
+| `AI_AGENT_KIT_CIRCUIT_BREAKER_CACHE_STORE` | `resilience.circuit_breaker.cache_store` | `null` |
+| `AI_AGENT_KIT_CIRCUIT_BREAKER_KEY_PREFIX` | `resilience.circuit_breaker.key_prefix` | `ai-agent-kit:circuit-breaker:` |
+| `AI_AGENT_KIT_CIRCUIT_BREAKER_LOCK_SECONDS` | `resilience.circuit_breaker.lock_seconds` | `5` |
 | `AI_AGENT_KIT_CIRCUIT_BREAKER_APPLY_TO_FAILOVER` | `resilience.circuit_breaker.apply_to_failover` | `false` |
 | `AI_AGENT_KIT_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `resilience.circuit_breaker.failure_threshold` | `3` |
 | `AI_AGENT_KIT_CIRCUIT_BREAKER_RESET_TIMEOUT_SECONDS` | `resilience.circuit_breaker.reset_timeout_seconds` | `60` |

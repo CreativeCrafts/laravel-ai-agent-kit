@@ -7,6 +7,7 @@ namespace CreativeCrafts\LaravelAiAgentKit\Memory;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\EncryptionService;
 use CreativeCrafts\LaravelAiAgentKit\Memory\Exceptions\ConversationStoreException;
+use CreativeCrafts\LaravelAiAgentKit\Memory\Exceptions\ConversationWriteConflictException;
 use DateMalformedStringException;
 use DateTimeImmutable;
 use Illuminate\Database\Connection;
@@ -73,13 +74,23 @@ final readonly class DatabaseConversationStore implements ConversationStore
                     payload: $attachmentsPayload,
                     isEncrypted: (bool)$record->is_encrypted,
                 );
-                $attachmentRows = $decoded['attachments'] ?? null;
-                if (is_array($attachmentRows) && $attachmentRows !== []) {
+                $attachmentRows = $decoded['attachments'] ?? [];
+                if (!is_array($attachmentRows)) {
+                    throw ConversationStoreException::payloadDecodingFailed(
+                        'messages.attachments_ciphertext.attachments',
+                        new RuntimeException('Persisted attachments must be an array.'),
+                    );
+                }
+
+                if ($attachmentRows !== []) {
                     /** @var list<array<string, mixed>> $normalizedRows */
                     $normalizedRows = [];
                     foreach ($attachmentRows as $row) {
                         if (!is_array($row)) {
-                            continue;
+                            throw ConversationStoreException::payloadDecodingFailed(
+                                'messages.attachments_ciphertext.attachments',
+                                new RuntimeException('Persisted attachment entries must be arrays.'),
+                            );
                         }
 
                         /** @var array<string, mixed> $assoc */
@@ -91,21 +102,19 @@ final readonly class DatabaseConversationStore implements ConversationStore
                         $normalizedRows[] = $assoc;
                     }
 
-                    if ($normalizedRows !== []) {
-                        $metadata['attachments'] = $normalizedRows;
-                    }
+                    $metadata['attachments'] = $normalizedRows;
                 }
             }
 
             $conversationMessages[] = new ConversationMessage(
-                id: new MessageId($messageId),
-                role: ConversationMessageRole::from($role),
+                id: $this->messageId($messageId, 'messages.message_id'),
+                role: $this->messageRole($role, 'messages.role'),
                 content: $this->decodeStringPayload(
                     field: 'messages.content_ciphertext',
                     payload: $contentCiphertext,
                     isEncrypted: (bool)$record->is_encrypted,
                 ),
-                createdAt: new DateTimeImmutable($createdAt),
+                createdAt: $this->date($createdAt, 'messages.created_at'),
                 metadata: $metadata,
             );
         }
@@ -115,15 +124,16 @@ final readonly class DatabaseConversationStore implements ConversationStore
         $conversationUpdatedAt = $this->requireStringValue($record, 'updated_at');
 
         return new Conversation(
-            id: new ConversationId($conversationRecordId),
-            createdAt: new DateTimeImmutable($conversationCreatedAt),
-            updatedAt: new DateTimeImmutable($conversationUpdatedAt),
+            id: $this->conversationId($conversationRecordId, 'conversations.conversation_id'),
+            createdAt: $this->date($conversationCreatedAt, 'conversations.created_at'),
+            updatedAt: $this->date($conversationUpdatedAt, 'conversations.updated_at'),
             messages: $conversationMessages,
             metadata: $this->decodeArrayPayload(
                 field: 'conversations.metadata_ciphertext',
                 payload: $record->metadata_ciphertext,
                 isEncrypted: (bool)$record->is_encrypted,
             ),
+            revision: $this->normalizeIntValue($record->revision ?? 0, 'conversations.revision'),
         );
     }
 
@@ -135,7 +145,7 @@ final readonly class DatabaseConversationStore implements ConversationStore
         $connection = $this->connection();
 
         $connection->transaction(function () use ($connection, $conversation): void {
-            $conversationRecordId = $this->upsertConversationRecord($connection, $conversation);
+            $conversationRecordId = $this->acquireConversationRevision($connection, $conversation);
 
             $this->upsertConversationMessages($connection, $conversationRecordId, $conversation);
         });
@@ -161,7 +171,7 @@ final readonly class DatabaseConversationStore implements ConversationStore
     /**
      * @throws DateMalformedStringException
      */
-    private function upsertConversationRecord(Connection $connection, Conversation $conversation): int
+    private function acquireConversationRevision(Connection $connection, Conversation $conversation): int
     {
         $conversationPayload = [
           'conversation_id' => $conversation->id->toString(),
@@ -177,23 +187,47 @@ final readonly class DatabaseConversationStore implements ConversationStore
           'deleted_at' => null,
         ];
 
-        $connection
+        $existing = $connection
             ->table($this->conversationsTable)
-            ->upsert(
-                [$conversationPayload],
-                ['conversation_id'],
-                [
-                    'driver',
-                    'store_conversation',
-                    'is_encrypted',
-                    'retention_until',
-                    'last_message_at',
-                    'summary_ciphertext',
-                    'metadata_ciphertext',
-                    'updated_at',
-                    'deleted_at',
-                ],
-            );
+            ->where('conversation_id', $conversation->id->toString())
+            ->first(['id', 'revision']);
+
+        if ($existing === null) {
+            if ($conversation->revision !== 0) {
+                throw ConversationWriteConflictException::forRevision(
+                    $conversation->id->toString(),
+                    $conversation->revision,
+                );
+            }
+
+            $inserted = $connection
+                ->table($this->conversationsTable)
+                ->insertOrIgnore([$conversationPayload + ['revision' => 0]]);
+
+            if ($inserted !== 1) {
+                throw ConversationWriteConflictException::forRevision(
+                    $conversation->id->toString(),
+                    $conversation->revision,
+                );
+            }
+        } else {
+            $actualRevision = $this->normalizeIntValue($existing->revision ?? 0, 'conversations.revision');
+            $updatePayload = $conversationPayload;
+            unset($updatePayload['created_at']);
+            $updated = $connection
+                ->table($this->conversationsTable)
+                ->where('conversation_id', $conversation->id->toString())
+                ->where('revision', $conversation->revision)
+                ->update($updatePayload + ['revision' => $conversation->revision + 1]);
+
+            if ($updated !== 1) {
+                throw ConversationWriteConflictException::forRevision(
+                    conversationId: $conversation->id->toString(),
+                    expectedRevision: $conversation->revision,
+                    actualRevision: $actualRevision,
+                );
+            }
+        }
 
         return $this->normalizeIntValue(
             $connection
@@ -331,13 +365,56 @@ final readonly class DatabaseConversationStore implements ConversationStore
         $decodedPayload = $this->decodeStringPayload($field, $payload, $isEncrypted);
 
         try {
-            /** @var array<string, mixed> $data */
             $data = json_decode($decodedPayload, true, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
             throw ConversationStoreException::payloadDecodingFailed($field, $exception);
         }
 
+        if (!is_array($data)) {
+            throw ConversationStoreException::payloadDecodingFailed(
+                $field,
+                new RuntimeException("Decoded payload for [{$field}] must be an array."),
+            );
+        }
+
+        /** @var array<string, mixed> $data */
         return $data;
+    }
+
+    private function messageRole(string $role, string $field): ConversationMessageRole
+    {
+        try {
+            return ConversationMessageRole::from($role);
+        } catch (Throwable $throwable) {
+            throw ConversationStoreException::payloadDecodingFailed($field, $throwable);
+        }
+    }
+
+    private function date(string $value, string $field): DateTimeImmutable
+    {
+        try {
+            return new DateTimeImmutable($value);
+        } catch (Throwable $throwable) {
+            throw ConversationStoreException::payloadDecodingFailed($field, $throwable);
+        }
+    }
+
+    private function messageId(string $value, string $field): MessageId
+    {
+        try {
+            return new MessageId($value);
+        } catch (Throwable $throwable) {
+            throw ConversationStoreException::payloadDecodingFailed($field, $throwable);
+        }
+    }
+
+    private function conversationId(string $value, string $field): ConversationId
+    {
+        try {
+            return new ConversationId($value);
+        } catch (Throwable $throwable) {
+            throw ConversationStoreException::payloadDecodingFailed($field, $throwable);
+        }
     }
 
     private function normalizeIntValue(mixed $value, string $field): int

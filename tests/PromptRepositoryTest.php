@@ -67,6 +67,19 @@ it('treats null variables as empty strings during interpolation', function () {
       ->toBe('Value: .');
 });
 
+it('renders escaped placeholder syntax literally without requiring a variable', function () {
+    $template = PromptTemplate::fromContent(
+        name: 'security.example',
+        version: '1.0.0',
+        content: 'Hello {{name}}, inspect \\{{payload}}.',
+    );
+
+    expect($template->variables)
+      ->toBe(['name'])
+      ->and($template->render(['name' => 'Prince']))
+      ->toBe('Hello Prince, inspect {{payload}}.');
+});
+
 it('reports missing prompts and versions cleanly', function () {
     $repository = new InMemoryPromptRepository([
       'greeting' => [

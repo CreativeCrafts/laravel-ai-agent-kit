@@ -72,6 +72,25 @@ it('preserves package-owned missing-variable failures during mapping', function 
     );
 })->throws(MissingPromptVariableException::class, 'topic');
 
+it('preserves escaped and inserted placeholder syntax when mapping a prompt', function () {
+    $repository = new InMemoryPromptRepository([
+      'security.example' => [
+        '1.0.0' => 'Inspect \\{{payload}} and preserve {{value}}.',
+      ],
+    ]);
+    $mapper = new PromptExecutionMapper($repository);
+
+    $request = $mapper->mapToExecutionRequest(
+        name: 'security.example',
+        runId: 'run-prompt-map-literal',
+        variables: ['value' => '{{other}}'],
+    );
+
+    expect($request->prompt)
+      ->toBe('Inspect {{payload}} and preserve {{other}}.')
+      ->and($request->metadata['prompt_version'])->toBe('1.0.0');
+});
+
 it('maps prompt repository output into a request the sdk runtime can execute', function () {
     app()->register(AiServiceProvider::class);
 

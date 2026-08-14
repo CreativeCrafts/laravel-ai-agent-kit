@@ -50,6 +50,9 @@ return [
     |
     */
   'media_input' => [
+    'require_https' => (bool)env('AI_AGENT_KIT_MEDIA_REQUIRE_HTTPS', false),
+    'host_match' => (string)env('AI_AGENT_KIT_MEDIA_HOST_MATCH', 'exact_and_subdomains'),
+    'include_diagnostic_names' => (bool)env('AI_AGENT_KIT_MEDIA_INCLUDE_DIAGNOSTIC_NAMES', false),
     'url_allowed_hosts' => array_values(
         array_filter(
             array_map(
@@ -176,6 +179,7 @@ return [
     'max_total_timeout_seconds' => (int)env('AI_AGENT_KIT_MAX_TOTAL_TIMEOUT_SECONDS', 120),
     'max_tokens' => env('AI_AGENT_KIT_MAX_TOKENS') === null ? null : (int)env('AI_AGENT_KIT_MAX_TOKENS'),
     'max_cost_usd' => env('AI_AGENT_KIT_MAX_COST_USD') === null ? null : (float)env('AI_AGENT_KIT_MAX_COST_USD'),
+    'cost_estimation_mode' => (string)env('AI_AGENT_KIT_COST_ESTIMATION_MODE', 'strict'),
   ],
 
     /*
@@ -209,6 +213,22 @@ return [
     |
     */
   'resilience' => [
+    'failover' => [
+      // An explicit request model applies only to the initial profile by
+      // default. Fallback profiles use their own model or SDK default.
+      'model_policy' => (string)env(
+          'AI_AGENT_KIT_FAILOVER_MODEL_POLICY',
+          'initial_only',
+      ),
+    ],
+    'failure_classification' => [
+      // Strict mode fails closed for unclassified exceptions. Set the legacy
+      // mode temporarily only while migrating code that relied on broad failover.
+      'unknown_failure_mode' => (string)env(
+          'AI_AGENT_KIT_UNKNOWN_FAILURE_MODE',
+          'strict',
+      ),
+    ],
     'retry' => [
       'enabled' => (bool)env('AI_AGENT_KIT_RETRY_ENABLED', true),
       'max_attempts' => (int)env('AI_AGENT_KIT_RETRY_MAX_ATTEMPTS', 3),
@@ -223,6 +243,10 @@ return [
     ],
     'circuit_breaker' => [
       'enabled' => (bool)env('AI_AGENT_KIT_CIRCUIT_BREAKER_ENABLED', true),
+      'driver' => (string)env('AI_AGENT_KIT_CIRCUIT_BREAKER_DRIVER', 'in_memory'),
+      'cache_store' => env('AI_AGENT_KIT_CIRCUIT_BREAKER_CACHE_STORE'),
+      'key_prefix' => (string)env('AI_AGENT_KIT_CIRCUIT_BREAKER_KEY_PREFIX', 'ai-agent-kit:circuit-breaker:'),
+      'lock_seconds' => (int)env('AI_AGENT_KIT_CIRCUIT_BREAKER_LOCK_SECONDS', 5),
       'apply_to_failover' => (bool)env('AI_AGENT_KIT_CIRCUIT_BREAKER_APPLY_TO_FAILOVER', false),
       'failure_threshold' => (int)env('AI_AGENT_KIT_CIRCUIT_BREAKER_FAILURE_THRESHOLD', 3),
       'reset_timeout_seconds' => (int)env('AI_AGENT_KIT_CIRCUIT_BREAKER_RESET_TIMEOUT_SECONDS', 60),

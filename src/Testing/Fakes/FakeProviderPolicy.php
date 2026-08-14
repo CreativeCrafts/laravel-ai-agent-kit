@@ -4,16 +4,17 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Testing\Fakes;
 
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\CapabilityAwareFailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderDisabledException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderNotDefinedException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderNotInFailoverOrderException;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\AuditedProviderCapabilityMatrix;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ProviderDefinition;
 use LogicException;
 
-final class FakeProviderPolicy implements FailoverProviderSelector, ProviderRegistry, ProviderSelector
+final class FakeProviderPolicy implements CapabilityAwareFailoverProviderSelector, ProviderRegistry, ProviderSelector
 {
     /**
      * @var array<string, ProviderDefinition>
@@ -134,12 +135,19 @@ final class FakeProviderPolicy implements FailoverProviderSelector, ProviderRegi
 
     public function nextAfter(string $currentProviderName): ?ProviderDefinition
     {
+        return $this->nextAfterSupporting($currentProviderName, []);
+    }
+
+    public function nextAfterSupporting(
+        string $currentProviderName,
+        array $requiredCapabilities,
+    ): ?ProviderDefinition {
         $this->failoverLookups[] = $currentProviderName;
 
-        $orderedProviders = $this->ordered();
+        $allOrderedProviders = $this->ordered();
         $currentIndex = null;
 
-        foreach ($orderedProviders as $index => $provider) {
+        foreach ($allOrderedProviders as $index => $provider) {
             if ($provider->name === $currentProviderName) {
                 $currentIndex = $index;
 
@@ -151,13 +159,26 @@ final class FakeProviderPolicy implements FailoverProviderSelector, ProviderRegi
             throw ProviderNotInFailoverOrderException::named($currentProviderName);
         }
 
-        return $orderedProviders[$currentIndex + 1] ?? null;
+        $capabilityMatrix = new AuditedProviderCapabilityMatrix();
+
+        foreach (array_slice($allOrderedProviders, $currentIndex + 1) as $provider) {
+            if ($capabilityMatrix->missingDeclaredCapabilities($provider, $requiredCapabilities) === []) {
+                return $provider;
+            }
+        }
+
+        return null;
     }
 
     /**
      * @return list<ProviderDefinition>
      */
     public function ordered(): array
+    {
+        return $this->orderedSupporting([]);
+    }
+
+    public function orderedSupporting(array $requiredCapabilities): array
     {
         $providers = [];
 
@@ -168,7 +189,9 @@ final class FakeProviderPolicy implements FailoverProviderSelector, ProviderRegi
                 throw ProviderDisabledException::named($providerName);
             }
 
-            $providers[] = $provider;
+            if ((new AuditedProviderCapabilityMatrix())->missingDeclaredCapabilities($provider, $requiredCapabilities) === []) {
+                $providers[] = $provider;
+            }
         }
 
         return $providers;

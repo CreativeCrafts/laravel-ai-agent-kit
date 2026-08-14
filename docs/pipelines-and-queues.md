@@ -1,5 +1,17 @@
 # Pipelines and queues
 
+## Retry disposition and amplification
+
+Pipeline step retries use the same semantic failure classifier as runtime failover. Transient transport, throttling, and temporary provider failures may retry; invalid input, configuration, authorization, unsupported capability, conversation, and budget failures do not consume the remaining retry policy. Backoff uses an injectable `Sleeper`, and the total-time budget is checked before sleeping.
+
+Queued execution can amplify calls across three layers:
+
+```text
+worst_case_provider_attempts = queue_attempts × pipeline_step_attempts × provider_attempts_per_execution
+```
+
+`RetryAmplificationCalculator` exposes this calculation. Every queued dispatch emits `QueuedPipelineRetryAmplificationEstimated`; the estimate is intentionally incomplete when `QueueDispatchOptions::$tries` is null because the consuming application's Laravel worker configuration remains authoritative. Set `tries`, `maxExceptions`, and `backoffSeconds` explicitly only when the job should override worker defaults.
+
 Pipelines run typed steps against a `RunContext`. Use synchronous pipelines for immediate workflows and queued pipelines for long-running work that should carry package budgets, memory state, and result handling.
 
 ## Synchronous pipeline

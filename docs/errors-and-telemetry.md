@@ -8,6 +8,16 @@ Package failures use stable categories such as:
 
 - `execution_failed`
 - `provider_failure`
+- `provider_transport`
+- `provider_overloaded`
+- `rate_limited`
+- `authentication_failed`
+- `quota_exceeded`
+- `invalid_request`
+- `unsupported_capability`
+- `configuration_failure`
+- `tool_authorization_denied`
+- `conversation_failure`
 - `budget_exceeded`
 - `refusal`
 - `malformed_output`
@@ -20,7 +30,7 @@ Use these package categories for operational handling. Do not treat provider-nat
 
 ## Runtime failures
 
-Runtime failures are wrapped in typed package exceptions where possible. Previous exceptions are preserved for debugging while package telemetry remains redacted.
+Runtime failures are wrapped in typed package exceptions where possible. Previous exceptions are preserved for debugging while package telemetry remains redacted. Classification makes four independent decisions: category, provider health, retryability, and failover safety. Only provider-health failures increment circuit breakers, and only failover-safe failures consume another provider profile. Unknown failures fail closed in the default strict mode.
 
 ## Blueprint failures
 

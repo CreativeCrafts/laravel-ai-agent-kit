@@ -10,7 +10,7 @@ Review this checklist before running real workloads with Agent Kit.
 - Keep model names in profile `options.model` and provider-native defaults in `options.provider_options`.
 - Configure failover order intentionally.
 - Ensure every provider that may participate in runtime failover appears in `failover_order`.
-- Configure circuit-breaker failover filtering when you want open breakers to skip unhealthy providers.
+- Configure circuit-breaker failover filtering when you want open breakers to skip unhealthy providers. Use the cache driver with a shared lock-capable store for multi-worker deployments; the default in-memory state is process-local.
 - Remember that prompt failover can make multiple provider attempts for one application request.
 - For streaming, failover is conservative: stream creation can fail over before chunks are emitted; mid-stream failures are terminal and are not replayed against another provider.
 

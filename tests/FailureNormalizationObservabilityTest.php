@@ -5,6 +5,7 @@ declare(strict_types=1);
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\Exceptions\TextToStructuredEvaluationException;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Agents\AgentRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\FailureClassifier;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Orchestration\AgentOrchestrator;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\AgentProviderProfileSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
@@ -36,6 +37,8 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Facades\Event;
 use CreativeCrafts\LaravelAiAgentKit\Tools\ProviderToolMaterializer;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\FailoverModelResolver;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\CostEstimator;
 
 it('resolves categories through the package-owned failure-category carrier interface', function (): void {
     $throwable = new class ('carrier failure') extends RuntimeException implements HasFailureCategory {
@@ -107,7 +110,7 @@ it('emits redacted runtime failure telemetry when execution fails before provide
     });
 });
 
-it('emits provider-failure runtime telemetry when the provider prompt edge fails', function (): void {
+it('emits configuration-failure runtime telemetry when a direct sdk provider is missing', function (): void {
     Event::fake([
       RuntimeExecutionFailed::class,
     ]);
@@ -129,7 +132,7 @@ it('emits provider-failure runtime telemetry when the provider prompt edge fails
         $this->fail('Expected provider failure was not thrown.');
     } catch (RuntimeExecutionException $exception) {
         expect($exception->failureCategory())
-          ->toBe(FailureCategory::ProviderFailure->value);
+          ->toBe(FailureCategory::ConfigurationFailure->value);
     }
 
     Event::assertDispatched(RuntimeExecutionFailed::class, function (RuntimeExecutionFailed $event): bool {
@@ -143,10 +146,10 @@ it('emits provider-failure runtime telemetry when the provider prompt edge fails
               'trace_id',
               'runtime_provider_attempts',
               'runtime_sdk_provider_attempts',
-              'runtime_failover_exhausted',
+              'runtime_failure_reason',
           ])
           ->and($event->projectedMessageCount)->toBe(0)
-          ->and($event->failureCategory)->toBe(FailureCategory::ProviderFailure->value)
+          ->and($event->failureCategory)->toBe(FailureCategory::ConfigurationFailure->value)
           ->and($event->exceptionClass)->toBe(RuntimeExecutionException::class)
           ->and($event->exceptionMessage)->toBe(
               app(Redactor::class)->redactText('AI runtime execution failed for run [run-provider-failure-001]'),
@@ -325,8 +328,11 @@ function runtimeForFailureTests(ConversationContextManager $conversationContextM
           ],
         ]),
         ),
+        failureClassifier: app(FailureClassifier::class),
+        costEstimator: app(CostEstimator::class),
         container: app(),
         providerTargetResolver: app(ProviderTargetResolver::class),
+        failoverModelResolver: app(FailoverModelResolver::class),
         events: $eventDispatcher,
         redactor: app(Redactor::class),
     );

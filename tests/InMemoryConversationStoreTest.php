@@ -10,6 +10,7 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessage;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessageRole;
 use CreativeCrafts\LaravelAiAgentKit\Memory\InMemoryConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
+use CreativeCrafts\LaravelAiAgentKit\Memory\Exceptions\ConversationWriteConflictException;
 
 beforeEach(function (): void {
     config()->set('ai-agent-kit.memory.default_driver', 'in_memory');
@@ -73,6 +74,33 @@ it('preserves delete semantics through the shared memory contract', function ():
     $store->delete($conversationId);
 
     expect($store->find($conversationId))->toBeNull();
+});
+
+it('detects concurrent updates loaded from the same in-memory revision', function (): void {
+    $store = app(ConversationStore::class);
+    $conversationId = new ConversationId('conv-memory-conflict');
+    $startedAt = new DateTimeImmutable('2026-03-14T09:00:00+00:00');
+    $store->save(new Conversation(id: $conversationId, createdAt: $startedAt, updatedAt: $startedAt));
+
+    $writerA = $store->find($conversationId);
+    $writerB = $store->find($conversationId);
+
+    expect($writerA)->toBeInstanceOf(Conversation::class)
+        ->and($writerB)->toBeInstanceOf(Conversation::class);
+
+    $store->save($writerA->withAppendedMessage(new ConversationMessage(
+        id: new MessageId('memory-a1'),
+        role: ConversationMessageRole::User,
+        content: 'A1',
+        createdAt: $startedAt,
+    )));
+
+    expect(fn () => $store->save($writerB->withAppendedMessage(new ConversationMessage(
+        id: new MessageId('memory-b1'),
+        role: ConversationMessageRole::User,
+        content: 'B1',
+        createdAt: $startedAt,
+    ))))->toThrow(ConversationWriteConflictException::class);
 });
 
 it('purges expired conversations from the in-memory driver', function (): void {

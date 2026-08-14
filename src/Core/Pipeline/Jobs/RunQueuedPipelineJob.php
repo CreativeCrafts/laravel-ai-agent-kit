@@ -30,6 +30,12 @@ class RunQueuedPipelineJob implements ShouldQueue
 
     public ?int $timeout = null;
 
+    public ?int $tries = null;
+
+    public ?int $maxExceptions = null;
+
+    public ?int $backoff = null;
+
     /**
      * @param class-string<QueuedPipelineDefinition> $pipelineDefinition
      * @param class-string<PipelineResultHandler>|null $resultHandler
@@ -53,6 +59,9 @@ class RunQueuedPipelineJob implements ShouldQueue
         }
 
         $this->timeout = $options->timeoutSeconds;
+        $this->tries = $options->tries;
+        $this->maxExceptions = $options->maxExceptions;
+        $this->backoff = $options->backoffSeconds;
     }
 
     /**

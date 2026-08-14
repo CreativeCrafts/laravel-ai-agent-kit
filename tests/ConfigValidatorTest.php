@@ -126,6 +126,36 @@ it('rejects invalid media input URL allowlist entries', function () {
     ]);
 })->throws(InvalidConfigurationException::class, 'media_input.url_allowed_hosts.0');
 
+it('rejects invalid media input policy values', function (array $mediaInput): void {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+
+    $validator->validate([
+      'providers' => [
+        'null' => [
+          'driver' => 'null',
+          'enabled' => true,
+          'options' => [],
+        ],
+      ],
+      'default_provider' => 'null',
+      'failover_order' => ['null'],
+      'budgets' => [
+        'max_steps' => 1,
+        'max_tool_calls' => 1,
+        'max_retries_per_step' => 1,
+        'max_total_timeout_seconds' => 1,
+        'max_tokens' => null,
+        'max_cost_usd' => null,
+      ],
+      'media_input' => $mediaInput,
+    ]);
+})->throws(InvalidConfigurationException::class)->with([
+    'require HTTPS type' => [['require_https' => 'yes']],
+    'host match mode' => [['host_match' => 'suffix']],
+    'diagnostic names type' => [['include_diagnostic_names' => 1]],
+]);
+
 it('validates redis memory configuration', function () {
     /** @var ConfigValidator $validator */
     $validator = app(ConfigValidator::class);
@@ -519,6 +549,22 @@ it('rejects an invalid circuit breaker failure threshold', function () {
     ]);
 })->throws(InvalidConfigurationException::class, 'resilience.circuit_breaker.failure_threshold');
 
+it('rejects invalid circuit breaker storage configuration', function (array $circuitBreaker): void {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+    $config = configValidatorProviderOptionsFixture([]);
+    $config['resilience'] = [
+        'circuit_breaker' => $circuitBreaker,
+    ];
+
+    $validator->validate($config);
+})->throws(InvalidConfigurationException::class)->with([
+    'driver' => [['driver' => 'database']],
+    'cache store' => [['cache_store' => '']],
+    'key prefix' => [['key_prefix' => '']],
+    'lock seconds' => [['lock_seconds' => 0]],
+]);
+
 it('rejects an invalid circuit breaker section type', function () {
     /** @var ConfigValidator $validator */
     $validator = app(ConfigValidator::class);
@@ -580,6 +626,82 @@ it('rejects an invalid circuit breaker apply_to_failover value type', function (
       ],
     ]);
 })->throws(InvalidConfigurationException::class, 'resilience.circuit_breaker.apply_to_failover');
+
+it('accepts supported unknown failure classification modes', function (string $mode) {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+    $config = configValidatorProviderOptionsFixture([]);
+    $config['resilience'] = [
+      'failure_classification' => [
+        'unknown_failure_mode' => $mode,
+      ],
+    ];
+
+    $validator->validate($config);
+
+    expect(true)->toBeTrue();
+})->with(['strict', 'legacy_failover']);
+
+it('rejects an unsupported unknown failure classification mode', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+    $config = configValidatorProviderOptionsFixture([]);
+    $config['resilience'] = [
+      'failure_classification' => [
+        'unknown_failure_mode' => 'failover_everything',
+      ],
+    ];
+
+    $validator->validate($config);
+})->throws(InvalidConfigurationException::class, 'resilience.failure_classification.unknown_failure_mode');
+
+it('accepts supported failover model policies', function (string $policy) {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+    $config = configValidatorProviderOptionsFixture([]);
+    $config['resilience'] = [
+      'failover' => [
+        'model_policy' => $policy,
+      ],
+    ];
+
+    $validator->validate($config);
+
+    expect(true)->toBeTrue();
+})->with(['initial_only', 'preserve_when_same_sdk_provider', 'preserve_always_legacy']);
+
+it('rejects an unsupported failover model policy', function () {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+    $config = configValidatorProviderOptionsFixture([]);
+    $config['resilience'] = [
+      'failover' => [
+        'model_policy' => 'preserve_when_driver_matches',
+      ],
+    ];
+
+    $validator->validate($config);
+})->throws(InvalidConfigurationException::class, 'resilience.failover.model_policy');
+
+it('accepts supported cost estimation modes', function (string $mode): void {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+    $config = configValidatorProviderOptionsFixture([]);
+    $config['budgets']['cost_estimation_mode'] = $mode;
+
+    $validator->validate($config);
+
+    expect(true)->toBeTrue();
+})->with(['strict', 'advisory']);
+
+it('rejects an unsupported cost estimation mode', function (): void {
+    /** @var ConfigValidator $validator */
+    $validator = app(ConfigValidator::class);
+    $config = configValidatorProviderOptionsFixture([]);
+    $config['budgets']['cost_estimation_mode'] = 'best_effort';
+
+    $validator->validate($config);
+})->throws(InvalidConfigurationException::class, 'budgets.cost_estimation_mode');
 
 it('rejects an unsupported prompts default driver', function () {
     /** @var ConfigValidator $validator */

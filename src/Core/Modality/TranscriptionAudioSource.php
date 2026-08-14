@@ -84,6 +84,8 @@ final readonly class TranscriptionAudioSource
             $url,
             'Transcription URL audio source',
             MediaInputSecurityConfig::urlAllowedHosts(),
+            MediaInputSecurityConfig::requireHttps(),
+            MediaInputSecurityConfig::hostMatchMode(),
         );
 
         return new self(TranscriptionAudioSourceKind::Url, $url, $mimeType);
@@ -130,13 +132,19 @@ final readonly class TranscriptionAudioSource
                 ...MediaSourceSafeMetadata::referenceFields(
                     $this->payload,
                     $this->kind === TranscriptionAudioSourceKind::Url,
+                    MediaInputSecurityConfig::includeDiagnosticNames(),
                 ),
             ];
         }
 
         if ($this->kind === TranscriptionAudioSourceKind::Upload && $this->payload instanceof UploadedFile) {
-            $metadata['client_original_name'] = $this->payload->getClientOriginalName();
-            $metadata['client_mime_type'] = $this->payload->getClientMimeType();
+            $metadata['mime_type'] ??= $this->payload->getClientMimeType();
+            $metadata['byte_length'] = $this->payload->getSize();
+            $metadata['reference_fingerprint'] = hash('sha256', $this->payload->getPathname());
+
+            if (MediaInputSecurityConfig::includeDiagnosticNames()) {
+                $metadata['client_original_name'] = $this->payload->getClientOriginalName();
+            }
         }
 
         return array_filter(

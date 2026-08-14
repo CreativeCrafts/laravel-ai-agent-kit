@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Commands;
 
+use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptManifest;
+use CreativeCrafts\LaravelAiAgentKit\Scaffolding\PromptManifestWriter;
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -13,9 +15,15 @@ final class MakePromptCommand extends Command
     protected $signature = 'ai:make:prompt
         {name : The prompt name, optionally using dotted or directory notation}
         {--prompt-version=1.0.0 : The prompt version to scaffold}
+        {--activate : Make the target version the manifest current_version}
         {--force : Overwrite the destination files if they already exist}';
 
     protected $description = 'Generate a versioned AI prompt scaffold with template and metadata files.';
+
+    public function __construct(private PromptManifestWriter $manifestWriter)
+    {
+        parent::__construct();
+    }
 
     public function handle(): int
     {
@@ -33,63 +41,241 @@ final class MakePromptCommand extends Command
         $rawVersion = $this->option('prompt-version');
         $version = trim($rawVersion);
 
-        if ($version === '') {
-            $this->components->error('The prompt version must be a non-empty string.');
+        if (!$this->isSafeVersion($version)) {
+            $this->components->error(
+                'The prompt version must be a safe single filename segment without separators, traversal markers, or control characters.',
+            );
 
             return self::FAILURE;
         }
 
         $metadataPath = $this->metadataPath($normalizedName);
         $templatePath = $this->templatePath($normalizedName, $version);
-
-        if (!$this->option('force')) {
-            $existingPath = $this->firstExistingPath([$metadataPath, $templatePath]);
-
-            if ($existingPath !== null) {
-                $this->components->error(
-                    sprintf(
-                        'The file [%s] already exists. Use --force to overwrite it.',
-                        $this->relativeProjectPath($existingPath),
-                    ),
-                );
-
-                return self::FAILURE;
-            }
-        }
+        $promptName = $this->promptName($normalizedName);
+        $variableNames = ['audience', 'goal', 'topic'];
+        $metadataExists = is_file($metadataPath);
 
         $directory = dirname($metadataPath);
         $this->ensureDirectoryExists($directory);
 
-        $promptName = $this->promptName($normalizedName);
-        $variableNames = ['audience', 'goal', 'topic'];
+        try {
+            $metadata = $metadataExists
+              ? $this->manifestWriter->read($metadataPath)
+              : $this->newManifest($promptName, $version);
+            $manifest = PromptManifest::fromMetadata($metadata, $promptName, $metadataPath);
+        } catch (RuntimeException $exception) {
+            $this->components->error($exception->getMessage());
 
-        $this->writeFile(
-            $metadataPath,
-            $this->buildMetadataContents($promptName, $version, $variableNames),
-            'prompt metadata scaffold',
+            return self::FAILURE;
+        }
+
+        if ($manifest->name !== $promptName) {
+            $this->components->error(
+                "The existing manifest belongs to prompt [{$manifest->name}], not [{$promptName}].",
+            );
+
+            return self::FAILURE;
+        }
+
+        $targetVersionExists = isset($manifest->versions[$version]);
+
+        if ((($metadataExists && $targetVersionExists) || is_file($templatePath)) && !$this->option('force')) {
+            $this->components->error(
+                sprintf(
+                    'Prompt version [%s] already exists. Use --force to replace only that version.',
+                    $version,
+                ),
+            );
+
+            return self::FAILURE;
+        }
+
+        $metadata = $this->updatedManifest(
+            metadata: $metadata,
+            manifest: $manifest,
+            version: $version,
+            variableNames: $variableNames,
+            activate: (bool)$this->option('activate'),
+            metadataExists: $metadataExists,
         );
 
-        $this->writeFile(
-            $templatePath,
-            $this->buildTemplateContents(),
-            'prompt template scaffold',
-        );
+        $previousTemplate = is_file($templatePath) ? file_get_contents($templatePath) : null;
+
+        if ($previousTemplate === false) {
+            $this->components->error("Unable to read existing prompt template [{$templatePath}].");
+
+            return self::FAILURE;
+        }
+
+        try {
+            $this->writeFileAtomically(
+                $templatePath,
+                $this->buildTemplateContents(),
+                'prompt template scaffold',
+            );
+        } catch (RuntimeException $exception) {
+            $this->components->error($exception->getMessage());
+
+            return self::FAILURE;
+        }
+
+        try {
+            $this->manifestWriter->write($metadataPath, $metadata);
+        } catch (RuntimeException $exception) {
+            $this->restoreTemplate($templatePath, $previousTemplate);
+            $this->components->error($exception->getMessage());
+
+            return self::FAILURE;
+        }
 
         $this->components->info(
             sprintf(
-                'Prompt scaffold created: %s',
+                'Prompt manifest updated: %s',
                 $this->relativeProjectPath($metadataPath),
             ),
         );
 
         $this->components->info(
             sprintf(
-                'Prompt scaffold created: %s',
+                'Prompt version scaffold created: %s',
                 $this->relativeProjectPath($templatePath),
             ),
         );
 
         return self::SUCCESS;
+    }
+
+    private function isSafeVersion(string $version): bool
+    {
+        if ($version === '' || str_contains($version, '..')) {
+            return false;
+        }
+
+        return preg_match('/[\\\\\/\x00-\x1F\x7F]/', $version) !== 1;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function newManifest(string $promptName, string $version): array
+    {
+        return [
+          'name' => $promptName,
+          'current_version' => $version,
+          'versions' => [
+            $version => $this->versionDefinition($version, ['audience', 'goal', 'topic']),
+          ],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $metadata
+     * @param list<string> $variableNames
+     * @return array<string, mixed>
+     */
+    private function updatedManifest(
+        array $metadata,
+        PromptManifest $manifest,
+        string $version,
+        array $variableNames,
+        bool $activate,
+        bool $metadataExists,
+    ): array {
+        $versions = $metadata['versions'];
+
+        if (!is_array($versions)) {
+            throw new RuntimeException('Prompt manifest [versions] must be an array.');
+        }
+
+        $versions[$version] = $this->versionDefinition($version, $variableNames);
+        $metadata['versions'] = $versions;
+
+        if ($activate || !$metadataExists) {
+            $metadata['current_version'] = $version;
+
+            return $metadata;
+        }
+
+        if (!array_key_exists('current_version', $metadata)) {
+            $metadata['current_version'] = $this->resolveHighestVersion(array_keys($manifest->versions));
+        }
+
+        return $metadata;
+    }
+
+    /**
+     * @param list<string> $variableNames
+     * @return array{template: string, variables: list<string>, description: string}
+     */
+    private function versionDefinition(string $version, array $variableNames): array
+    {
+        return [
+          'template' => $version . '.md',
+          'variables' => $variableNames,
+          'description' => 'Prompt scaffold generated by ai:make:prompt.',
+        ];
+    }
+
+    /** @param list<string> $versions */
+    private function resolveHighestVersion(array $versions): string
+    {
+        usort($versions, static fn (string $left, string $right): int => version_compare($right, $left));
+
+        return $versions[0];
+    }
+
+    private function restoreTemplate(string $templatePath, string|null $previousTemplate): void
+    {
+        if ($previousTemplate === null) {
+            if (is_file($templatePath)) {
+                unlink($templatePath);
+            }
+
+            return;
+        }
+
+        $this->writeFileAtomically(
+            $templatePath,
+            $previousTemplate,
+            'previous prompt template',
+        );
+    }
+
+    private function writeFileAtomically(string $path, string $contents, string $label): void
+    {
+        $temporaryPath = tempnam(dirname($path), '.prompt-template-');
+
+        if (!is_string($temporaryPath)) {
+            throw new RuntimeException(
+                sprintf(
+                    'Failed to create temporary %s beside [%s].',
+                    $label,
+                    $this->relativeProjectPath($path),
+                ),
+            );
+        }
+
+        try {
+            if (file_put_contents($temporaryPath, $contents, LOCK_EX) === false) {
+                throw new RuntimeException(
+                    sprintf('Failed to write temporary %s.', $label),
+                );
+            }
+
+            if (!rename($temporaryPath, $path)) {
+                throw new RuntimeException(
+                    sprintf(
+                        'Failed to replace %s at [%s].',
+                        $label,
+                        $this->relativeProjectPath($path),
+                    ),
+                );
+            }
+        } finally {
+            if (is_file($temporaryPath)) {
+                unlink($temporaryPath);
+            }
+        }
     }
 
     private function normalizePromptName(string $name): string
@@ -140,20 +326,6 @@ final class MakePromptCommand extends Command
         return $this->laravel->basePath('resources/prompts/' . $normalizedName . '/' . $version . '.md');
     }
 
-    /**
-     * @param list<string> $paths
-     */
-    private function firstExistingPath(array $paths): ?string
-    {
-        foreach ($paths as $path) {
-            if (is_file($path)) {
-                return $path;
-            }
-        }
-
-        return null;
-    }
-
     private function relativeProjectPath(string $absolutePath): string
     {
         return Str::after($absolutePath, rtrim($this->laravel->basePath(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR);
@@ -188,57 +360,6 @@ final class MakePromptCommand extends Command
         }
 
         return implode('.', $nameSegments);
-    }
-
-    private function writeFile(string $path, string $contents, string $label): void
-    {
-        $written = file_put_contents($path, $contents);
-
-        if ($written !== false) {
-            return;
-        }
-
-        throw new RuntimeException(
-            sprintf(
-                'Failed to write %s to [%s].',
-                $label,
-                $this->relativeProjectPath($path),
-            ),
-        );
-    }
-
-    /**
-     * @param list<string> $variableNames
-     */
-    private function buildMetadataContents(string $promptName, string $version, array $variableNames): string
-    {
-        $variableList = implode(
-            ",\n",
-            array_map(
-                static fn (string $variable): string => "                '{$variable}',",
-                $variableNames,
-            ),
-        );
-
-        return <<<PHP
-            <?php
-            
-            declare(strict_types=1);
-            
-            return [
-                'name' => '{$promptName}',
-                'current_version' => '{$version}',
-                'versions' => [
-                    '{$version}' => [
-                        'template' => '{$version}.md',
-                        'variables' => [
-            {$variableList}
-                        ],
-                        'description' => 'Initial prompt scaffold generated by ai:make:prompt.',
-                    ],
-                ],
-            ];
-            PHP;
     }
 
     private function buildTemplateContents(): string

@@ -17,6 +17,7 @@ final readonly class ExecutionRequest
      * @param list<string> $toolNames
      * @param list<string> $providerToolNames
      * @param list<File> $attachments
+     * @param list<string> $requiredCapabilities
      * @param array<string, mixed> $input
      * @param array<string, mixed> $metadata
      */
@@ -38,6 +39,7 @@ final readonly class ExecutionRequest
         public array $attachments = [],
         public array $providerToolNames = [],
         public bool $strictStructuredOutput = false,
+        public array $requiredCapabilities = [],
     ) {
         if ($this->runId === '') {
             throw new InvalidArgumentException('Execution requests require a non-empty runId.');
@@ -69,6 +71,7 @@ final readonly class ExecutionRequest
 
         $this->validateAttachments($this->attachments);
         $this->validateProviderToolNames($this->providerToolNames);
+        $this->validateRequiredCapabilities($this->requiredCapabilities);
     }
 
     /**
@@ -94,6 +97,7 @@ final readonly class ExecutionRequest
             attachments: $this->attachments,
             providerToolNames: $this->providerToolNames,
             strictStructuredOutput: $this->strictStructuredOutput,
+            requiredCapabilities: $this->requiredCapabilities,
         );
     }
 
@@ -117,6 +121,7 @@ final readonly class ExecutionRequest
             attachments: $this->attachments,
             providerToolNames: $this->providerToolNames,
             strictStructuredOutput: $this->strictStructuredOutput,
+            requiredCapabilities: $this->requiredCapabilities,
         );
     }
 
@@ -150,6 +155,30 @@ final readonly class ExecutionRequest
                     sprintf('Execution request providerToolNames[%d] must be a non-empty string.', $index),
                 );
             }
+        }
+    }
+
+    /**
+     * @param array<int, mixed> $requiredCapabilities
+     */
+    private function validateRequiredCapabilities(array $requiredCapabilities): void
+    {
+        $seen = [];
+
+        foreach ($requiredCapabilities as $index => $capability) {
+            if (!is_string($capability) || $capability === '') {
+                throw new InvalidArgumentException(
+                    sprintf('Execution request requiredCapabilities[%d] must be a non-empty string.', $index),
+                );
+            }
+
+            if (isset($seen[$capability])) {
+                throw new InvalidArgumentException(
+                    sprintf('Execution request requiredCapabilities contains duplicate [%s].', $capability),
+                );
+            }
+
+            $seen[$capability] = true;
         }
     }
 }

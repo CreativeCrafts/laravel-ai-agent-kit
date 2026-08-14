@@ -16,12 +16,19 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\SdkAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StreamComplete;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StreamFailure;
 use Laravel\Ai\Ai;
+use Laravel\Ai\AiManager;
 use Laravel\Ai\AiServiceProvider;
+use Illuminate\Http\Client\ConnectionException;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderTargetResolver;
 
-it('fails over when stream creation fails before chunks are emitted', function (): void {
+it('fails over when stream creation has a classified connection failure', function (): void {
     app()->register(AiServiceProvider::class);
+
+    app(AiManager::class)->extend(
+        'broken',
+        static fn (): never => throw new ConnectionException('stream connection failed'),
+    );
 
     config()->set('ai-agent-kit.default_provider', 'broken-provider');
     config()->set('ai-agent-kit.failover_order', ['broken-provider', 'openai']);
@@ -35,6 +42,39 @@ it('fails over when stream creation fails before chunks are emitted', function (
         new ExecutionRequest(
             runId: 'run-stream-creation-failover-001',
             prompt: 'Recover stream creation.',
+        ),
+    ));
+
+    $terminal = $events[array_key_last($events)];
+
+    expect($terminal)->toBeInstanceOf(StreamComplete::class)
+        ->and($terminal->output)->toBe('Recovered stream response')
+        ->and($terminal->metadata['runtime_provider_attempts'])->toBe(['broken-provider', 'openai'])
+        ->and($terminal->metadata['runtime_final_provider'])->toBe('openai')
+        ->and($terminal->metadata['runtime_failover_attempted'])->toBeTrue();
+});
+
+it('preserves broad stream creation failover only in explicit legacy mode', function (): void {
+    app()->register(AiServiceProvider::class);
+
+    app(AiManager::class)->extend(
+        'broken',
+        static fn (): never => throw new RuntimeException('unknown stream creation failure'),
+    );
+
+    config()->set('ai-agent-kit.default_provider', 'broken-provider');
+    config()->set('ai-agent-kit.failover_order', ['broken-provider', 'openai']);
+    config()->set('ai-agent-kit.resilience.failure_classification.unknown_failure_mode', 'legacy_failover');
+    configureStreamingRuntimeProvider('broken-provider', 'broken', 'broken-model');
+    configureStreamingRuntimeProvider('openai', 'openai', 'gpt-4o-mini');
+    refreshStreamingProviderBindings();
+
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, ['Recovered stream response'])->preventStrayPrompts();
+
+    $events = iterator_to_array(app(StreamingAiRuntime::class)->executeStream(
+        new ExecutionRequest(
+            runId: 'run-stream-creation-legacy-failover-001',
+            prompt: 'Recover stream creation in legacy mode.',
         ),
     ));
 

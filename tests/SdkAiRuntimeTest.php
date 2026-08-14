@@ -7,6 +7,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\CircuitBreakerManager;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ProviderToolRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\Tool;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolAuthorizer;
@@ -23,6 +24,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\RuntimeTelemetryAgent;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\SdkAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StructuredAgentResponseMapper;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\StructuredRuntimeTelemetryAgent;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\enums\CircuitBreakerState;
 use CreativeCrafts\LaravelAiAgentKit\Memory\Conversation;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationId;
 use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessage;
@@ -34,6 +36,7 @@ use CreativeCrafts\LaravelAiAgentKit\Tools\ProviderToolMaterializer;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolAdapter;
 use Laravel\Ai\Ai;
 use Laravel\Ai\AiServiceProvider;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Providers\Tools\WebSearch;
@@ -44,6 +47,7 @@ use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderTargetResolver;
+use Illuminate\Http\Client\ConnectionException;
 
 it('binds the ai runtime contract to the sdk ai runtime', function () {
     app()->register(AiServiceProvider::class);
@@ -158,7 +162,7 @@ it('fails over provider prompt execution when the first provider attempt fails',
             $attempts++;
 
             if ($attempts === 1) {
-                throw new RuntimeException('openai unavailable');
+                throw new ConnectionException('openai unavailable');
             }
 
             return 'Fallback provider response';
@@ -182,6 +186,148 @@ it('fails over provider prompt execution when the first provider attempt fails',
         ->and($result->metadata['runtime_failover_attempted'])->toBeTrue();
 });
 
+it('fails closed on an unknown provider execution throwable without consuming a fallback', function () {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai-agent-kit.default_provider', 'openai');
+    config()->set('ai-agent-kit.failover_order', ['openai', 'anthropic']);
+    configureRuntimeProvider('openai', 'openai', 'gpt-4o-mini');
+    configureRuntimeProvider('anthropic', 'anthropic', 'claude-3-haiku');
+    refreshRuntimeProviderBindings();
+
+    $attempts = 0;
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, [
+        static function () use (&$attempts): never {
+            $attempts++;
+
+            throw new RuntimeException('unclassified execution failure');
+        },
+    ])->preventStrayPrompts();
+
+    try {
+        app(AiRuntime::class)->execute(
+            new ExecutionRequest(
+                runId: 'run-unknown-fail-closed-001',
+                prompt: 'Do not consume a fallback.',
+            ),
+        );
+    } catch (RuntimeExecutionException $exception) {
+        expect($exception->failureCategory())->toBe('execution_failed')
+            ->and($exception->getPrevious())->toBeInstanceOf(RuntimeException::class);
+    }
+
+    expect($attempts)->toBe(1)
+        ->and(app(CircuitBreakerManager::class)->for('providers.openai')->snapshot()->state)
+        ->toBe(CircuitBreakerState::Closed);
+});
+
+it('does not fail over or damage provider health for an invalid provider request', function () {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai-agent-kit.default_provider', 'openai');
+    config()->set('ai-agent-kit.failover_order', ['openai', 'anthropic']);
+    config()->set('ai-agent-kit.resilience.circuit_breaker.failure_threshold', 1);
+    configureRuntimeProvider('openai', 'openai', 'gpt-4o-mini');
+    configureRuntimeProvider('anthropic', 'anthropic', 'claude-3-haiku');
+    refreshRuntimeProviderBindings();
+
+    $attempts = 0;
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, [
+        static function () use (&$attempts): never {
+            $attempts++;
+
+            throw new InvalidArgumentException('unsupported provider option');
+        },
+    ])->preventStrayPrompts();
+
+    try {
+        app(AiRuntime::class)->execute(
+            new ExecutionRequest(
+                runId: 'run-invalid-request-fail-closed-001',
+                prompt: 'Reject this request.',
+            ),
+        );
+    } catch (RuntimeExecutionException $exception) {
+        expect($exception->failureCategory())->toBe('invalid_request');
+    }
+
+    expect($attempts)->toBe(1)
+        ->and(app(CircuitBreakerManager::class)->for('providers.openai')->snapshot()->state)
+        ->toBe(CircuitBreakerState::Closed);
+});
+
+it('fails over rate limits without treating them as provider health failures', function () {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai-agent-kit.default_provider', 'openai');
+    config()->set('ai-agent-kit.failover_order', ['openai', 'anthropic']);
+    config()->set('ai-agent-kit.resilience.circuit_breaker.failure_threshold', 1);
+    configureRuntimeProvider('openai', 'openai', 'gpt-4o-mini');
+    configureRuntimeProvider('anthropic', 'anthropic', 'claude-3-haiku');
+    refreshRuntimeProviderBindings();
+
+    $attempts = 0;
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, [
+        static function () use (&$attempts): string {
+            $attempts++;
+
+            if ($attempts === 1) {
+                throw RateLimitedException::forProvider('openai', 429);
+            }
+
+            return 'Rate limit fallback response';
+        },
+    ])->preventStrayPrompts();
+
+    $result = app(AiRuntime::class)->execute(
+        new ExecutionRequest(
+            runId: 'run-rate-limit-failover-001',
+            prompt: 'Use a fallback when rate limited.',
+        ),
+    );
+
+    expect($attempts)->toBe(2)
+        ->and($result->metadata['runtime_provider_attempts'])->toBe(['openai', 'anthropic'])
+        ->and(app(CircuitBreakerManager::class)->for('providers.openai')->snapshot()->state)
+        ->toBe(CircuitBreakerState::Closed);
+});
+
+it('fails over connection failures and records degraded provider health', function () {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai-agent-kit.default_provider', 'openai');
+    config()->set('ai-agent-kit.failover_order', ['openai', 'anthropic']);
+    config()->set('ai-agent-kit.resilience.circuit_breaker.failure_threshold', 1);
+    configureRuntimeProvider('openai', 'openai', 'gpt-4o-mini');
+    configureRuntimeProvider('anthropic', 'anthropic', 'claude-3-haiku');
+    refreshRuntimeProviderBindings();
+
+    $attempts = 0;
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, [
+        static function () use (&$attempts): string {
+            $attempts++;
+
+            if ($attempts === 1) {
+                throw new ConnectionException('connection failed');
+            }
+
+            return 'Connection fallback response';
+        },
+    ])->preventStrayPrompts();
+
+    $result = app(AiRuntime::class)->execute(
+        new ExecutionRequest(
+            runId: 'run-connection-failover-001',
+            prompt: 'Use a fallback on connection failure.',
+        ),
+    );
+
+    expect($attempts)->toBe(2)
+        ->and($result->metadata['runtime_provider_attempts'])->toBe(['openai', 'anthropic'])
+        ->and(app(CircuitBreakerManager::class)->for('providers.openai')->snapshot()->state)
+        ->toBe(CircuitBreakerState::Open);
+});
+
 it('normalizes provider failure when runtime failover is exhausted', function () {
     app()->register(AiServiceProvider::class);
 
@@ -191,7 +337,7 @@ it('normalizes provider failure when runtime failover is exhausted', function ()
     refreshRuntimeProviderBindings();
 
     Ai::fakeAgent(RuntimeTelemetryAgent::class, [
-        static fn (): never => throw new RuntimeException('openai unavailable'),
+        static fn (): never => throw new ConnectionException('openai unavailable'),
     ])->preventStrayPrompts();
 
     /** @var AiRuntime $runtime */
@@ -640,6 +786,8 @@ it('fails closed when max_cost_usd is configured but runtime cost metadata is mi
             ),
         ))
       ->toThrow(RuntimeBudgetExceededException::class, 'metadata.cost_usd');
+
+    Ai::assertAgentNeverPrompted(RuntimeTelemetryAgent::class);
 });
 
 it('enforces max cost budget when cost metadata is provided', function () {
@@ -662,6 +810,28 @@ it('enforces max cost budget when cost metadata is provided', function () {
             ),
         ))
       ->toThrow(RuntimeBudgetExceededException::class, 'max_cost_usd [0.01]');
+
+    Ai::assertAgentNeverPrompted(RuntimeTelemetryAgent::class);
+});
+
+it('allows advisory cost budgets to dispatch with explicit cost unknown telemetry', function (): void {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai-agent-kit.budgets.max_cost_usd', 0.01);
+    config()->set('ai-agent-kit.budgets.cost_estimation_mode', 'advisory');
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, ['Advisory response'])->preventStrayPrompts();
+
+    /** @var AiRuntime $runtime */
+    $runtime = app(AiRuntime::class);
+    $result = $runtime->execute(new ExecutionRequest(
+        runId: 'run-budget-cost-advisory',
+        prompt: 'Allow unknown advisory cost.',
+        provider: 'openai',
+    ));
+
+    expect($result->metadata['estimated_cost_usd'])->toBeNull()
+        ->and($result->metadata['cost_estimate_source'])->toBeNull()
+        ->and($result->metadata['cost_unknown'])->toBeTrue();
 });
 
 it('wraps sdk runtime failures in a typed runtime execution exception', function () {

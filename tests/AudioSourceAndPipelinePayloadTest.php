@@ -15,6 +15,9 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
 
 beforeEach(function (): void {
     config()->set('ai-agent-kit.media_input.url_allowed_hosts', []);
+    config()->set('ai-agent-kit.media_input.require_https', false);
+    config()->set('ai-agent-kit.media_input.host_match', 'exact_and_subdomains');
+    config()->set('ai-agent-kit.media_input.include_diagnostic_names', false);
 });
 
 it('redacts raw base64 audio and upload contents from source metadata', function (): void {
@@ -34,7 +37,7 @@ it('redacts raw base64 audio and upload contents from source metadata', function
         ->and(json_encode($metadata))->not->toContain($raw);
 });
 
-it('redacts full storage paths and URL hosts from source metadata', function (): void {
+it('redacts full storage paths, basenames, and URL paths from source metadata', function (): void {
     $storageMetadata = TranscriptionAudioSource::fromStorage('answers/audio.mp3', 's3-audios', 'audio/mpeg')->safeMetadata();
     $urlMetadata = EvaluationImageInput::fromUrl('https://example.invalid/question.jpg')->safeMetadata();
 
@@ -43,9 +46,9 @@ it('redacts full storage paths and URL hosts from source metadata', function ():
             'kind' => 'storage',
             'disk' => 's3-audios',
             'mime_type' => 'audio/mpeg',
-            'reference_basename' => 'audio.mp3',
             'reference_fingerprint' => hash('sha256', 'answers/audio.mp3'),
         ])
+        ->and($storageMetadata)->not->toHaveKey('reference_basename')
         ->and($storageMetadata)->not->toHaveKey('reference')
         ->and(json_encode($storageMetadata))->not->toContain('answers/audio.mp3')
         ->and($urlMetadata)
@@ -53,6 +56,7 @@ it('redacts full storage paths and URL hosts from source metadata', function ():
             'kind' => 'url',
             'url_scheme' => 'https',
             'url_host' => 'example.invalid',
+            'reference_fingerprint' => hash('sha256', 'https://example.invalid/question.jpg'),
         ])
         ->and($urlMetadata)->not->toHaveKey('reference')
         ->and(json_encode($urlMetadata))->not->toContain('question.jpg');

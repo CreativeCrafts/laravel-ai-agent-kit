@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Security;
 
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\DnsResolver;
 use InvalidArgumentException;
 
 final class SafeHttpUrlValidator
@@ -11,10 +12,22 @@ final class SafeHttpUrlValidator
     /**
      * Reject HTTP(S) URLs that target private, link-local, or otherwise unsafe hosts.
      *
-     * @param list<string> $allowedHosts When non-empty, the URL host must match one entry exactly or as a subdomain.
+     * @param list<string> $allowedHosts When non-empty, the URL host must match the configured policy.
      */
-    public static function assertPublicHttpUrl(string $url, string $context, array $allowedHosts = []): void
-    {
+    public static function assertPublicHttpUrl(
+        string $url,
+        string $context,
+        array $allowedHosts = [],
+        bool $requireHttps = false,
+        MediaHostMatchMode $hostMatchMode = MediaHostMatchMode::ExactAndSubdomains,
+        ?DnsResolver $dnsResolver = null,
+    ): void {
+        $scheme = parse_url($url, PHP_URL_SCHEME);
+
+        if ($requireHttps && strtolower(is_string($scheme) ? $scheme : '') !== 'https') {
+            throw new InvalidArgumentException(sprintf('%s requires an HTTPS URL.', $context));
+        }
+
         $host = parse_url($url, PHP_URL_HOST);
 
         if (!is_string($host) || $host === '') {
@@ -24,7 +37,7 @@ final class SafeHttpUrlValidator
         $normalizedHost = self::normalizeHost($host);
 
         self::assertHostNotBlocked($normalizedHost, $context);
-        self::assertHostAllowed($normalizedHost, $allowedHosts, $context);
+        self::assertHostAllowed($normalizedHost, $allowedHosts, $hostMatchMode, $context);
 
         if (filter_var($normalizedHost, FILTER_VALIDATE_IP) !== false) {
             self::assertPublicIp($normalizedHost, $context);
@@ -33,7 +46,11 @@ final class SafeHttpUrlValidator
         }
 
         self::assertNotObfuscatedIpLiteral($normalizedHost, $context);
-        self::assertResolvedAddressesArePublic($normalizedHost, $context);
+        self::assertResolvedAddressesArePublic(
+            $normalizedHost,
+            $context,
+            $dnsResolver ?? new SystemDnsResolver(),
+        );
     }
 
     private static function normalizeHost(string $host): string
@@ -65,8 +82,12 @@ final class SafeHttpUrlValidator
     /**
      * @param list<string> $allowedHosts
      */
-    private static function assertHostAllowed(string $normalizedHost, array $allowedHosts, string $context): void
-    {
+    private static function assertHostAllowed(
+        string $normalizedHost,
+        array $allowedHosts,
+        MediaHostMatchMode $hostMatchMode,
+        string $context,
+    ): void {
         if ($allowedHosts === []) {
             return;
         }
@@ -80,7 +101,14 @@ final class SafeHttpUrlValidator
                 continue;
             }
 
-            if ($normalizedHost === $allowed || str_ends_with($normalizedHost, '.'.$allowed)) {
+            if ($normalizedHost === $allowed) {
+                return;
+            }
+
+            if (
+                $hostMatchMode === MediaHostMatchMode::ExactAndSubdomains
+                && str_ends_with($normalizedHost, '.'.$allowed)
+            ) {
                 return;
             }
         }
@@ -127,9 +155,12 @@ final class SafeHttpUrlValidator
         }
     }
 
-    private static function assertResolvedAddressesArePublic(string $normalizedHost, string $context): void
-    {
-        $addresses = self::resolveHostAddresses($normalizedHost);
+    private static function assertResolvedAddressesArePublic(
+        string $normalizedHost,
+        string $context,
+        DnsResolver $dnsResolver,
+    ): void {
+        $addresses = $dnsResolver->resolve($normalizedHost);
 
         if ($addresses === []) {
             return;
@@ -140,41 +171,4 @@ final class SafeHttpUrlValidator
         }
     }
 
-    /**
-     * @return list<string>
-     */
-    private static function resolveHostAddresses(string $host): array
-    {
-        $addresses = [];
-
-        if (function_exists('dns_get_record')) {
-            $records = @dns_get_record($host, DNS_A + DNS_AAAA);
-
-            if (is_array($records)) {
-                foreach ($records as $record) {
-                    if (isset($record['ip']) && is_string($record['ip']) && $record['ip'] !== '') {
-                        $addresses[] = $record['ip'];
-                    }
-
-                    if (isset($record['ipv6']) && is_string($record['ipv6']) && $record['ipv6'] !== '') {
-                        $addresses[] = $record['ipv6'];
-                    }
-                }
-            }
-        }
-
-        if ($addresses === []) {
-            $fallback = @gethostbynamel($host);
-
-            if (is_array($fallback)) {
-                foreach ($fallback as $address) {
-                    if ($address !== '') {
-                        $addresses[] = $address;
-                    }
-                }
-            }
-        }
-
-        return array_values(array_unique($addresses));
-    }
 }

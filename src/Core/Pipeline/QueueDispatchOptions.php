@@ -11,6 +11,9 @@ final readonly class QueueDispatchOptions
         public ?string $queue = null,
         public ?int $delaySeconds = null,
         public ?int $timeoutSeconds = null,
+        public ?int $tries = null,
+        public ?int $maxExceptions = null,
+        public ?int $backoffSeconds = null,
     ) {
     }
 }

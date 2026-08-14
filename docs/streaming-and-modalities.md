@@ -128,9 +128,11 @@ Treat modality and blueprint media DTOs as security-sensitive when they originat
 | `fromStorage()` | Disk-backed objects under Laravel Storage policies | Rejects `..`, null bytes, and `file://` in storage keys |
 | `fromUpload()` / `fromBase64()` | Untrusted uploads and in-memory payloads | No filesystem/URL fetch at construction |
 | `fromPath()` | **Trusted administrator or batch paths only** | Rejects traversal segments; does **not** chroot or validate absolute paths such as `/etc/passwd` |
-| `fromUrl()` | Pre-approved remote assets only | Rejects private/reserved IPs, localhost/metadata hosts, internal suffixes; optional host allowlist via `media_input.url_allowed_hosts`; resolves DNS and rejects private/reserved addresses when records exist |
+| `fromUrl()` | Pre-approved remote assets only | Rejects private/reserved IPs, localhost/metadata hosts, internal suffixes; supports HTTPS-only and exact/exact-plus-subdomain allowlist policies; resolves DNS and rejects private/reserved addresses when records exist |
 
-For user-supplied URLs, prefer pre-signed object URLs from your own storage, an application proxy, or configure `AI_AGENT_KIT_MEDIA_URL_ALLOWED_HOSTS` / `media_input.url_allowed_hosts` to an explicit domain list. DNS rebinding between validation and provider fetch remains an application concern when URLs are untrusted; use short-lived signed URLs or a fetch proxy when that threat model applies.
+For user-supplied URLs, prefer pre-signed object URLs from your own storage, an application proxy, or configure `AI_AGENT_KIT_MEDIA_URL_ALLOWED_HOSTS` / `media_input.url_allowed_hosts` to an explicit domain list. Set `media_input.require_https=true` and `media_input.host_match=exact_only` for the recommended secure profile. The compatibility defaults remain HTTP(S) plus exact-or-subdomain matching. A DNS lookup that returns no addresses preserves existing behavior and does not reject the URL.
+
+DNS rebinding between validation and the later fetch performed by an external AI provider remains an application concern. Agent Kit cannot eliminate that provider-side time-of-check/time-of-use gap; use short-lived signed URLs or a fetch proxy when that threat model applies.
 
 For user-supplied files, prefer `fromUpload()`, `fromBase64()`, or `fromStorage()` with disk policies — not `fromPath()`.
 
@@ -138,7 +140,9 @@ For user-supplied files, prefer `fromUpload()`, `fromBase64()`, or `fromStorage(
 
 Existing `new TranscriptionRequest(base64Audio: ...)` calls remain supported. New code should prefer `TranscriptionRequest::fromAudioSource(...)` for any non-base64 input.
 
-Source metadata is redacted/summarized: base64 payloads and upload contents are not emitted in full. Path, storage, and URL kinds expose basename/fingerprint or URL host/scheme only — not full references. Tests can assert source kind, MIME type, disk, redacted reference fields, and prompt/model/provider values through `FakeTranscriptionRuntime`.
+Source metadata is redacted/summarized: base64 payloads and upload contents are not emitted in full. The default includes kind, MIME type, safe disk names, byte/payload length, opaque reference fingerprints, and URL host/scheme. Original upload names and path/storage basenames are available only with `media_input.include_diagnostic_names=true` because those names may contain personal or tenant data.
+
+For storage transcription, Agent Kit passes path and disk through Laravel AI's stored-audio source and applies the optional MIME value supplied to `fromStorage()` through the supported SDK `withMimeType()` API before dispatch. The MIME remains present in `safeMetadata()`; it is not a substitute for validating untrusted file contents.
 
 ## Transcription prompts
 

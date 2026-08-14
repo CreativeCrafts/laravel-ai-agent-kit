@@ -10,13 +10,20 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\QueuedPipelineDispatcher;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\Exceptions\InvalidPipelineResultHandlerException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\Exceptions\InvalidQueuedPipelineDefinitionException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\Jobs\RunQueuedPipelineJob;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\RetryPolicyResolver;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\QueuedPipelineRetryAmplificationEstimated;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\RetryAmplificationCalculator;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
+use Illuminate\Contracts\Events\Dispatcher;
 use RuntimeException;
 
 final class LaravelQueuedPipelineDispatcher implements QueuedPipelineDispatcher
 {
     public function __construct(
         private ConfigRepository $config,
+        private ?RetryPolicyResolver $retryPolicyResolver = null,
+        private ?RetryAmplificationCalculator $retryAmplificationCalculator = null,
+        private ?Dispatcher $events = null,
     ) {
     }
 
@@ -46,6 +53,7 @@ final class LaravelQueuedPipelineDispatcher implements QueuedPipelineDispatcher
         );
 
         $this->assertQueuedJobSizeIfGuarded($job);
+        $this->dispatchRetryAmplificationEstimate($context, $options);
 
         dispatch($job);
     }
@@ -81,5 +89,28 @@ final class LaravelQueuedPipelineDispatcher implements QueuedPipelineDispatcher
                 $maxBytes,
             ));
         }
+    }
+
+    private function dispatchRetryAmplificationEstimate(
+        RunContext $context,
+        QueueDispatchOptions $options,
+    ): void {
+        if (!$this->events instanceof Dispatcher) {
+            return;
+        }
+
+        $pipelineStepAttempts = $this->retryPolicyResolver?->resolve()->maxAttempts ?? 1;
+        $failoverOrder = $this->config->get('ai-agent-kit.failover_order', []);
+        $providerAttempts = is_array($failoverOrder) ? max(1, count($failoverOrder)) : 1;
+        $calculator = $this->retryAmplificationCalculator ?? new RetryAmplificationCalculator();
+        $estimate = $calculator->estimate(
+            queueAttempts: $options->tries,
+            pipelineStepAttempts: $pipelineStepAttempts,
+            providerAttemptsPerExecution: $providerAttempts,
+        );
+
+        $this->events->dispatch(
+            QueuedPipelineRetryAmplificationEstimated::fromEstimate($context->runId, $estimate),
+        );
     }
 }

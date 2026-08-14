@@ -3,11 +3,94 @@
 declare(strict_types=1);
 
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\CircuitBreakerManager;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\CacheCircuitBreakerManager;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\enums\CircuitBreakerState;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\InMemoryCircuitBreakerManager;
+use Illuminate\Contracts\Cache\Factory as CacheFactory;
+use Illuminate\Contracts\Config\Repository as ConfigRepository;
 
 it('binds the circuit breaker manager contract to the in-memory implementation', function () {
     expect(app(CircuitBreakerManager::class))->toBeInstanceOf(InMemoryCircuitBreakerManager::class);
+});
+
+it('binds the cache circuit breaker driver when configured', function (): void {
+    config()->set('ai-agent-kit.resilience.circuit_breaker.driver', 'cache');
+    config()->set('ai-agent-kit.resilience.circuit_breaker.cache_store', 'array');
+    forgetResolvedCircuitBreakerManagers();
+
+    expect(app(CircuitBreakerManager::class))->toBeInstanceOf(CacheCircuitBreakerManager::class);
+});
+
+it('shares atomic cache-backed state across manager instances', function (): void {
+    config()->set('ai-agent-kit.resilience.circuit_breaker', [
+        'enabled' => true,
+        'driver' => 'cache',
+        'cache_store' => 'array',
+        'key_prefix' => 'circuit-test:'.bin2hex(random_bytes(8)).':',
+        'lock_seconds' => 2,
+        'failure_threshold' => 2,
+        'reset_timeout_seconds' => 60,
+        'half_open_success_threshold' => 1,
+    ]);
+
+    /** @var CacheFactory $cache */
+    $cache = app(CacheFactory::class);
+    /** @var ConfigRepository $config */
+    $config = app(ConfigRepository::class);
+
+    $firstManager = new CacheCircuitBreakerManager($cache, $config);
+    $secondManager = new CacheCircuitBreakerManager($cache, $config);
+    $firstBreaker = $firstManager->for('providers.openai');
+    $secondBreaker = $secondManager->for('providers.openai');
+    $firstFailureAt = new DateTimeImmutable('2026-08-14T10:00:00+00:00');
+    $secondFailureAt = $firstFailureAt->modify('+1 second');
+
+    $firstBreaker->recordFailure($firstFailureAt);
+    $sharedAfterFirstFailure = $secondBreaker->snapshot($firstFailureAt);
+    $secondBreaker->recordFailure($secondFailureAt);
+    $sharedAfterSecondFailure = $firstBreaker->snapshot($secondFailureAt);
+
+    expect($sharedAfterFirstFailure->consecutiveFailures)->toBe(1)
+        ->and($sharedAfterFirstFailure->state)->toBe(CircuitBreakerState::Closed)
+        ->and($sharedAfterSecondFailure->consecutiveFailures)->toBe(2)
+        ->and($sharedAfterSecondFailure->state)->toBe(CircuitBreakerState::Open)
+        ->and($firstBreaker->allowsExecution($secondFailureAt))->toBeFalse()
+        ->and($secondBreaker->allowsExecution($secondFailureAt))->toBeFalse();
+});
+
+it('coordinates half-open recovery through cache state', function (): void {
+    config()->set('ai-agent-kit.resilience.circuit_breaker', [
+        'enabled' => true,
+        'driver' => 'cache',
+        'cache_store' => 'array',
+        'key_prefix' => 'circuit-recovery-test:'.bin2hex(random_bytes(8)).':',
+        'lock_seconds' => 2,
+        'failure_threshold' => 1,
+        'reset_timeout_seconds' => 10,
+        'half_open_success_threshold' => 2,
+    ]);
+
+    /** @var CacheFactory $cache */
+    $cache = app(CacheFactory::class);
+    /** @var ConfigRepository $config */
+    $config = app(ConfigRepository::class);
+
+    $firstManager = new CacheCircuitBreakerManager($cache, $config);
+    $secondManager = new CacheCircuitBreakerManager($cache, $config);
+    $firstBreaker = $firstManager->for('providers.anthropic');
+    $secondBreaker = $secondManager->for('providers.anthropic');
+    $openedAt = new DateTimeImmutable('2026-08-14T11:00:00+00:00');
+    $halfOpenAt = $openedAt->modify('+11 seconds');
+
+    $firstBreaker->recordFailure($openedAt);
+    $firstSuccess = $secondBreaker->recordSuccess($halfOpenAt);
+    $closed = $firstBreaker->recordSuccess($halfOpenAt->modify('+1 second'));
+
+    expect($firstSuccess->state)->toBe(CircuitBreakerState::HalfOpen)
+        ->and($firstSuccess->halfOpenSuccesses)->toBe(1)
+        ->and($closed->state)->toBe(CircuitBreakerState::Closed)
+        ->and($closed->consecutiveFailures)->toBe(0)
+        ->and($closed->openedAt)->toBeNull();
 });
 
 it('opens after the configured failure threshold and transitions to half-open after the reset timeout', function () {
@@ -107,4 +190,5 @@ function forgetResolvedCircuitBreakerManagers(): void
 {
     app()->forgetInstance(CircuitBreakerManager::class);
     app()->forgetInstance(InMemoryCircuitBreakerManager::class);
+    app()->forgetInstance(CacheCircuitBreakerManager::class);
 }

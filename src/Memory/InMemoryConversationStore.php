@@ -8,6 +8,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationRetentionPurge
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationStore;
 use DateMalformedStringException;
 use DateTimeImmutable;
+use CreativeCrafts\LaravelAiAgentKit\Memory\Exceptions\ConversationWriteConflictException;
 
 final class InMemoryConversationStore implements ConversationRetentionPurger, ConversationStore
 {
@@ -28,7 +29,24 @@ final class InMemoryConversationStore implements ConversationRetentionPurger, Co
 
     public function save(Conversation $conversation): void
     {
-        $this->conversations[$conversation->id->toString()] = $conversation;
+        $key = $conversation->id->toString();
+        $stored = $this->conversations[$key] ?? null;
+
+        if (!$stored instanceof Conversation) {
+            $this->conversations[$key] = $conversation->withRevision(0);
+
+            return;
+        }
+
+        if ($stored->revision !== $conversation->revision) {
+            throw ConversationWriteConflictException::forRevision(
+                conversationId: $key,
+                expectedRevision: $conversation->revision,
+                actualRevision: $stored->revision,
+            );
+        }
+
+        $this->conversations[$key] = $conversation->withRevision($conversation->revision + 1);
     }
 
     public function delete(ConversationId $conversationId): void

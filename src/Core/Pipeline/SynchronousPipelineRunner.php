@@ -8,6 +8,8 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineRunner;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\PipelineStep;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Memory\ConversationContextManager;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\RetryPolicyResolver;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\FailureClassifier;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\Sleeper;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\Redactor;
 use CreativeCrafts\LaravelAiAgentKit\Core\Pipeline\Exceptions\PipelineExecutionException;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\PipelineCompleted;
@@ -19,6 +21,7 @@ use CreativeCrafts\LaravelAiAgentKit\Resilience\BackoffStrategyConfig;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\enums\BackoffStrategy;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\PipelineBudgetEnforcer;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\RetryPolicy;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\SystemSleeper;
 use Illuminate\Contracts\Events\Dispatcher;
 use Throwable;
 
@@ -30,6 +33,8 @@ final readonly class SynchronousPipelineRunner implements PipelineRunner
         private ?Redactor $redactor = null,
         private ?PipelineBudgetEnforcer $budgetEnforcer = null,
         private ?RetryPolicyResolver $retryPolicyResolver = null,
+        private ?FailureClassifier $failureClassifier = null,
+        private ?Sleeper $sleeper = null,
     ) {
     }
 
@@ -112,6 +117,11 @@ final readonly class SynchronousPipelineRunner implements PipelineRunner
             try {
                 return $step->handle($currentContext);
             } catch (Throwable $throwable) {
+                if ($this->failureClassifier instanceof FailureClassifier
+                    && !$this->failureClassifier->classify($throwable)->retryable) {
+                    throw $throwable;
+                }
+
                 if (!$policy->allowsRetryAfterAttempt($attempt)) {
                     throw $throwable;
                 }
@@ -119,7 +129,8 @@ final readonly class SynchronousPipelineRunner implements PipelineRunner
                 $delayForRetry = $policy->delayForRetry($attempt);
 
                 if ($delayForRetry > 0) {
-                    usleep($delayForRetry * 1000);
+                    $this->budgetEnforcer?->assertDelayWithinTimeout($startedAt, $delayForRetry);
+                    ($this->sleeper ?? new SystemSleeper())->sleepMilliseconds($delayForRetry);
                 }
 
                 $attempt++;

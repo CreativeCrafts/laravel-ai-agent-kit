@@ -14,6 +14,9 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ToolAuthorizer;
 use CreativeCrafts\LaravelAiAgentKit\Core\Config\Exceptions\InvalidConfigurationException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Orchestration\DelegationPolicyMode;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\enums\BackoffStrategy;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\enums\UnknownFailureMode;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\enums\CostBudgetMode;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\FailoverModelPolicy;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 
 final readonly class ConfigValidator
@@ -323,6 +326,27 @@ final readonly class ConfigValidator
 
         $mediaInput = $config['media_input'];
 
+        if (array_key_exists('require_https', $mediaInput) && !is_bool($mediaInput['require_https'])) {
+            throw InvalidConfigurationException::invalidType('media_input.require_https', 'bool');
+        }
+
+        if (
+            array_key_exists('host_match', $mediaInput)
+            && (!is_string($mediaInput['host_match']) || !in_array($mediaInput['host_match'], ['exact_only', 'exact_and_subdomains'], true))
+        ) {
+            throw InvalidConfigurationException::invalidValue(
+                'media_input.host_match',
+                'Must be one of: exact_only, exact_and_subdomains.',
+            );
+        }
+
+        if (
+            array_key_exists('include_diagnostic_names', $mediaInput)
+            && !is_bool($mediaInput['include_diagnostic_names'])
+        ) {
+            throw InvalidConfigurationException::invalidType('media_input.include_diagnostic_names', 'bool');
+        }
+
         if (!array_key_exists('url_allowed_hosts', $mediaInput)) {
             return;
         }
@@ -489,6 +513,17 @@ final readonly class ConfigValidator
                 throw InvalidConfigurationException::invalidValue("budgets.{$key}", 'Must be >= 0.');
             }
         }
+
+        if (array_key_exists('cost_estimation_mode', $config['budgets'])) {
+            $mode = $config['budgets']['cost_estimation_mode'];
+
+            if (!is_string($mode) || CostBudgetMode::tryFrom($mode) === null) {
+                throw InvalidConfigurationException::invalidValue(
+                    'budgets.cost_estimation_mode',
+                    'Must be one of: strict, advisory.',
+                );
+            }
+        }
     }
 
     /**
@@ -578,6 +613,44 @@ final readonly class ConfigValidator
 
         $resilience = $config['resilience'];
 
+        if (array_key_exists('failover', $resilience)) {
+            if (!is_array($resilience['failover'])) {
+                throw InvalidConfigurationException::invalidType('resilience.failover', 'array');
+            }
+
+            $failover = $resilience['failover'];
+
+            if (array_key_exists('model_policy', $failover)) {
+                $policy = $failover['model_policy'];
+
+                if (!is_string($policy) || FailoverModelPolicy::tryFrom($policy) === null) {
+                    throw InvalidConfigurationException::invalidValue(
+                        'resilience.failover.model_policy',
+                        'Must be one of: initial_only, preserve_when_same_sdk_provider, preserve_always_legacy.',
+                    );
+                }
+            }
+        }
+
+        if (array_key_exists('failure_classification', $resilience)) {
+            if (!is_array($resilience['failure_classification'])) {
+                throw InvalidConfigurationException::invalidType('resilience.failure_classification', 'array');
+            }
+
+            $classification = $resilience['failure_classification'];
+
+            if (array_key_exists('unknown_failure_mode', $classification)) {
+                $mode = $classification['unknown_failure_mode'];
+
+                if (!is_string($mode) || UnknownFailureMode::tryFrom($mode) === null) {
+                    throw InvalidConfigurationException::invalidValue(
+                        'resilience.failure_classification.unknown_failure_mode',
+                        'Must be one of: strict, legacy_failover.',
+                    );
+                }
+            }
+        }
+
         if (array_key_exists('retry', $resilience)) {
             if (!is_array($resilience['retry'])) {
                 throw InvalidConfigurationException::invalidType('resilience.retry', 'array');
@@ -664,11 +737,42 @@ final readonly class ConfigValidator
             throw InvalidConfigurationException::invalidType('resilience.circuit_breaker.enabled', 'bool');
         }
 
+        if (
+            array_key_exists('driver', $circuitBreaker)
+            && (!is_string($circuitBreaker['driver']) || !in_array($circuitBreaker['driver'], ['in_memory', 'cache'], true))
+        ) {
+            throw InvalidConfigurationException::invalidValue(
+                'resilience.circuit_breaker.driver',
+                'Must be one of: in_memory, cache.',
+            );
+        }
+
+        if (
+            array_key_exists('cache_store', $circuitBreaker)
+            && $circuitBreaker['cache_store'] !== null
+            && (!is_string($circuitBreaker['cache_store']) || trim($circuitBreaker['cache_store']) === '')
+        ) {
+            throw InvalidConfigurationException::invalidValue(
+                'resilience.circuit_breaker.cache_store',
+                'Must be null or a non-empty string.',
+            );
+        }
+
+        if (
+            array_key_exists('key_prefix', $circuitBreaker)
+            && (!is_string($circuitBreaker['key_prefix']) || $circuitBreaker['key_prefix'] === '')
+        ) {
+            throw InvalidConfigurationException::invalidValue(
+                'resilience.circuit_breaker.key_prefix',
+                'Must be a non-empty string.',
+            );
+        }
+
         if (array_key_exists('apply_to_failover', $circuitBreaker) && !is_bool($circuitBreaker['apply_to_failover'])) {
             throw InvalidConfigurationException::invalidType('resilience.circuit_breaker.apply_to_failover', 'bool');
         }
 
-        foreach (['failure_threshold', 'reset_timeout_seconds', 'half_open_success_threshold'] as $key) {
+        foreach (['failure_threshold', 'reset_timeout_seconds', 'half_open_success_threshold', 'lock_seconds'] as $key) {
             if (!array_key_exists($key, $circuitBreaker)) {
                 continue;
             }

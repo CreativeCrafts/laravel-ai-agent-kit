@@ -2,15 +2,49 @@
 
 All notable changes to `laravel-ai-agent-kit` will be documented in this file.
 
+## [1.1.2] - 2026-08-14
+
+### Added
+
+- Added an opt-in cache-backed circuit breaker with atomic lock-guarded transitions and cross-worker state sharing while retaining the process-local in-memory compatibility default.
+
+- Hardened media metadata defaults, added HTTPS/exact-host policies and deterministic DNS resolution, and forwarded stored-audio MIME through the installed SDK's official API.
+
+- Split runtime budgets into cost preflight and token/tool postflight phases with a package-owned estimator contract and strict or advisory unknown-cost handling.
+
+- Added optimistic conversation revisions and stale-write conflicts across database, Redis, and in-memory stores, plus normalized package-owned corruption failures with safe field context.
+
+- Made pipeline retries disposition-aware, replaced hard-coded sleeping with an injectable sleeper, enforced timeout budgets before backoff, and added queued retry-amplification estimates and
+  telemetry.
+
+- Added capability-aware provider failover with audited aliases, safe skip telemetry, explicit execution requirements, and source compatibility for existing selector implementations.
+
+- Isolated explicit request models from fallback profiles with configurable `initial_only`, same-SDK-provider, and legacy failover policies.
+
+- Added canonical prompt token parsing with literal `\{{placeholder}}` escaping and non-recursive interpolation.
+- Added validated file prompt manifests, typed manifest exceptions, and the `ai:prompts:lint` command.
+- Added non-destructive prompt version scaffolding with explicit `--activate` semantics.
+- Added package-owned semantic failure dispositions for category, provider health, retryability, and failover safety.
+
+### Changed
+
+- File prompts now honor `current_version` and authoritative per-version `variables` declarations while preserving highest-version selection and variable inference for legacy manifests that omit those
+  fields.
+- `ai:make:prompt --force` now replaces only its target version; version strings and template references are validated as safe paths before writing.
+- Runtime failover now proceeds only for classified failover-safe failures, and circuit breakers count only provider-health failures. Unknown failures fail closed by default with an explicit
+  `legacy_failover` compatibility mode.
+
 ## [1.1.1] - 2026-08-13
 
 ### Added
 
-- Added deterministic `evaluationInputTemplate` support to audio-image structured evaluation with `{{transcript}}` and optional `{{evaluation_prompt}}` placeholders while preserving the existing default prompt composition.
+- Added deterministic `evaluationInputTemplate` support to audio-image structured evaluation with `{{transcript}}` and optional `{{evaluation_prompt}}` placeholders while preserving the existing
+  default prompt composition.
 
 ### Fixed
 
-- Provider configuration validation now rejects unsupported keys under `providers.*.options` and directs provider-native options to `options.provider_options`, preventing silently ignored profile settings.
+- Provider configuration validation now rejects unsupported keys under `providers.*.options` and directs provider-native options to `options.provider_options`, preventing silently ignored profile
+  settings.
 - Queued `AudioImageStructuredEvaluationRequest` payloads serialized before `evaluationInputTemplate` existed now restore that field to `null` instead of throwing on uninitialized property access.
 
 See [UPGRADE.md](UPGRADE.md).

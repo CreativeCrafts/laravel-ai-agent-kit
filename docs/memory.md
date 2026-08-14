@@ -1,5 +1,13 @@
 # Memory
 
+## Optimistic conversation revisions
+
+Every `Conversation` carries a non-negative persistence `revision`, defaulting to `0` for source and serialization compatibility. Database, Redis, and in-memory stores compare that revision atomically before replacing aggregate state. Saving one of two aggregates loaded at the same revision succeeds; saving the stale aggregate throws `ConversationWriteConflictException`. Agent Kit does not merge concurrent message graphs automatically.
+
+Publish and run the `add_revision_to_ai_agent_conversations_table` migration when upgrading an existing database installation. Redis compare-and-set uses a Lua script, including for encrypted payloads; it does not perform a non-atomic read/compare/write sequence.
+
+Malformed persisted JSON, roles, dates, required fields, attachments, and encrypted payloads are normalized to `ConversationStoreException` with a semantic field name and the original throwable as `previous`. Exception messages never include decrypted conversation content.
+
 Memory lets workflows start or continue conversations through package-owned contracts. The package owns retention, persistence, encryption, and no-store policy; Laravel AI SDK conversation objects are not the public memory contract for Agent Kit workflows.
 
 ## Drivers

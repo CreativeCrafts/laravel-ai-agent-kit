@@ -11,6 +11,8 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\ConversationMessageRole;
 use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationRetentionPurger;
 use CreativeCrafts\LaravelAiAgentKit\Memory\DatabaseConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
+use CreativeCrafts\LaravelAiAgentKit\Memory\Exceptions\ConversationWriteConflictException;
+use CreativeCrafts\LaravelAiAgentKit\Memory\Exceptions\ConversationStoreException;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -76,6 +78,99 @@ it('persists and reloads conversations through the database-backed store', funct
       ->and((string)$messageRow?->content_ciphertext)->not->toContain('Summarize the meeting notes.');
 });
 
+it('detects concurrent database updates loaded from the same revision', function (): void {
+    $store = app(ConversationStore::class);
+    $conversationId = new ConversationId('conv-database-conflict');
+    $startedAt = new DateTimeImmutable('2026-03-14T09:00:00+00:00');
+    $store->save(new Conversation(id: $conversationId, createdAt: $startedAt, updatedAt: $startedAt));
+
+    $writerA = $store->find($conversationId);
+    $writerB = $store->find($conversationId);
+
+    expect($writerA)->toBeInstanceOf(Conversation::class)
+        ->and($writerB)->toBeInstanceOf(Conversation::class);
+
+    $store->save($writerA->withAppendedMessage(new ConversationMessage(
+        id: new MessageId('database-a1'),
+        role: ConversationMessageRole::User,
+        content: 'A1',
+        createdAt: $startedAt,
+    )));
+
+    expect(fn () => $store->save($writerB->withAppendedMessage(new ConversationMessage(
+        id: new MessageId('database-b1'),
+        role: ConversationMessageRole::User,
+        content: 'B1',
+        createdAt: $startedAt,
+    ))))->toThrow(ConversationWriteConflictException::class);
+});
+
+it('normalizes malformed database persistence fields', function (Closure $corrupt, string $field): void {
+    config()->set('ai-agent-kit.memory.database.encrypt_payloads', false);
+    $store = app(ConversationStore::class);
+    $conversationId = new ConversationId('conv-database-corrupt');
+    $store->save(databaseConversation('conv-database-corrupt'));
+    $corrupt();
+
+    try {
+        $store->find($conversationId);
+    } catch (ConversationStoreException $exception) {
+        expect($exception->getMessage())->toContain($field)
+            ->and($exception->getPrevious())->not->toBeNull()
+            ->and($exception->getMessage())->not->toContain('candidate-secret-content');
+
+        return;
+    }
+
+    throw new RuntimeException('Expected malformed database persistence to be normalized.');
+})->with([
+    'wrong metadata top-level type' => [
+        static fn () => DB::table('ai_agent_conversations')
+            ->where('conversation_id', 'conv-database-corrupt')
+            ->update(['metadata_ciphertext' => '"candidate-secret-content"']),
+        'conversations.metadata_ciphertext',
+    ],
+    'invalid message role' => [
+        static fn () => DB::table('ai_agent_conversation_messages')
+            ->where('message_id', 'msg-001')
+            ->update(['role' => 'invalid-role']),
+        'messages.role',
+    ],
+    'invalid message date' => [
+        static fn () => DB::table('ai_agent_conversation_messages')
+            ->where('message_id', 'msg-001')
+            ->update(['created_at' => 'not-a-date']),
+        'messages.created_at',
+    ],
+    'malformed attachment representation' => [
+        static fn () => DB::table('ai_agent_conversation_messages')
+            ->where('message_id', 'msg-001')
+            ->update(['attachments_ciphertext' => '{"attachments":["candidate-secret-content"]}']),
+        'messages.attachments_ciphertext.attachments',
+    ],
+]);
+
+it('normalizes database payload decryption failures without exposing content', function (): void {
+    $store = app(ConversationStore::class);
+    $conversationId = new ConversationId('conv-database-decryption-corrupt');
+    $store->save(databaseConversation('conv-database-decryption-corrupt'));
+    DB::table('ai_agent_conversation_messages')
+        ->where('message_id', 'msg-001')
+        ->update(['content_ciphertext' => 'candidate-secret-content']);
+
+    try {
+        $store->find($conversationId);
+    } catch (ConversationStoreException $exception) {
+        expect($exception->getMessage())->toContain('messages.content_ciphertext')
+            ->and($exception->getPrevious())->not->toBeNull()
+            ->and($exception->getMessage())->not->toContain('candidate-secret-content');
+
+        return;
+    }
+
+    throw new RuntimeException('Expected database decryption failure to be normalized.');
+});
+
 it('persists plaintext payloads when database encryption is explicitly disabled', function (): void {
     config()->set('ai-agent-kit.memory.database.encrypt_payloads', false);
 
@@ -131,8 +226,12 @@ it('saves the same conversation idempotently without duplicate conversation or m
     $conversation = databaseConversation('conv-idempotent');
 
     $store->save($conversation);
-    $store->save($conversation);
-    $store->save($conversation);
+
+    for ($save = 0; $save < 2; $save++) {
+        $current = $store->find($conversation->id);
+        expect($current)->toBeInstanceOf(Conversation::class);
+        $store->save($current);
+    }
 
     $conversationRow = DB::table('ai_agent_conversations')
         ->where('conversation_id', 'conv-idempotent')

@@ -4,14 +4,19 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Runtime;
 
+use CreativeCrafts\LaravelAiAgentKit\Resilience\CostEstimate;
 use Closure;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\AiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Core\StreamingAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\CapabilityAwareFailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\CircuitBreakerManager;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\CostEstimator;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\FailureClassifier;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\Redactor;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderNotInFailoverOrderException;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\FailoverModelResolver;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ProviderDefinition;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ResolvedProviderTarget;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeBudgetExceededException;
@@ -26,6 +31,7 @@ use CreativeCrafts\LaravelAiAgentKit\Observability\Support\FailureCategory;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Support\FailureCategoryResolver;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Support\RequestObservabilityKeys;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\RuntimeBudgetEnforcer;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\FailureDisposition;
 use CreativeCrafts\LaravelAiAgentKit\Tools\Exceptions\ToolAuthorizationDeniedException;
 use CreativeCrafts\LaravelAiAgentKit\Tools\ProviderToolMaterializer;
 use CreativeCrafts\LaravelAiAgentKit\Tools\SdkToolMaterializer;
@@ -57,8 +63,11 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
         private ProviderToolMaterializer $providerToolMaterializer,
         private RuntimeConversationMemoryBridge $runtimeConversationMemoryBridge,
         private RuntimeBudgetEnforcer $runtimeBudgetEnforcer,
+        private FailureClassifier $failureClassifier,
+        private CostEstimator $costEstimator,
         private Container $container,
         private ProviderTargetResolver $providerTargetResolver,
+        private FailoverModelResolver $failoverModelResolver,
         private ?Dispatcher $events = null,
         private ?Redactor $redactor = null,
     ) {
@@ -70,12 +79,16 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
     public function execute(ExecutionRequest $request): ExecutionResult
     {
         try {
-            $estimatedCostUsd = $this->estimatedCostUsd($request);
+            $costEstimate = $this->costEstimator->estimate($request);
+            $this->runtimeBudgetEnforcer->assertPreflight($request->runId, $costEstimate);
         } catch (RuntimeBudgetExceededException $exception) {
             $this->reportRuntimeFailure($request, $exception);
 
             throw $exception;
         }
+
+        $estimatedCostUsd = $costEstimate?->amountUsd;
+        $costUnknown = $this->runtimeBudgetEnforcer->isCostBudgetConfigured() && !$costEstimate instanceof CostEstimate;
 
         try {
             $projectedConversation = $this->runtimeConversationMemoryBridge->project($request);
@@ -111,6 +124,7 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
         $effectiveAttachments = $this->effectivePromptAttachments($request, $projectedConversation);
         $attemptedProfiles = [];
         $attemptedSdkProviders = [];
+        $requiredCapabilities = $this->requiredCapabilitiesFor($request);
         $attempt = $this->providerTargetResolver->resolve($request->provider, $request->model);
         $attemptRequest = $request->withProviderIdentity($attempt->policyIdentity(), $attempt->model);
         $lastProviderThrowable = null;
@@ -154,25 +168,49 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
                 break;
             } catch (Throwable $throwable) {
                 $lastProviderThrowable = $throwable;
-                $this->recordProviderFailure($attempt->policyIdentity());
+                $disposition = $this->failureClassifier->classify($throwable);
+                $this->recordProviderFailureForDisposition($attempt->policyIdentity(), $disposition);
 
-                $nextProvider = $this->nextFailoverProvider($attempt->policyIdentity());
+                $failureRequest = $attemptRequest->withMetadata([
+                  'runtime_provider_attempts' => $attemptedProfiles,
+                  'runtime_sdk_provider_attempts' => $attemptedSdkProviders,
+                  'runtime_failure_reason' => $disposition->reason,
+                ]);
 
-                if (!$nextProvider instanceof ProviderDefinition) {
+                if (!$disposition->failoverSafe) {
                     throw $this->wrapAndReportRuntimeFailure(
-                        request: $attemptRequest->withMetadata([
-                        'runtime_provider_attempts' => $attemptedProfiles,
-                        'runtime_sdk_provider_attempts' => $attemptedSdkProviders,
-                        'runtime_failover_exhausted' => true,
-                      ]),
+                        request: $failureRequest,
                         throwable: $throwable,
                         projectedMessageCount: $telemetryContext->projectedMessageCount,
                         packageConversationId: $telemetryContext->packageConversationId?->toString(),
-                        failureCategory: FailureCategory::ProviderFailure->value,
+                        failureCategory: $disposition->category->value,
                     );
                 }
 
-                $attempt = $this->providerTargetResolver->fromDefinition($nextProvider, $request->model);
+                $nextProvider = $this->nextFailoverProvider(
+                    $attempt->policyIdentity(),
+                    $requiredCapabilities,
+                );
+
+                if (!$nextProvider instanceof ProviderDefinition) {
+                    throw $this->wrapAndReportRuntimeFailure(
+                        request: $failureRequest->withMetadata([
+                          'runtime_failover_exhausted' => true,
+                          'runtime_failover_required_capabilities' => $requiredCapabilities,
+                        ]),
+                        throwable: $throwable,
+                        projectedMessageCount: $telemetryContext->projectedMessageCount,
+                        packageConversationId: $telemetryContext->packageConversationId?->toString(),
+                        failureCategory: $disposition->category->value,
+                    );
+                }
+
+                $fallbackRequestModel = $this->failoverModelResolver->requestModelForFallback(
+                    requestModel: $request->model,
+                    currentTarget: $attempt,
+                    fallbackDefinition: $nextProvider,
+                );
+                $attempt = $this->providerTargetResolver->fromDefinition($nextProvider, $fallbackRequestModel);
             }
         }
 
@@ -183,11 +221,10 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
         $totalTokens = $promptTokens + $completionTokens;
 
         try {
-            $this->runtimeBudgetEnforcer->assertResponseWithinBudgets(
+            $this->runtimeBudgetEnforcer->assertPostflight(
                 runId: $request->runId,
                 totalTokens: $totalTokens,
                 toolCallCount: $response->toolCalls->count(),
-                estimatedCostUsd: $estimatedCostUsd,
             );
         } catch (RuntimeBudgetExceededException $exception) {
             $this->reportRuntimeFailure(
@@ -242,6 +279,8 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
             'package_conversation_id' => $conversation?->id->toString(),
             'package_conversation_message_count' => $conversation?->messageCount(),
             'estimated_cost_usd' => $estimatedCostUsd,
+            'cost_estimate_source' => $costEstimate?->source,
+            'cost_unknown' => $costUnknown,
             'attachment_replay_merge' => $projectedConversation->attachmentReplayMerge,
             'attachment_replay_prior_included' => $projectedConversation->priorAttachmentReplayCount,
             'attachment_replay_prior_excluded' => $projectedConversation->priorAttachmentExcludedCount,
@@ -270,13 +309,17 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
         $broadcastChannel = $this->resolveStreamingBroadcastChannel($request);
 
         try {
-            $estimatedCostUsd = $this->estimatedCostUsd($request);
+            $costEstimate = $this->costEstimator->estimate($request);
+            $this->runtimeBudgetEnforcer->assertPreflight($request->runId, $costEstimate);
         } catch (RuntimeBudgetExceededException $exception) {
             $this->reportStreamFailure($request, $exception, 0, null, $broadcastChannel);
             yield $this->streamFailureFromThrowable($request, $exception);
 
             return;
         }
+
+        $estimatedCostUsd = $costEstimate?->amountUsd;
+        $costUnknown = $this->runtimeBudgetEnforcer->isCostBudgetConfigured() && !$costEstimate instanceof CostEstimate;
 
         try {
             $projectedConversation = $this->runtimeConversationMemoryBridge->project($request);
@@ -310,6 +353,7 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
         $effectiveAttachments = $this->effectivePromptAttachments($request, $projectedConversation);
         $attemptedProfiles = [];
         $attemptedSdkProviders = [];
+        $requiredCapabilities = $this->requiredCapabilitiesFor($request);
         $attempt = $this->providerTargetResolver->resolve($request->provider, $request->model);
         $attemptRequest = $request->withProviderIdentity($attempt->policyIdentity(), $attempt->model);
 
@@ -339,28 +383,57 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
 
                 break;
             } catch (Throwable $throwable) {
-                $this->recordProviderFailure($attempt->policyIdentity());
-                $nextProvider = $this->nextFailoverProvider($attempt->policyIdentity());
+                $disposition = $this->failureClassifier->classify($throwable);
+                $this->recordProviderFailureForDisposition($attempt->policyIdentity(), $disposition);
+                $failureRequest = $attemptRequest->withMetadata([
+                  'runtime_provider_attempts' => $attemptedProfiles,
+                  'runtime_sdk_provider_attempts' => $attemptedSdkProviders,
+                  'runtime_failure_reason' => $disposition->reason,
+                ]);
 
-                if (!$nextProvider instanceof ProviderDefinition) {
+                if (!$disposition->failoverSafe) {
                     $wrapped = $this->wrapStreamFailure(
-                        request: $attemptRequest->withMetadata([
-                        'runtime_provider_attempts' => $attemptedProfiles,
-                        'runtime_sdk_provider_attempts' => $attemptedSdkProviders,
-                        'runtime_failover_exhausted' => true,
-                      ]),
+                        request: $failureRequest,
                         throwable: $throwable,
                         projectedMessageCount: $telemetryContext->projectedMessageCount,
                         packageConversationId: $telemetryContext->packageConversationId?->toString(),
                         broadcastChannel: $broadcastChannel,
-                        failureCategory: FailureCategory::ProviderFailure->value,
+                        failureCategory: $disposition->category->value,
                     );
-                    yield $this->streamFailureFromThrowable($attemptRequest, $wrapped);
+                    yield $this->streamFailureFromThrowable($failureRequest, $wrapped);
 
                     return;
                 }
 
-                $attempt = $this->providerTargetResolver->fromDefinition($nextProvider, $request->model);
+                $nextProvider = $this->nextFailoverProvider(
+                    $attempt->policyIdentity(),
+                    $requiredCapabilities,
+                );
+
+                if (!$nextProvider instanceof ProviderDefinition) {
+                    $exhaustedRequest = $failureRequest->withMetadata([
+                      'runtime_failover_exhausted' => true,
+                      'runtime_failover_required_capabilities' => $requiredCapabilities,
+                    ]);
+                    $wrapped = $this->wrapStreamFailure(
+                        request: $exhaustedRequest,
+                        throwable: $throwable,
+                        projectedMessageCount: $telemetryContext->projectedMessageCount,
+                        packageConversationId: $telemetryContext->packageConversationId?->toString(),
+                        broadcastChannel: $broadcastChannel,
+                        failureCategory: $disposition->category->value,
+                    );
+                    yield $this->streamFailureFromThrowable($exhaustedRequest, $wrapped);
+
+                    return;
+                }
+
+                $fallbackRequestModel = $this->failoverModelResolver->requestModelForFallback(
+                    requestModel: $request->model,
+                    currentTarget: $attempt,
+                    fallbackDefinition: $nextProvider,
+                );
+                $attempt = $this->providerTargetResolver->fromDefinition($nextProvider, $fallbackRequestModel);
             }
         }
 
@@ -394,12 +467,19 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
                 }
 
                 if ($event instanceof StreamError) {
-                    $this->recordProviderFailure($attempt->policyIdentity());
+                    $disposition = new FailureDisposition(
+                        category: FailureCategory::ProviderFailure,
+                        providerHealthFailure: true,
+                        retryable: false,
+                        failoverSafe: false,
+                        reason: 'provider_stream_error',
+                    );
+                    $this->recordProviderFailureForDisposition($attempt->policyIdentity(), $disposition);
 
                     $exception = RuntimeExecutionException::forRequest(
                         runId: $request->runId,
                         previous: new RuntimeException($event->message),
-                        failureCategory: FailureCategory::ProviderFailure->value,
+                        failureCategory: $disposition->category->value,
                     );
 
                     $this->reportStreamFailure(
@@ -412,7 +492,7 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
 
                     yield new StreamFailure(
                         runId: $request->runId,
-                        failureCategory: FailureCategory::ProviderFailure->value,
+                        failureCategory: $disposition->category->value,
                         exceptionClass: StreamError::class,
                         exceptionMessage: $event->message,
                     );
@@ -422,7 +502,8 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
                 }
             }
         } catch (Throwable $throwable) {
-            $this->recordProviderFailure($attempt->policyIdentity());
+            $disposition = $this->failureClassifier->classify($throwable);
+            $this->recordProviderFailureForDisposition($attempt->policyIdentity(), $disposition);
 
             $wrapped = $this->wrapStreamFailure(
                 request: $attemptRequest,
@@ -430,7 +511,7 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
                 projectedMessageCount: $telemetryContext->projectedMessageCount,
                 packageConversationId: $telemetryContext->packageConversationId?->toString(),
                 broadcastChannel: $broadcastChannel,
-                failureCategory: FailureCategory::ProviderFailure->value,
+                failureCategory: $disposition->category->value,
             );
 
             yield $this->streamFailureFromThrowable($attemptRequest, $wrapped);
@@ -450,12 +531,19 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
         $meta = $this->resolveStreamMeta($stream->events);
 
         if (!$meta instanceof Meta) {
-            $this->recordProviderFailure($attempt->policyIdentity());
+            $disposition = new FailureDisposition(
+                category: FailureCategory::ProviderFailure,
+                providerHealthFailure: true,
+                retryable: false,
+                failoverSafe: false,
+                reason: 'provider_stream_metadata_missing',
+            );
+            $this->recordProviderFailureForDisposition($attempt->policyIdentity(), $disposition);
 
             $exception = RuntimeExecutionException::forRequest(
                 runId: $request->runId,
                 previous: new RuntimeException('Stream completed without provider metadata.'),
-                failureCategory: FailureCategory::ProviderFailure->value,
+                failureCategory: $disposition->category->value,
             );
 
             $this->reportStreamFailure(
@@ -478,11 +566,10 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
         );
 
         try {
-            $this->runtimeBudgetEnforcer->assertResponseWithinBudgets(
+            $this->runtimeBudgetEnforcer->assertPostflight(
                 runId: $request->runId,
                 totalTokens: $totalTokens,
                 toolCallCount: $streamedResponse->toolCalls->count(),
-                estimatedCostUsd: $estimatedCostUsd,
             );
         } catch (RuntimeBudgetExceededException $exception) {
             $this->reportStreamFailure(
@@ -555,6 +642,8 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
             'package_conversation_id' => $conversation?->id->toString(),
             'package_conversation_message_count' => $conversation?->messageCount(),
             'estimated_cost_usd' => $estimatedCostUsd,
+            'cost_estimate_source' => $costEstimate?->source,
+            'cost_unknown' => $costUnknown,
             'runtime_provider_attempts' => $attemptedProfiles,
             'runtime_sdk_provider_attempts' => $attemptedSdkProviders,
             'runtime_final_provider' => $attempt->policyIdentity(),
@@ -562,25 +651,6 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
             'runtime_failover_attempted' => count($attemptedProfiles) > 1,
           ],
         );
-    }
-
-    private function estimatedCostUsd(ExecutionRequest $request): ?float
-    {
-        $value = $request->metadata['cost_usd'] ?? $request->metadata['estimated_cost_usd'] ?? null;
-
-        if ($value === null) {
-            return null;
-        }
-
-        if (!is_int($value) && !is_float($value)) {
-            throw RuntimeBudgetExceededException::forInvalidEstimatedCostType($request->runId, get_debug_type($value));
-        }
-
-        if ($value < 0) {
-            throw RuntimeBudgetExceededException::forInvalidEstimatedCostValue($request->runId, (float)$value);
-        }
-
-        return (float)$value;
     }
 
     private function reportRuntimeFailure(
@@ -861,17 +931,57 @@ final readonly class SdkAiRuntime implements AiRuntime, StreamingAiRuntime
         $this->circuitBreakerManager()?->for('providers.' . $providerName)->recordFailure();
     }
 
-    private function nextFailoverProvider(?string $currentProviderName): ?ProviderDefinition
-    {
+    private function recordProviderFailureForDisposition(
+        ?string $providerName,
+        FailureDisposition $disposition,
+    ): void {
+        if (!$disposition->providerHealthFailure) {
+            return;
+        }
+
+        $this->recordProviderFailure($providerName);
+    }
+
+    /**
+     * @param list<string> $requiredCapabilities
+     */
+    private function nextFailoverProvider(
+        ?string $currentProviderName,
+        array $requiredCapabilities,
+    ): ?ProviderDefinition {
         if ($currentProviderName === null || $currentProviderName === '') {
             return null;
         }
 
         try {
-            return $this->failoverProviderSelector()->nextAfter($currentProviderName);
+            $selector = $this->failoverProviderSelector();
+
+            if ($selector instanceof CapabilityAwareFailoverProviderSelector) {
+                return $selector->nextAfterSupporting($currentProviderName, $requiredCapabilities);
+            }
+
+            return $selector->nextAfter($currentProviderName);
         } catch (ProviderNotInFailoverOrderException) {
             return null;
         }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function requiredCapabilitiesFor(ExecutionRequest $request): array
+    {
+        $requiredCapabilities = $request->requiredCapabilities;
+
+        if (!in_array('text_generation', $requiredCapabilities, true)) {
+            $requiredCapabilities[] = 'text_generation';
+        }
+
+        if ($request->schema !== null && !in_array('structured_output', $requiredCapabilities, true)) {
+            $requiredCapabilities[] = 'structured_output';
+        }
+
+        return $requiredCapabilities;
     }
 
     /**

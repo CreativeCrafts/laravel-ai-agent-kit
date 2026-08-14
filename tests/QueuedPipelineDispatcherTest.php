@@ -16,6 +16,8 @@ use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\TestPipelineResultHandler;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\TestQueuedPipelineDefinition;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Event;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\QueuedPipelineRetryAmplificationEstimated;
 
 beforeEach(function () {
     TestPipelineResultHandler::reset();
@@ -44,6 +46,9 @@ it('dispatches a queued pipeline job with typed payload and queue options', func
             queue: 'ai-pipelines',
             delaySeconds: 15,
             timeoutSeconds: 90,
+            tries: 3,
+            maxExceptions: 2,
+            backoffSeconds: 30,
         ),
         resultHandler: TestPipelineResultHandler::class,
     );
@@ -56,8 +61,39 @@ it('dispatches a queued pipeline job with typed payload and queue options', func
           && $job->connection === 'redis'
           && $job->queue === 'ai-pipelines'
           && $job->delay === 15
-          && $job->timeout === 90;
+          && $job->timeout === 90
+          && $job->tries === 3
+          && $job->maxExceptions === 2
+          && $job->backoff === 30;
     });
+});
+
+it('emits enough telemetry to compute explicit queued retry amplification', function (): void {
+    Queue::fake();
+    Event::fake([QueuedPipelineRetryAmplificationEstimated::class]);
+    config()->set('ai-agent-kit.failover_order', ['primary', 'secondary']);
+    config()->set('ai-agent-kit.budgets.max_retries_per_step', 1);
+    config()->set('ai-agent-kit.resilience.retry.enabled', true);
+    config()->set('ai-agent-kit.resilience.retry.max_attempts', 2);
+
+    /** @var QueuedPipelineDispatcher $dispatcher */
+    $dispatcher = app(QueuedPipelineDispatcher::class);
+    $dispatcher->dispatch(
+        pipelineDefinition: TestQueuedPipelineDefinition::class,
+        context: new RunContext(runId: 'run-retry-amplification'),
+        options: new QueueDispatchOptions(tries: 3),
+    );
+
+    Event::assertDispatched(
+        QueuedPipelineRetryAmplificationEstimated::class,
+        static fn (QueuedPipelineRetryAmplificationEstimated $event): bool =>
+            $event->runId === 'run-retry-amplification'
+            && $event->queueAttempts === 3
+            && $event->pipelineStepAttempts === 2
+            && $event->providerAttemptsPerExecution === 2
+            && $event->worstCaseProviderAttempts === 12
+            && $event->complete,
+    );
 });
 
 it('executes a queued pipeline job and forwards successful results explicitly', function () {

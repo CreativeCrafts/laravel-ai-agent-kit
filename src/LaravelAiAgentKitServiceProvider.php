@@ -7,6 +7,7 @@ namespace CreativeCrafts\LaravelAiAgentKit;
 use Closure;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\AudioToTextToEvaluation;
 use CreativeCrafts\LaravelAiAgentKit\Blueprints\TextToStructuredEvaluation;
+use CreativeCrafts\LaravelAiAgentKit\Commands\LintPromptsCommand;
 use CreativeCrafts\LaravelAiAgentKit\Commands\MakeAgentCommand;
 use CreativeCrafts\LaravelAiAgentKit\Commands\MakePipelineCommand;
 use CreativeCrafts\LaravelAiAgentKit\Commands\MakePromptCommand;
@@ -38,7 +39,10 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\CircuitBreakerManager;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\CostEstimator;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\FailureClassifier;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\RetryPolicyResolver;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\Sleeper;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\EncryptionService;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Security\Redactor;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Tools\ProviderToolRegistry;
@@ -64,6 +68,8 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredFailoverProviderSe
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderTargetResolver;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\FailoverModelPolicy;
+use CreativeCrafts\LaravelAiAgentKit\Core\Providers\FailoverModelResolver;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\CompiledBlueprintRunner;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\MiddlewareExecutingAiRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\PromptBlueprintCompiler;
@@ -83,9 +89,15 @@ use CreativeCrafts\LaravelAiAgentKit\Prompts\FilePromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\InMemoryPromptRepository;
 use CreativeCrafts\LaravelAiAgentKit\Prompts\PromptExecutionMapper;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\ConfigRetryPolicyResolver;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\CacheCircuitBreakerManager;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\InMemoryCircuitBreakerManager;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\PipelineBudgetEnforcer;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\RequestMetadataCostEstimator;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\RuntimeBudgetEnforcer;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\RetryAmplificationCalculator;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\SemanticFailureClassifier;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\SystemSleeper;
+use CreativeCrafts\LaravelAiAgentKit\Resilience\enums\UnknownFailureMode;
 use CreativeCrafts\LaravelAiAgentKit\Security\DefaultRedactor;
 use CreativeCrafts\LaravelAiAgentKit\Security\LaravelEncryptionService;
 use CreativeCrafts\LaravelAiAgentKit\Support\AgentKitManager;
@@ -98,6 +110,7 @@ use CreativeCrafts\LaravelAiAgentKit\Tools\SimilaritySearchTool;
 use CreativeCrafts\LaravelAiAgentKit\Vector\DatabaseVectorStore;
 use CreativeCrafts\LaravelAiAgentKit\Vector\InMemoryVectorStore;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
+use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Contracts\Encryption\Encrypter;
 use Illuminate\Contracts\Events\Dispatcher;
@@ -126,10 +139,12 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
           ->hasConfigFile('ai-agent-kit')
           ->hasViews()
           ->hasMigration('create_ai_agent_conversations_table')
+          ->hasMigration('add_revision_to_ai_agent_conversations_table')
           ->hasMigration('create_ai_agent_conversation_messages_table')
           ->hasMigration('update_ai_agent_conversation_messages_message_identity_index')
           ->hasMigration('create_ai_agent_vector_documents_table')
           ->hasCommands([
+            LintPromptsCommand::class,
             MakeAgentCommand::class,
             MakePipelineCommand::class,
             MakePromptCommand::class,
@@ -425,6 +440,26 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return $app->make(ConfiguredFailoverProviderSelector::class);
         });
 
+        $this->app->singleton(FailoverModelResolver::class, function (Application $app): FailoverModelResolver {
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+            $configuredPolicy = $config->get(
+                'ai-agent-kit.resilience.failover.model_policy',
+                FailoverModelPolicy::InitialOnly->value,
+            );
+            $policy = $configuredPolicy instanceof FailoverModelPolicy
+                ? $configuredPolicy
+                : (is_string($configuredPolicy) ? FailoverModelPolicy::tryFrom($configuredPolicy) : null);
+
+            if (!$policy instanceof FailoverModelPolicy) {
+                throw new RuntimeException(
+                    'Configuration key [ai-agent-kit.resilience.failover.model_policy] must be one of [initial_only, preserve_when_same_sdk_provider, preserve_always_legacy].',
+                );
+            }
+
+            return new FailoverModelResolver($policy);
+        });
+
         $this->app->singleton(ConfiguredProviderTargetResolver::class, function (Application $app): ConfiguredProviderTargetResolver {
             return new ConfiguredProviderTargetResolver(
                 providerRegistry: $app->make(ProviderRegistry::class),
@@ -440,6 +475,34 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
 
     private function registerResilienceBindings(): void
     {
+        $this->app->singleton(SemanticFailureClassifier::class, function (Application $app): SemanticFailureClassifier {
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+            $configuredMode = $config->get(
+                'ai-agent-kit.resilience.failure_classification.unknown_failure_mode',
+                UnknownFailureMode::Strict->value,
+            );
+            $mode = $configuredMode instanceof UnknownFailureMode
+                ? $configuredMode
+                : (is_string($configuredMode) ? UnknownFailureMode::tryFrom($configuredMode) : null);
+
+            if (!$mode instanceof UnknownFailureMode) {
+                throw new RuntimeException(
+                    'Configuration key [ai-agent-kit.resilience.failure_classification.unknown_failure_mode] must be one of [strict, legacy_failover].',
+                );
+            }
+
+            return new SemanticFailureClassifier($mode);
+        });
+
+        $this->app->singleton(FailureClassifier::class, function (Application $app): FailureClassifier {
+            return $app->make(SemanticFailureClassifier::class);
+        });
+
+        $this->app->singleton(CostEstimator::class, static fn (): CostEstimator => new RequestMetadataCostEstimator());
+
+        $this->app->singleton(Sleeper::class, static fn (): Sleeper => new SystemSleeper());
+
         $this->app->singleton(ConfigRetryPolicyResolver::class, function (Application $app): ConfigRetryPolicyResolver {
             /** @var ConfigRepository $config */
             $config = $app->make(ConfigRepository::class);
@@ -458,8 +521,23 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
             return new InMemoryCircuitBreakerManager($config);
         });
 
+        $this->app->singleton(CacheCircuitBreakerManager::class, function (Application $app): CacheCircuitBreakerManager {
+            /** @var CacheFactory $cache */
+            $cache = $app->make(CacheFactory::class);
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+
+            return new CacheCircuitBreakerManager($cache, $config);
+        });
+
         $this->app->singleton(CircuitBreakerManager::class, function (Application $app): CircuitBreakerManager {
-            return $app->make(InMemoryCircuitBreakerManager::class);
+            /** @var ConfigRepository $config */
+            $config = $app->make(ConfigRepository::class);
+            $driver = $config->get('ai-agent-kit.resilience.circuit_breaker.driver', 'in_memory');
+
+            return $driver === 'cache'
+                ? $app->make(CacheCircuitBreakerManager::class)
+                : $app->make(InMemoryCircuitBreakerManager::class);
         });
 
         $this->app->singleton(PipelineBudgetEnforcer::class, function (Application $app): PipelineBudgetEnforcer {
@@ -1065,8 +1143,11 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
                 providerToolMaterializer: $app->make(ProviderToolMaterializer::class),
                 runtimeConversationMemoryBridge: $app->make(RuntimeConversationMemoryBridge::class),
                 runtimeBudgetEnforcer: $app->make(RuntimeBudgetEnforcer::class),
+                failureClassifier: $app->make(FailureClassifier::class),
+                costEstimator: $app->make(CostEstimator::class),
                 container: $app,
                 providerTargetResolver: $app->make(ProviderTargetResolver::class),
+                failoverModelResolver: $app->make(FailoverModelResolver::class),
                 events: $app->make(Dispatcher::class),
                 redactor: $app->make(Redactor::class),
             );
@@ -1112,6 +1193,8 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
                 redactor: $app->make(Redactor::class),
                 budgetEnforcer: $app->make(PipelineBudgetEnforcer::class),
                 retryPolicyResolver: $app->make(RetryPolicyResolver::class),
+                failureClassifier: $app->make(FailureClassifier::class),
+                sleeper: $app->make(Sleeper::class),
             );
         });
 
@@ -1196,6 +1279,9 @@ class LaravelAiAgentKitServiceProvider extends PackageServiceProvider
         $this->app->singleton(LaravelQueuedPipelineDispatcher::class, function (Application $app): LaravelQueuedPipelineDispatcher {
             return new LaravelQueuedPipelineDispatcher(
                 config: $app->make(ConfigRepository::class),
+                retryPolicyResolver: $app->make(RetryPolicyResolver::class),
+                retryAmplificationCalculator: $app->make(RetryAmplificationCalculator::class),
+                events: $app->make(Dispatcher::class),
             );
         });
 

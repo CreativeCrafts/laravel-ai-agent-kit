@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -29,6 +30,7 @@ it('creates the conversation and message tables with the expected schema', funct
           'driver',
           'store_conversation',
           'is_encrypted',
+          'revision',
           'retention_until',
           'last_message_at',
           'summary_ciphertext',
@@ -86,6 +88,24 @@ it('creates the conversation and message tables with the expected schema', funct
     DB::table('ai_agent_conversations')->where('id', $conversationRecordId)->delete();
 
     expect(DB::table('ai_agent_conversation_messages')->count())->toBe(0);
+});
+
+it('adds optimistic revision storage to an existing conversation table defensively', function (): void {
+    Schema::create('ai_agent_conversations', function (Blueprint $table): void {
+        $table->id();
+        $table->string('conversation_id')->unique();
+    });
+
+    /** @var Migration $addRevision */
+    $addRevision = require __DIR__ . '/../database/migrations/add_revision_to_ai_agent_conversations_table.php.stub';
+    $addRevision->up();
+    $addRevision->up();
+
+    expect(Schema::hasColumn('ai_agent_conversations', 'revision'))->toBeTrue();
+
+    DB::table('ai_agent_conversations')->insert(['conversation_id' => 'legacy-conversation']);
+
+    expect(DB::table('ai_agent_conversations')->value('revision'))->toBe(0);
 });
 
 it('drops the message table before the conversation table on rollback', function (): void {

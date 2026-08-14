@@ -8,6 +8,7 @@ use CreativeCrafts\LaravelAiAgentKit\Contracts\Modality\TranscriptionRuntime;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
 use CreativeCrafts\LaravelAiAgentKit\Core\Modality\Exceptions\UnsupportedTranscriptionAudioSourceException;
 use Illuminate\Http\UploadedFile;
+use Laravel\Ai\Files\StoredAudio;
 use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
 use Laravel\Ai\Transcription;
 
@@ -86,10 +87,23 @@ final readonly class SdkTranscriptionRuntime implements TranscriptionRuntime
         return match ($source->kind()) {
             TranscriptionAudioSourceKind::Base64 => Transcription::fromBase64((string) $payload, $source->mimeType()),
             TranscriptionAudioSourceKind::Path => Transcription::fromPath((string) $payload, $source->mimeType()),
-            TranscriptionAudioSourceKind::Storage => Transcription::fromStorage((string) $payload, $source->disk()),
+            TranscriptionAudioSourceKind::Storage => $this->pendingFromStorageSource($source, (string) $payload),
             TranscriptionAudioSourceKind::Upload => Transcription::fromUpload($this->uploadedFilePayload($source, $payload)),
             TranscriptionAudioSourceKind::Url => throw UnsupportedTranscriptionAudioSourceException::forSourceKind($source->kind()),
         };
+    }
+
+    private function pendingFromStorageSource(
+        TranscriptionAudioSource $source,
+        string $path,
+    ): PendingTranscriptionGeneration {
+        $audio = new StoredAudio($path, $source->disk());
+
+        if ($source->mimeType() !== null) {
+            $audio->withMimeType($source->mimeType());
+        }
+
+        return Transcription::of($audio);
     }
 
     private function uploadedFilePayload(TranscriptionAudioSource $source, mixed $payload): UploadedFile

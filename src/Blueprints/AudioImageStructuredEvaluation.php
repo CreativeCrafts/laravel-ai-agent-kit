@@ -77,6 +77,7 @@ final readonly class AudioImageStructuredEvaluation
                 schema: $this->imageAttachmentFactory->executionSchema($request->schema),
                 attachments: [$this->imageAttachmentFactory->make($request->image)],
                 strictStructuredOutput: $request->strictStructuredOutput,
+                requiredCapabilities: ['text_generation', 'structured_output', 'image_input'],
             ),
         );
 

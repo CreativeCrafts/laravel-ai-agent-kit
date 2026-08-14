@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace CreativeCrafts\LaravelAiAgentKit\Core\Providers;
 
-use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\FailoverProviderSelector;
+use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\CapabilityAwareFailoverProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Resilience\CircuitBreakerManager;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderDisabledException;
@@ -12,11 +12,14 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderNotInFail
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\ProviderFailoverExhausted;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\ProviderFailoverResolved;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\ProviderSkippedByCircuitBreaker;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\ProviderSkippedByCapabilities;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Events\Dispatcher;
 
-final readonly class ConfiguredFailoverProviderSelector implements FailoverProviderSelector
+final readonly class ConfiguredFailoverProviderSelector implements CapabilityAwareFailoverProviderSelector
 {
+    private AuditedProviderCapabilityMatrix $capabilityMatrix;
+
     public function __construct(
         private ConfigRepository $config,
         private ProviderRegistry $providerRegistry,
@@ -24,11 +27,20 @@ final readonly class ConfiguredFailoverProviderSelector implements FailoverProvi
         private ?Dispatcher $events = null,
         private ?CircuitBreakerManager $circuitBreakerManager = null,
         private string $circuitBreakerFailoverConfigKey = 'ai-agent-kit.resilience.circuit_breaker.apply_to_failover',
+        ?AuditedProviderCapabilityMatrix $capabilityMatrix = null,
     ) {
+        $this->capabilityMatrix = $capabilityMatrix ?? new AuditedProviderCapabilityMatrix();
     }
 
     public function nextAfter(string $currentProviderName): ?ProviderDefinition
     {
+        return $this->nextAfterSupporting($currentProviderName, []);
+    }
+
+    public function nextAfterSupporting(
+        string $currentProviderName,
+        array $requiredCapabilities,
+    ): ?ProviderDefinition {
         $orderedProviders = $this->enabledProvidersInFailoverOrder();
         $currentIndex = null;
 
@@ -51,12 +63,16 @@ final readonly class ConfiguredFailoverProviderSelector implements FailoverProvi
                 continue;
             }
 
+            if ($this->isSkippedByCapabilities($candidate, $requiredCapabilities, true)) {
+                continue;
+            }
+
             $nextProvider = $candidate;
 
             break;
         }
 
-        $eligibleProviders = $this->filterByCircuitBreaker($orderedProviders, false);
+        $eligibleProviders = $this->filterEligible($orderedProviders, $requiredCapabilities, false);
 
         if (!$nextProvider instanceof ProviderDefinition) {
             $this->dispatch(
@@ -83,7 +99,12 @@ final readonly class ConfiguredFailoverProviderSelector implements FailoverProvi
      */
     public function ordered(): array
     {
-        return $this->filterByCircuitBreaker($this->enabledProvidersInFailoverOrder(), true);
+        return $this->orderedSupporting([]);
+    }
+
+    public function orderedSupporting(array $requiredCapabilities): array
+    {
+        return $this->filterEligible($this->enabledProvidersInFailoverOrder(), $requiredCapabilities, true);
     }
 
     /**
@@ -156,6 +177,34 @@ final readonly class ConfiguredFailoverProviderSelector implements FailoverProvi
         return (bool)$this->config->get($this->circuitBreakerFailoverConfigKey, false);
     }
 
+    /**
+     * @param list<string> $requiredCapabilities
+     */
+    private function isSkippedByCapabilities(
+        ProviderDefinition $provider,
+        array $requiredCapabilities,
+        bool $emitSkipEvents,
+    ): bool {
+        $missingCapabilities = $this->capabilityMatrix->missingDeclaredCapabilities(
+            $provider,
+            $requiredCapabilities,
+        );
+
+        if ($missingCapabilities === []) {
+            return false;
+        }
+
+        if ($emitSkipEvents) {
+            $this->dispatch(new ProviderSkippedByCapabilities(
+                provider: $provider->name,
+                providerSkippedReason: 'missing_capabilities',
+                missingCapabilities: $missingCapabilities,
+            ));
+        }
+
+        return true;
+    }
+
     private function dispatch(object $event): void
     {
         if ($this->events instanceof Dispatcher) {
@@ -165,14 +214,22 @@ final readonly class ConfiguredFailoverProviderSelector implements FailoverProvi
 
     /**
      * @param list<ProviderDefinition> $providers
+     * @param list<string> $requiredCapabilities
      * @return list<ProviderDefinition>
      */
-    private function filterByCircuitBreaker(array $providers, bool $emitSkipEvents): array
-    {
+    private function filterEligible(
+        array $providers,
+        array $requiredCapabilities,
+        bool $emitSkipEvents,
+    ): array {
         $eligibleProviders = [];
 
         foreach ($providers as $provider) {
             if ($this->isSkippedByCircuitBreaker($provider, $emitSkipEvents)) {
+                continue;
+            }
+
+            if ($this->isSkippedByCapabilities($provider, $requiredCapabilities, $emitSkipEvents)) {
                 continue;
             }
 

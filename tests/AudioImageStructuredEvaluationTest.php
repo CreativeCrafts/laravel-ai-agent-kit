@@ -41,13 +41,11 @@ it('records source-backed transcription requests through the fake runtime', func
         ->and($request?->resolvedAudioSource()->safeMetadata())->toMatchArray([
             'kind' => 'storage',
             'disk' => 's3-audios',
-            'reference_basename' => 'audio.mp3',
             'reference_fingerprint' => hash('sha256', 'answers/audio.mp3'),
         ])
         ->and($result->metadata['audio_source'])->toMatchArray([
             'kind' => 'storage',
             'disk' => 's3-audios',
-            'reference_basename' => 'audio.mp3',
             'reference_fingerprint' => hash('sha256', 'answers/audio.mp3'),
         ]);
 });

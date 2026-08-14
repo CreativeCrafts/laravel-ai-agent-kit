@@ -37,6 +37,21 @@ final readonly class PipelineBudgetEnforcer
         }
     }
 
+    public function assertDelayWithinTimeout(float $startedAt, int $delayMilliseconds): void
+    {
+        $maxTotalTimeoutSeconds = $this->intConfigValue($this->configKey . '.budgets.max_total_timeout_seconds', 120);
+        $elapsedSeconds = max(0.0, microtime(true) - $startedAt);
+        $projectedElapsedSeconds = $elapsedSeconds + ($delayMilliseconds / 1000);
+
+        if ($projectedElapsedSeconds > $maxTotalTimeoutSeconds) {
+            throw PipelineBudgetExceededException::forUnaffordableRetryDelay(
+                maxTotalTimeoutSeconds: $maxTotalTimeoutSeconds,
+                elapsedSeconds: $elapsedSeconds,
+                delayMilliseconds: $delayMilliseconds,
+            );
+        }
+    }
+
     private function intConfigValue(string $key, int $default): int
     {
         $value = $this->config->get($key, $default);

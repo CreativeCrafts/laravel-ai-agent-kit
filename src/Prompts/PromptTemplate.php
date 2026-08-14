@@ -8,6 +8,8 @@ use CreativeCrafts\LaravelAiAgentKit\Prompts\Exceptions\MissingPromptVariableExc
 
 final readonly class PromptTemplate
 {
+    private ParsedPromptTemplate $parsedTemplate;
+
     /**
      * @param list<string> $variables
      */
@@ -17,20 +19,18 @@ final readonly class PromptTemplate
         public string $content,
         public array $variables = [],
     ) {
+        $this->parsedTemplate = (new PromptTemplateParser())->parse($content);
     }
 
     public static function fromContent(string $name, string $version, string $content): self
     {
-        preg_match_all('/\{\{\s*([A-Za-z_]\w*)\s*}}/', $content, $matches);
-
-        /** @var list<string> $variables */
-        $variables = array_values(array_unique($matches[1]));
+        $parsedTemplate = (new PromptTemplateParser())->parse($content);
 
         return new self(
             name: $name,
             version: $version,
             content: $content,
-            variables: $variables,
+            variables: $parsedTemplate->variables,
         );
     }
 
@@ -51,15 +51,6 @@ final readonly class PromptTemplate
             throw MissingPromptVariableException::forTemplate($this->name, $this->version, $missingVariables);
         }
 
-        return (string)preg_replace_callback(
-            '/\{\{\s*([A-Za-z_]\w*)\s*}}/',
-            static function (array $matches) use ($variables): string {
-              $key = $matches[1];
-              $value = $variables[$key] ?? null;
-
-              return $value === null ? '' : (string)$value;
-          },
-            $this->content,
-        );
+        return $this->parsedTemplate->render($variables);
     }
 }

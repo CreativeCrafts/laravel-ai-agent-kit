@@ -9,6 +9,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderDisabledE
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderNotDefinedException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\Exceptions\ProviderNotInFailoverOrderException;
 use CreativeCrafts\LaravelAiAgentKit\Observability\Events\ProviderSkippedByCircuitBreaker;
+use CreativeCrafts\LaravelAiAgentKit\Observability\Events\ProviderSkippedByCapabilities;
 use CreativeCrafts\LaravelAiAgentKit\Resilience\InMemoryCircuitBreakerManager;
 use Illuminate\Config\Repository;
 use Illuminate\Support\Facades\Event;
@@ -87,6 +88,88 @@ it('returns the next provider after the current provider', function () {
     expect($nextProvider)->not
       ->toBeNull()
       ->and($nextProvider?->name)->toBe('backup');
+});
+
+it('skips fallback profiles missing an execution required capability', function (): void {
+    Event::fake([ProviderSkippedByCapabilities::class]);
+
+    $config = new Repository([
+      'ai-agent-kit' => [
+        'providers' => [
+          'primary' => [
+            'driver' => 'openai',
+            'enabled' => true,
+            'capabilities' => ['text_generation', 'structured_output'],
+            'options' => [],
+          ],
+          'text-only-backup' => [
+            'driver' => 'anthropic',
+            'enabled' => true,
+            'capabilities' => ['text_generation'],
+            'options' => [],
+          ],
+          'structured-backup' => [
+            'driver' => 'gemini',
+            'enabled' => true,
+            'capabilities' => ['text_generation', 'structured_output'],
+            'options' => [],
+          ],
+        ],
+        'failover_order' => ['primary', 'text-only-backup', 'structured-backup'],
+      ],
+    ]);
+
+    $selector = new ConfiguredFailoverProviderSelector(
+        config: $config,
+        providerRegistry: new ConfiguredProviderRegistry($config),
+        events: Event::getFacadeRoot(),
+    );
+
+    expect($selector->nextAfterSupporting('primary', ['text_generation', 'structured_output'])?->name)
+        ->toBe('structured-backup');
+
+    Event::assertDispatched(
+        ProviderSkippedByCapabilities::class,
+        static function (ProviderSkippedByCapabilities $event): bool {
+            expect($event->provider)->toBe('text-only-backup')
+                ->and($event->providerSkippedReason)->toBe('missing_capabilities')
+                ->and($event->missingCapabilities)->toBe(['structured_output']);
+
+            return true;
+        },
+    );
+});
+
+it('uses audited capability aliases while selecting fallback profiles', function (): void {
+    $config = new Repository([
+      'ai-agent-kit' => [
+        'providers' => [
+          'primary' => [
+            'driver' => 'openai',
+            'enabled' => true,
+            'capabilities' => ['text_generation', 'structured_output', 'image_input'],
+            'options' => [],
+          ],
+          'vision-backup' => [
+            'driver' => 'anthropic',
+            'enabled' => true,
+            'capabilities' => ['text_generation', 'structured_output', 'vision'],
+            'options' => [],
+          ],
+        ],
+        'failover_order' => ['primary', 'vision-backup'],
+      ],
+    ]);
+
+    $selector = new ConfiguredFailoverProviderSelector(
+        config: $config,
+        providerRegistry: new ConfiguredProviderRegistry($config),
+    );
+
+    expect($selector->nextAfterSupporting(
+        'primary',
+        ['text_generation', 'structured_output', 'image_input'],
+    )?->name)->toBe('vision-backup');
 });
 
 it('returns null when the current provider is last in failover order', function () {

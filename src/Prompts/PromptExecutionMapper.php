@@ -28,6 +28,7 @@ final readonly class PromptExecutionMapper
      * @param list<File> $attachments
      * @param array<string, mixed> $input
      * @param array<string, mixed> $metadata
+     * @param list<string> $requiredCapabilities
      */
     public function mapToExecutionRequest(
         string $name,
@@ -49,6 +50,7 @@ final readonly class PromptExecutionMapper
         array $attachments = [],
         array $providerToolNames = [],
         bool $strictStructuredOutput = false,
+        array $requiredCapabilities = [],
     ): ExecutionRequest {
         $template = $this->promptRepository->get($name, $version);
         $renderedPrompt = $template->render($variables);
@@ -85,6 +87,7 @@ final readonly class PromptExecutionMapper
             attachments: $attachments,
             providerToolNames: $providerToolNames,
             strictStructuredOutput: $strictStructuredOutput,
+            requiredCapabilities: $requiredCapabilities,
         );
     }
 

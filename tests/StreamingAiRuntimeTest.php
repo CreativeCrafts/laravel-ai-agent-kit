@@ -52,7 +52,7 @@ it('streams ordered text chunks then a terminal complete event', function (): vo
     expect($sequences)->toBe(range(0, count($sequences) - 1));
 });
 
-it('yields a single terminal failure when the sdk stream fails', function (): void {
+it('fails an unknown sdk stream throwable closed as one terminal failure', function (): void {
     app()->register(AiServiceProvider::class);
 
     Ai::fakeAgent(RuntimeTelemetryAgent::class, [
@@ -76,7 +76,7 @@ it('yields a single terminal failure when the sdk stream fails', function (): vo
     expect($events)
       ->toHaveCount(1)
       ->and($events[0])->toBeInstanceOf(StreamFailure::class)
-      ->and($events[0]->failureCategory)->toBe('provider_failure')
+      ->and($events[0]->failureCategory)->toBe('execution_failed')
       ->and($events[0]->exceptionMessage)->toBe('provider stream failed');
 });
 

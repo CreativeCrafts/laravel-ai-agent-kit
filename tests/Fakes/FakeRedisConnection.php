@@ -38,6 +38,7 @@ final class FakeRedisConnection
             'DEL' => $this->del((string)($arguments[0] ?? '')),
             'KEYS' => $this->keys((string)($arguments[0] ?? '')),
             'SCAN' => $this->scan($arguments),
+            'EVAL' => $this->evaluateCompareAndSet($arguments),
             default => throw new RuntimeException("Unsupported fake redis command [{$name}]."),
         };
     }
@@ -140,5 +141,47 @@ final class FakeRedisConnection
         }
 
         return $this->set($key, $value, $ttlSeconds);
+    }
+
+    /**
+     * Emulates the package's atomic conversation compare-and-set Lua script.
+     *
+     * @param list<mixed> $arguments
+     */
+    private function evaluateCompareAndSet(array $arguments): int
+    {
+        $key = (string)($arguments[2] ?? '');
+        $expectedRevision = (int)($arguments[3] ?? 0);
+        $initialValue = (string)($arguments[4] ?? '');
+        $updatedValue = (string)($arguments[5] ?? '');
+        $ttl = $arguments[6] ?? null;
+        $ttlSeconds = is_string($ttl) && ctype_digit($ttl) ? (int)$ttl : null;
+        $current = $this->get($key);
+
+        if ($current === null) {
+            if ($expectedRevision !== 0) {
+                return 0;
+            }
+
+            $this->set($key, $initialValue, $ttlSeconds);
+
+            return 1;
+        }
+
+        $decoded = json_decode($current, true);
+
+        if (!is_array($decoded)) {
+            return -2;
+        }
+
+        $actualRevision = $decoded['revision'] ?? 0;
+
+        if (!is_int($actualRevision) || $actualRevision !== $expectedRevision) {
+            return 0;
+        }
+
+        $this->set($key, $updatedValue, $ttlSeconds);
+
+        return 2;
     }
 }

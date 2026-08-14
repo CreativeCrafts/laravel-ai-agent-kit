@@ -11,6 +11,7 @@ use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredFailoverProviderSe
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderRegistry;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\DefaultProviderSelector;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\ExecutionRequest;
+use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\Exceptions\RuntimeExecutionException;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\GenerationOptions;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\RuntimeTelemetryAgent;
 use CreativeCrafts\LaravelAiAgentKit\Core\Runtime\SdkAiRuntime;
@@ -19,6 +20,7 @@ use CreativeCrafts\LaravelAiAgentKit\Resilience\InMemoryCircuitBreakerManager;
 use Laravel\Ai\Ai;
 use Laravel\Ai\AiServiceProvider;
 use Laravel\Ai\Files\Base64Document;
+use Illuminate\Http\Client\ConnectionException;
 use CreativeCrafts\LaravelAiAgentKit\Contracts\Providers\ProviderTargetResolver;
 use CreativeCrafts\LaravelAiAgentKit\Core\Providers\ConfiguredProviderTargetResolver;
 
@@ -37,7 +39,7 @@ it('preserves structured schema attachments generation options and timeout acros
             $attempts++;
 
             if ($attempts === 1) {
-                throw new RuntimeException('primary unavailable');
+                throw new ConnectionException('primary unavailable');
             }
 
             return ['ok' => true];
@@ -81,6 +83,116 @@ it('preserves structured schema attachments generation options and timeout acros
     });
 });
 
+it('uses the fallback profile model after an explicit request model fails across sdk providers', function (): void {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai-agent-kit.default_provider', 'openai-primary');
+    config()->set('ai-agent-kit.failover_order', ['openai-primary', 'anthropic-secondary']);
+    configureAdditionalRuntimeProvider('openai-primary', 'openai', 'gpt-primary');
+    configureAdditionalRuntimeProvider('anthropic-secondary', 'anthropic', 'claude-secondary');
+    refreshAdditionalRuntimeProviderBindings();
+
+    $attempts = 0;
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, [
+        static function () use (&$attempts): string {
+            $attempts++;
+
+            if ($attempts === 1) {
+                throw new ConnectionException('primary unavailable');
+            }
+
+            return 'Fallback response';
+        },
+    ])->preventStrayPrompts();
+
+    app(AiRuntime::class)->execute(
+        new ExecutionRequest(
+            runId: 'run-cross-provider-model-isolation-001',
+            prompt: 'Keep fallback models isolated.',
+            model: 'gpt-explicit',
+        ),
+    );
+
+    Ai::assertAgentWasPrompted(RuntimeTelemetryAgent::class, static function ($prompt): bool {
+        return $prompt->provider->name() === 'anthropic'
+            && $prompt->model === 'claude-secondary';
+    });
+});
+
+it('uses the fallback profile model after an explicit request model fails within one sdk provider', function (): void {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai-agent-kit.default_provider', 'openai-primary');
+    config()->set('ai-agent-kit.failover_order', ['openai-primary', 'openai-secondary']);
+    configureAdditionalRuntimeProvider('openai-primary', 'openai', 'gpt-primary');
+    configureAdditionalRuntimeProvider('openai-secondary', 'openai', 'gpt-secondary');
+    refreshAdditionalRuntimeProviderBindings();
+
+    $attempts = 0;
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, [
+        static function () use (&$attempts): string {
+            $attempts++;
+
+            if ($attempts === 1) {
+                throw new ConnectionException('primary unavailable');
+            }
+
+            return 'Fallback response';
+        },
+    ])->preventStrayPrompts();
+
+    app(AiRuntime::class)->execute(
+        new ExecutionRequest(
+            runId: 'run-same-provider-model-isolation-001',
+            prompt: 'Use the fallback profile model.',
+            model: 'gpt-explicit',
+        ),
+    );
+
+    Ai::assertAgentWasPrompted(RuntimeTelemetryAgent::class, static function ($prompt): bool {
+        return $prompt->provider->name() === 'openai'
+            && $prompt->model === 'gpt-secondary';
+    });
+});
+
+it('defers to the fallback sdk provider default when the fallback profile has no model', function (): void {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai-agent-kit.default_provider', 'openai-primary');
+    config()->set('ai-agent-kit.failover_order', ['openai-primary', 'anthropic-secondary']);
+    configureAdditionalRuntimeProvider('openai-primary', 'openai', 'gpt-primary');
+    configureAdditionalRuntimeProvider('anthropic-secondary', 'anthropic', null);
+    refreshAdditionalRuntimeProviderBindings();
+
+    $attempts = 0;
+    Ai::fakeAgent(RuntimeTelemetryAgent::class, [
+        static function () use (&$attempts): string {
+            $attempts++;
+
+            if ($attempts === 1) {
+                throw new ConnectionException('primary unavailable');
+            }
+
+            return 'Fallback response';
+        },
+    ])->preventStrayPrompts();
+
+    app(AiRuntime::class)->execute(
+        new ExecutionRequest(
+            runId: 'run-fallback-sdk-default-model-001',
+            prompt: 'Use the fallback SDK default.',
+            model: 'gpt-explicit',
+        ),
+    );
+
+    Ai::assertAgentWasPrompted(RuntimeTelemetryAgent::class, static function ($prompt): bool {
+        return $prompt->provider->name() === 'anthropic'
+            && is_string($prompt->model)
+            && $prompt->model !== ''
+            && $prompt->model !== 'gpt-explicit';
+    });
+});
+
 it('skips open circuit breaker providers during runtime failover', function (): void {
     app()->register(AiServiceProvider::class);
 
@@ -101,7 +213,7 @@ it('skips open circuit breaker providers during runtime failover', function (): 
             $attempts++;
 
             if ($attempts === 1) {
-                throw new RuntimeException('primary unavailable');
+                throw new ConnectionException('primary unavailable');
             }
 
             return 'Gemini fallback response';
@@ -121,13 +233,110 @@ it('skips open circuit breaker providers during runtime failover', function (): 
         ->and($result->metadata['runtime_final_provider'])->toBe('gemini');
 });
 
-function configureAdditionalRuntimeProvider(string $name, string $driver, string $model): void
-{
+it('skips fallback profiles incompatible with an inferred structured output requirement', function (): void {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai-agent-kit.default_provider', 'openai');
+    config()->set('ai-agent-kit.failover_order', ['openai', 'text-only-anthropic', 'structured-gemini']);
+    configureAdditionalRuntimeProvider('openai', 'openai', 'gpt-primary');
+    configureAdditionalRuntimeProvider('text-only-anthropic', 'anthropic', 'claude-text', ['text_generation']);
+    configureAdditionalRuntimeProvider('structured-gemini', 'gemini', 'gemini-structured');
+    refreshAdditionalRuntimeProviderBindings();
+
+    $attempts = 0;
+    Ai::fakeAgent(StructuredRuntimeTelemetryAgent::class, [
+        static function () use (&$attempts): array {
+            $attempts++;
+
+            if ($attempts === 1) {
+                throw new ConnectionException('primary unavailable');
+            }
+
+            return ['ok' => true];
+        },
+    ])->preventStrayPrompts();
+
+    $result = app(AiRuntime::class)->execute(
+        new ExecutionRequest(
+            runId: 'run-capability-aware-failover-001',
+            prompt: 'Return structured output.',
+            schema: static fn ($js): array => [
+                'type' => 'object',
+                'properties' => ['ok' => ['type' => 'boolean']],
+                'required' => ['ok'],
+            ],
+        ),
+    );
+
+    expect($attempts)->toBe(2)
+        ->and($result->metadata['runtime_provider_attempts'])->toBe(['openai', 'structured-gemini']);
+});
+
+it('preserves the original provider failure when no capability-compatible fallback exists', function (): void {
+    app()->register(AiServiceProvider::class);
+
+    config()->set('ai-agent-kit.default_provider', 'openai');
+    config()->set('ai-agent-kit.failover_order', ['openai', 'text-only-anthropic']);
+    configureAdditionalRuntimeProvider('openai', 'openai', 'gpt-primary');
+    configureAdditionalRuntimeProvider('text-only-anthropic', 'anthropic', 'claude-text', ['text_generation']);
+    refreshAdditionalRuntimeProviderBindings();
+
+    $attempts = 0;
+    Ai::fakeAgent(StructuredRuntimeTelemetryAgent::class, [
+        static function () use (&$attempts): array {
+            $attempts++;
+
+            if ($attempts === 1) {
+                throw new ConnectionException('original primary failure');
+            }
+
+            return ['should_not' => 'execute'];
+        },
+    ])->preventStrayPrompts();
+
+    try {
+        app(AiRuntime::class)->execute(
+            new ExecutionRequest(
+                runId: 'run-no-compatible-fallback-001',
+                prompt: 'Return structured output.',
+                schema: static fn ($js): array => [
+                    'type' => 'object',
+                    'properties' => ['ok' => ['type' => 'boolean']],
+                    'required' => ['ok'],
+                ],
+            ),
+        );
+    } catch (RuntimeExecutionException $exception) {
+        expect($attempts)->toBe(1)
+            ->and($exception->getPrevious())->toBeInstanceOf(ConnectionException::class)
+            ->and($exception->getPrevious()?->getMessage())->toBe('original primary failure');
+
+        return;
+    }
+
+    throw new RuntimeException('Expected the original provider failure to be preserved.');
+});
+
+/**
+ * @param list<string> $capabilities
+ */
+function configureAdditionalRuntimeProvider(
+    string $name,
+    string $driver,
+    ?string $model,
+    array $capabilities = ['text_generation', 'structured_output'],
+): void {
+    $options = [];
+
+    if ($model !== null) {
+        $options['model'] = $model;
+    }
+
     config()->set("ai-agent-kit.providers.{$name}", [
         'driver' => $driver,
         'enabled' => true,
-        'capabilities' => ['text_generation', 'structured_output'],
-        'options' => ['model' => $model],
+        'capabilities' => $capabilities,
+        'options' => $options,
     ]);
 }
 

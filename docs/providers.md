@@ -192,15 +192,21 @@ Optional package-level default instructions are opt-in through `runtime.default_
 ],
 ~~~
 
-For prompt execution, provider-edge failures are retried against the next eligible profile in `failover_order`. Agent Kit preserves the request schema, strictness, tools, provider tools, attachments, timeout, typed generation options, memory projection, and metadata across attempts. Raw provider options are rebuilt for the next profile.
+For prompt execution, only failures classified as failover-safe proceed to the next eligible profile in `failover_order`. Transport failures, temporary provider overload, throttling, authentication failures, and exhausted provider quota have explicit dispositions. Invalid requests, unsupported capability, local configuration, authorization, budget, memory, and unknown failures do not automatically consume another profile. Agent Kit preserves the request schema, strictness, tools, provider tools, attachments, timeout, typed generation options, memory projection, and metadata across attempts. Raw provider options are rebuilt for the next profile.
 
-When no later profile remains eligible, the runtime surfaces a package-owned `RuntimeExecutionException` with provider-failure category and emits failover exhaustion/resolution telemetry.
+An explicit request model applies only to the initial profile by default. Each fallback profile uses its own configured model, or its Laravel AI provider default when no profile model is configured. Set `resilience.failover.model_policy` to `preserve_when_same_sdk_provider` only when profiles pointing to the same Laravel AI provider deliberately share compatible model identifiers. The `preserve_always_legacy` mode retains the earlier cross-provider behavior for migration only. Direct Laravel AI provider names are not Agent Kit policy profiles and therefore do not initiate traversal through `failover_order`.
+
+Fallback selection is capability-aware. Runtime execution always requires `text_generation`, adds `structured_output` when a schema is present, and combines those inferred requirements with `ExecutionRequest::$requiredCapabilities`. Incompatible profiles are skipped before dispatch, and `ProviderSkippedByCapabilities` reports only the profile name, `missing_capabilities` reason, and safe capability identifiers. The audio-image blueprint additionally requires `image_input`; the audited capability matrix accepts the documented `vision` alias. If no compatible fallback remains, the original provider failure stays attached as the causal exception.
+
+When no later profile remains eligible for a failover-safe failure, the runtime surfaces a package-owned `RuntimeExecutionException` with the classified category and emits failover exhaustion/resolution telemetry. Unclassified failures fail closed by default. The temporary `legacy_failover` compatibility mode is documented in [Configuration](configuration.md).
 
 Streaming uses a conservative policy: failover is creation-only. If the provider stream cannot be created before any chunks are emitted, the runtime may try the next profile. Once chunks are emitted, mid-stream provider errors become one terminal `StreamFailure`; the runtime does not replay the partial stream against another profile.
 
 ## Circuit breaker integration
 
-When circuit-breaker failover filtering is enabled, profiles with open breakers are skipped by the failover selector. Runtime attempts record success/failure against `providers.<profile-name>` so independent profiles that share a driver do not collapse into one breaker.
+When circuit-breaker failover filtering is enabled, profiles with open breakers are skipped by the failover selector. Runtime attempts record success against `providers.<profile-name>`, while only dispositions marked as provider-health failures increment the breaker. Rate limits, credential/quota failures, invalid requests, authorization failures, and local defects do not make a provider appear unhealthy. Independent profiles that share a driver do not collapse into one breaker.
+
+The default `in_memory` breaker is process-local. For shared state across queue and HTTP workers, configure `resilience.circuit_breaker.driver=cache` and select a shared cache store that supports Laravel atomic locks. The package rejects cache stores without lock support rather than approximating distributed transitions with separate reads and writes.
 
 ## Runtime telemetry
 

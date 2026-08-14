@@ -13,6 +13,8 @@ use CreativeCrafts\LaravelAiAgentKit\Memory\MessageId;
 use CreativeCrafts\LaravelAiAgentKit\Memory\RedisConversationStore;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\FakeRedisConnection;
 use CreativeCrafts\LaravelAiAgentKit\Tests\Fakes\FakeRedisManager;
+use CreativeCrafts\LaravelAiAgentKit\Memory\Exceptions\ConversationWriteConflictException;
+use CreativeCrafts\LaravelAiAgentKit\Memory\Exceptions\ConversationStoreException;
 
 beforeEach(function (): void {
     config()->set('ai-agent-kit.memory.default_driver', 'redis');
@@ -71,6 +73,122 @@ it('persists and reloads conversations through the redis-backed store', function
       ->and($reloaded?->latestMessage()?->content)->toBe('Here is the shared summary.')
       ->and($reloaded?->latestMessage()?->metadataValue('driver'))->toBe('redis')
       ->and($reloaded?->metadataValue('scope'))->toBe('shared');
+});
+
+it('detects concurrent redis updates loaded from the same revision', function (): void {
+    $store = app(ConversationStore::class);
+    $conversationId = new ConversationId('conv-redis-conflict');
+    $store->save(redisConversation('conv-redis-conflict'));
+
+    $writerA = $store->find($conversationId);
+    $writerB = $store->find($conversationId);
+
+    expect($writerA)->toBeInstanceOf(Conversation::class)
+        ->and($writerB)->toBeInstanceOf(Conversation::class);
+
+    $createdAt = new DateTimeImmutable('2036-05-14T09:10:00+00:00');
+    $store->save($writerA->withAppendedMessage(new ConversationMessage(
+        id: new MessageId('redis-a1'),
+        role: ConversationMessageRole::User,
+        content: 'A1',
+        createdAt: $createdAt,
+    )));
+
+    expect(fn () => $store->save($writerB->withAppendedMessage(new ConversationMessage(
+        id: new MessageId('redis-b1'),
+        role: ConversationMessageRole::User,
+        content: 'B1',
+        createdAt: $createdAt,
+    ))))->toThrow(ConversationWriteConflictException::class);
+});
+
+it('normalizes malformed redis persistence fields', function (Closure $corrupt, string $field): void {
+    config()->set('ai-agent-kit.memory.redis.encrypt_payloads', false);
+    app()->forgetInstance(ConversationStore::class);
+    app()->forgetInstance(ConversationRetentionPurger::class);
+    app()->forgetInstance(RedisConversationStore::class);
+    $store = app(ConversationStore::class);
+    $conversationId = new ConversationId('conv-redis-corrupt');
+    $store->save(redisConversation('conv-redis-corrupt'));
+    $corrupt(redisConnection());
+
+    try {
+        $store->find($conversationId);
+    } catch (ConversationStoreException $exception) {
+        expect($exception->getMessage())->toContain($field)
+            ->and($exception->getPrevious())->not->toBeNull()
+            ->and($exception->getMessage())->not->toContain('candidate-secret-content');
+
+        return;
+    }
+
+    throw new RuntimeException('Expected malformed Redis persistence to be normalized.');
+})->with([
+    'wrong root type' => [
+        static fn (FakeRedisConnection $redis) => $redis->set(
+            'ai_agent_memory:conv-redis-corrupt',
+            '"candidate-secret-content"',
+        ),
+        'redis.payload',
+    ],
+    'missing messages field' => [
+        static function (FakeRedisConnection $redis): void {
+            $payload = json_decode((string)$redis->get('ai_agent_memory:conv-redis-corrupt'), true);
+            unset($payload['messages']);
+            $redis->set('ai_agent_memory:conv-redis-corrupt', json_encode($payload, JSON_THROW_ON_ERROR));
+        },
+        'redis.payload.messages',
+    ],
+    'invalid message role' => [
+        static function (FakeRedisConnection $redis): void {
+            $payload = json_decode((string)$redis->get('ai_agent_memory:conv-redis-corrupt'), true);
+            $payload['messages'][0]['role'] = 'invalid-role';
+            $redis->set('ai_agent_memory:conv-redis-corrupt', json_encode($payload, JSON_THROW_ON_ERROR));
+        },
+        'redis.payload.messages.0.role',
+    ],
+    'invalid message date' => [
+        static function (FakeRedisConnection $redis): void {
+            $payload = json_decode((string)$redis->get('ai_agent_memory:conv-redis-corrupt'), true);
+            $payload['messages'][0]['created_at'] = 'not-a-date';
+            $redis->set('ai_agent_memory:conv-redis-corrupt', json_encode($payload, JSON_THROW_ON_ERROR));
+        },
+        'redis.payload.messages.0.created_at',
+    ],
+    'malformed attachment representation' => [
+        static function (FakeRedisConnection $redis): void {
+            $payload = json_decode((string)$redis->get('ai_agent_memory:conv-redis-corrupt'), true);
+            $payload['messages'][0]['attachments'] = ['candidate-secret-content'];
+            $redis->set('ai_agent_memory:conv-redis-corrupt', json_encode($payload, JSON_THROW_ON_ERROR));
+        },
+        'redis.payload.messages.0.attachments',
+    ],
+]);
+
+it('normalizes redis payload decryption failures without exposing content', function (): void {
+    $store = app(ConversationStore::class);
+    $conversationId = new ConversationId('conv-redis-decryption-corrupt');
+    $store->save(redisConversation('conv-redis-decryption-corrupt'));
+    redisConnection()->set(
+        'ai_agent_memory:conv-redis-decryption-corrupt',
+        json_encode([
+            'encrypted' => true,
+            'revision' => 0,
+            'payload' => 'candidate-secret-content',
+        ], JSON_THROW_ON_ERROR),
+    );
+
+    try {
+        $store->find($conversationId);
+    } catch (ConversationStoreException $exception) {
+        expect($exception->getMessage())->toContain('redis.payload.payload')
+            ->and($exception->getPrevious())->not->toBeNull()
+            ->and($exception->getMessage())->not->toContain('candidate-secret-content');
+
+        return;
+    }
+
+    throw new RuntimeException('Expected Redis decryption failure to be normalized.');
 });
 
 it('writes encrypted redis payloads by default and still round-trips through find', function (): void {
@@ -136,7 +254,7 @@ it('uses the container encryption service when resolving the redis store binding
 
     expect($decoded)->toMatchArray(['encrypted' => true])
         ->and($decoded['payload'] ?? null)->toStartWith('custom:')
-        ->and($encryptionService->encryptions)->toBe(1);
+        ->and($encryptionService->encryptions)->toBe(2);
 
     $reloaded = $store->find(new ConversationId('conv-redis-container-encryption'));
 
@@ -200,9 +318,8 @@ it('sets redis native expiration when retention is configured', function (): voi
 
     expect($ttl)->toBeInt()
         ->and($ttl)->toBeGreaterThanOrEqual(1)
-        ->and($setCommand['name'] ?? null)->toBe('SET')
-        ->and($setCommand['arguments'][2] ?? null)->toBe('EX')
-        ->and($setCommand['arguments'][3] ?? null)->toBe($ttl);
+        ->and($setCommand['name'] ?? null)->toBe('EVAL')
+        ->and($setCommand['arguments'][6] ?? null)->toBe((string)$ttl);
 });
 
 it('omits redis native expiration when retention is disabled', function (): void {
@@ -218,8 +335,8 @@ it('omits redis native expiration when retention is disabled', function (): void
     $setCommand = redisConnection()->recordedCommands()[0] ?? null;
 
     expect(redisConnection()->ttlFor('ai_agent_memory:conv-redis-no-ttl'))->toBeNull()
-        ->and($setCommand['name'] ?? null)->toBe('SET')
-        ->and($setCommand['arguments'])->toHaveCount(2);
+        ->and($setCommand['name'] ?? null)->toBe('EVAL')
+        ->and($setCommand['arguments'][6] ?? null)->toBe('');
 });
 
 it('uses a minimum redis ttl of one second for past retention timestamps', function (): void {
